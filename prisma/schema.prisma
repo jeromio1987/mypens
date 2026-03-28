@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model WeightEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  date      String
+
+  scaleKg      Float
+  bodyFatPct   Float?
+  muscleMassKg Float?
+  boneMassKg   Float?
+  bodyWaterPct Float?
+  visceralFat  Int?
+
+  creatineDoseG     Float   @default(0)
+  creatineDaysOn    Int     @default(0)
+  alcoholUnits      Float   @default(0)
+  hoursSinceAlcohol Float   @default(48)
+  carbsG            Float   @default(0)
+  hardTraining      Boolean @default(false)
+  morningReading    Boolean @default(true)
+
+  // Phase 5 confounders
+  highSodium      Boolean @default(false) // high sodium day → water retention
+  restaurantMeal  Boolean @default(false) // proxy for hidden sodium
+  flightDay       Boolean @default(false) // immobility / fluid pooling
+  illnessDay      Boolean @default(false) // inflammation → scale unreliable
+
+  creatineRetentionKg Float   @default(0)
+  alcoholRetentionKg  Float   @default(0)
+  glycogenRetentionKg Float   @default(0)
+  trueWeightKg        Float   @default(0)
+  tanitaReliable      Boolean @default(true)
+}
+
+// Phase 2 — Food Logging
+model FoodEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  date      String
+  meal      String   @default("snack") // breakfast | lunch | dinner | snack
+
+  name     String
+  kcal     Float @default(0)
+  proteinG Float @default(0)
+  carbsG   Float @default(0)
+  fatG     Float @default(0)
+  fiberG   Float @default(0)
+  notes    String?
+}
+
+// Phase 3 — Sleep
+model SleepEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  date      String   @unique
+
+  bedtime  String  // HH:MM e.g. "22:30"
+  wakeTime String  // HH:MM e.g. "06:45"
+  hours    Float   // auto-calculated
+  quality  Int     // 1–5
+  hrv      Float?  // optional HRV in ms
+  notes    String?
+}
+
+// Phase 3 — Training
+model TrainingEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  date      String
+
+  exercise String
+  sets     Int
+  reps     Int
+  weightKg Float    @default(0)
+  rpe      Int?     // 1–10
+  notes    String?
+  volume   Float    @default(0) // sets × reps × weightKg (computed on save)
+}
+
+// Phase 4 — Body Measurements
+model BodyMeasurement {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  date      String   @unique
+
+  waistCm      Float?
+  chestCm      Float?
+  hipsCm       Float?
+  leftArmCm    Float?
+  rightArmCm   Float?
+  leftThighCm  Float?
+  rightThighCm Float?
+  neckCm       Float?
+  notes        String?
+}
+
+// Phase 4 — Presets (quick-entry templates per module)
+model Preset {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  module    String   // weight | food | sleep | training
+  name      String
+  data      String   // JSON blob of form fields
+  usedCount Int      @default(0)
+}
