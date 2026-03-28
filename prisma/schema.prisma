@@ -102,6 +102,17 @@ model BodyMeasurement {
   notes        String?
 }
 
+// Phase 5 — Event / Trip tagging
+model EventTag {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  type      String   // travel | illness | holiday | diet-break | competition | other
+  label     String
+  startDate String
+  endDate   String
+  notes     String?
+}
+
 // Phase 4 — Presets (quick-entry templates per module)
 model Preset {
   id        String   @id @default(cuid())

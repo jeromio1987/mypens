@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Scale, UtensilsCrossed, Moon, Dumbbell, LayoutDashboard, Ruler } from 'lucide-react'
+import { Scale, UtensilsCrossed, Moon, Dumbbell, LayoutDashboard, Ruler, CalendarDays } from 'lucide-react'
 
 const modules = [
   {
@@ -61,6 +61,16 @@ const modules = [
     iconColor: 'text-rose-600',
     badge: 'Phase 4',
     badgeColor: 'bg-rose-100 text-rose-600',
+  },
+  {
+    href: '/events',
+    icon: CalendarDays,
+    title: 'Event Tags',
+    description: 'Tag trips, illness, and other events to contextualise scale spikes. Active events appear as banners.',
+    color: 'bg-sky-50 border-sky-200 hover:bg-sky-100',
+    iconColor: 'text-sky-600',
+    badge: 'Phase 5',
+    badgeColor: 'bg-sky-100 text-sky-600',
   },
 ]
 

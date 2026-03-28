@@ -10,9 +10,19 @@ interface WeightBreakdown {
   creatineKg: number
   alcoholKg: number
   glycogenKg: number
+  sodiumKg: number
+  hardTrainingKg: number
   trueWeightKg: number
   tanitaReliable: boolean
   tanitaFlags: string[]
+  confidence: 'high' | 'medium' | 'low'
+  activeConfounders: number
+}
+
+const CONF_STYLES = {
+  high:   { badge: 'bg-emerald-50 text-emerald-700 border border-emerald-200', label: 'High confidence', sub: 'No confounders — reading is clean' },
+  medium: { badge: 'bg-amber-50 text-amber-700 border border-amber-200',       label: 'Medium confidence', sub: 'Minor factors logged — small uncertainty' },
+  low:    { badge: 'bg-red-50 text-red-600 border border-red-200',             label: 'Low confidence', sub: 'Multiple confounders — adjusted weight is approximate' },
 }
 
 interface EntryResult {
@@ -374,32 +384,34 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
 
       {/* Result */}
       {result && (
-        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl text-sm space-y-2">
-          <p className="font-semibold text-green-800">Saved ✓</p>
-          <div className="grid grid-cols-2 gap-x-4 text-green-700 text-xs">
-            <span>
-              Scale: <strong>{result.breakdown.scaleKg} kg</strong>
-            </span>
-            <span>
-              True: <strong>{result.breakdown.trueWeightKg} kg</strong>
-            </span>
-            {result.breakdown.creatineKg > 0 && (
-              <span>Creatine: +{result.breakdown.creatineKg} kg</span>
-            )}
-            {result.breakdown.alcoholKg > 0 && (
-              <span>Alcohol: +{result.breakdown.alcoholKg} kg</span>
-            )}
-            {result.breakdown.glycogenKg > 0 && (
-              <span>Glycogen: +{result.breakdown.glycogenKg} kg</span>
+        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl text-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="font-semibold text-green-800">Saved ✓</p>
+            {result.breakdown.confidence && (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CONF_STYLES[result.breakdown.confidence].badge}`}>
+                {CONF_STYLES[result.breakdown.confidence].label}
+              </span>
             )}
           </div>
+          {result.breakdown.confidence && (
+            <p className="text-xs text-gray-500">{CONF_STYLES[result.breakdown.confidence].sub}
+              {result.breakdown.activeConfounders > 0 && ` · ${result.breakdown.activeConfounders} active factor${result.breakdown.activeConfounders > 1 ? 's' : ''}`}
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-x-4 text-green-700 text-xs">
+            <span>Scale: <strong>{result.breakdown.scaleKg} kg</strong></span>
+            <span>Adjusted: <strong>{result.breakdown.trueWeightKg} kg</strong></span>
+            {result.breakdown.creatineKg > 0 && <span>Creatine: −{result.breakdown.creatineKg} kg</span>}
+            {result.breakdown.alcoholKg > 0 && <span>Alcohol: −{result.breakdown.alcoholKg} kg</span>}
+            {result.breakdown.glycogenKg > 0 && <span>Glycogen: −{result.breakdown.glycogenKg} kg</span>}
+            {result.breakdown.sodiumKg > 0 && <span>Sodium: −{result.breakdown.sodiumKg} kg</span>}
+            {result.breakdown.hardTrainingKg > 0 && <span>Training: −{result.breakdown.hardTrainingKg} kg</span>}
+          </div>
           {!result.breakdown.tanitaReliable && (
-            <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
               <p className="text-amber-700 font-medium text-xs">⚠ Tanita reading may be unreliable</p>
               {result.breakdown.tanitaFlags.map((f, i) => (
-                <p key={i} className="text-amber-600 text-xs mt-0.5">
-                  • {f}
-                </p>
+                <p key={i} className="text-amber-600 text-xs mt-0.5">• {f}</p>
               ))}
             </div>
           )}

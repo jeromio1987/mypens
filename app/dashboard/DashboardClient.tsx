@@ -1,12 +1,24 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Scale, UtensilsCrossed, Moon, Dumbbell, Ruler, DatabaseBackup, Lightbulb } from 'lucide-react'
+import {
+  ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Upload, Scale,
+  UtensilsCrossed, Moon, Dumbbell, Ruler, DatabaseBackup,
+  Plane, Thermometer, Palmtree, Salad, Trophy, Tag,
+  CheckCircle, AlertTriangle, Info, CalendarDays,
+} from 'lucide-react'
+import type { StructuredInsight } from '@/app/api/dashboard/route'
+
+interface EventTag { id: string; type: string; label: string; startDate: string; endDate: string; notes?: string | null }
 
 interface DashboardData {
   weight: {
-    latest: { scaleKg: number; trueWeightKg: number; date: string } | null
+    latest: {
+      scaleKg: number; trueWeightKg: number; date: string
+      confidence: 'high' | 'medium' | 'low' | null
+      activeConfounders: number
+    } | null
     avg7: number | null
     trend7: number | null
   }
@@ -31,32 +43,51 @@ interface DashboardData {
     latest: { waistCm: number | null; chestCm: number | null; hipsCm: number | null; date: string } | null
     delta: { waistCm: number | null; chestCm: number | null } | null
   }
-  insights: string[]
+  events: {
+    active: EventTag[]
+    recent: EventTag[]
+  }
+  insights: StructuredInsight[]
 }
 
 type ConfidenceLevel = 'high' | 'medium' | 'low'
 
 const CONFIDENCE_STYLES: Record<ConfidenceLevel, string> = {
-  high: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  high:   'bg-emerald-50 text-emerald-700 border border-emerald-200',
   medium: 'bg-amber-50 text-amber-700 border border-amber-200',
-  low: 'bg-red-50 text-red-600 border border-red-200',
+  low:    'bg-red-50 text-red-600 border border-red-200',
 }
 
-// Derive confidence from the stored weight entry context.
-// The dashboard API doesn't currently send confounder counts, so we infer
-// from the gap between scaleKg and trueWeightKg as a proxy until the
-// entry-level confidence is exposed on the dashboard endpoint.
-function inferConfidenceFromGap(scale: number, adjusted: number): ConfidenceLevel {
-  const gap = parseFloat((scale - adjusted).toFixed(2))
-  if (gap <= 0) return 'high'
-  if (gap < 0.5) return 'medium'
-  return 'low'
+const CONFIDENCE_DESCRIPTIONS: Record<ConfidenceLevel, string> = {
+  high:   'No confounders — reading is reliable',
+  medium: '1–2 factors affecting reading',
+  low:    'Multiple factors — rough estimate',
+}
+
+const EVENT_ICONS: Record<string, React.ElementType> = {
+  travel: Plane, illness: Thermometer, holiday: Palmtree,
+  'diet-break': Salad, competition: Trophy, other: Tag,
+}
+
+const EVENT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  travel:       { bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
+  illness:      { bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-200' },
+  holiday:      { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  'diet-break': { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200' },
+  competition:  { bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-200' },
+  other:        { bg: 'bg-gray-50',    text: 'text-gray-700',    border: 'border-gray-200' },
+}
+
+const INSIGHT_SEVERITY_STYLES: Record<string, { icon: React.ElementType; border: string; iconColor: string; bg: string }> = {
+  positive: { icon: CheckCircle,  border: 'border-emerald-200', iconColor: 'text-emerald-500', bg: 'bg-emerald-50' },
+  warning:  { icon: AlertTriangle,border: 'border-amber-200',   iconColor: 'text-amber-500',   bg: 'bg-amber-50' },
+  info:     { icon: Info,         border: 'border-blue-200',    iconColor: 'text-blue-400',    bg: 'bg-blue-50' },
 }
 
 function TrendArrow({ v }: { v: number | null }) {
   if (v == null) return null
   if (v < -0.05) return <TrendingDown size={14} className="text-green-500" />
-  if (v > 0.05) return <TrendingUp size={14} className="text-red-500" />
+  if (v > 0.05)  return <TrendingUp   size={14} className="text-red-500" />
   return <Minus size={14} className="text-gray-400" />
 }
 
@@ -71,27 +102,32 @@ function QualityDots({ q }: { q: number }) {
 }
 
 const MODULES = [
-  { href: '/weight', label: 'Weight', icon: Scale, color: 'text-blue-600' },
-  { href: '/food', label: 'Food', icon: UtensilsCrossed, color: 'text-emerald-600' },
-  { href: '/sleep', label: 'Sleep', icon: Moon, color: 'text-violet-600' },
-  { href: '/training', label: 'Training', icon: Dumbbell, color: 'text-orange-500' },
-  { href: '/measurements', label: 'Measurements', icon: Ruler, color: 'text-rose-600' },
+  { href: '/weight',       label: 'Weight',       icon: Scale,          color: 'text-blue-600' },
+  { href: '/food',         label: 'Food',         icon: UtensilsCrossed,color: 'text-emerald-600' },
+  { href: '/sleep',        label: 'Sleep',        icon: Moon,           color: 'text-violet-600' },
+  { href: '/training',     label: 'Training',     icon: Dumbbell,       color: 'text-orange-500' },
+  { href: '/measurements', label: 'Measurements', icon: Ruler,          color: 'text-rose-600' },
+  { href: '/events',       label: 'Events',       icon: CalendarDays,   color: 'text-sky-600' },
 ]
 
 export default function DashboardClient() {
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [apiError, setApiError] = useState<string | null>(null)
+  const [data, setData]             = useState<DashboardData | null>(null)
+  const [loading, setLoading]       = useState(true)
+  const [apiError, setApiError]     = useState<string | null>(null)
   const [exportModule, setExportModule] = useState<string>('all')
   const [backupStatus, setBackupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [backupInfo, setBackupInfo] = useState<{ filename: string; sizeKb: number } | null>(null)
+  const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [importResult, setImportResult] = useState<{ module: string; inserted: number; skipped: number; total: number } | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch('/api/dashboard')
       .then(r => r.json())
       .then(d => {
         if (d.error || !d.weight) {
-          setApiError(d.error ?? 'Unexpected response from dashboard API. Make sure you have run: npx prisma db push')
+          setApiError(d.error ?? 'Unexpected response. Make sure you have run: npx prisma db push')
         } else {
           setData(d)
         }
@@ -100,22 +136,36 @@ export default function DashboardClient() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleExport = () => {
-    window.location.href = `/api/export?module=${exportModule}`
-  }
+  const handleExport = () => { window.location.href = `/api/export?module=${exportModule}` }
 
   const handleBackup = async () => {
-    setBackupStatus('loading')
-    setBackupInfo(null)
+    setBackupStatus('loading'); setBackupInfo(null)
     try {
       const res = await fetch('/api/backup', { method: 'POST' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Backup failed')
       setBackupStatus('success')
       setBackupInfo({ filename: json.filename, sizeKb: json.sizeKb })
-    } catch {
-      setBackupStatus('error')
+    } catch { setBackupStatus('error') }
+  }
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportStatus('loading'); setImportResult(null); setImportError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/import', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Import failed')
+      setImportStatus('success')
+      setImportResult(json)
+    } catch (err: unknown) {
+      setImportStatus('error')
+      setImportError(err instanceof Error ? err.message : 'Import failed')
     }
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   return (
@@ -132,9 +182,7 @@ export default function DashboardClient() {
           </div>
         </div>
 
-        {loading && (
-          <div className="text-center py-12 text-gray-400 text-sm">Loading…</div>
-        )}
+        {loading && <div className="text-center py-12 text-gray-400 text-sm">Loading…</div>}
 
         {apiError && (
           <div className="bg-red-50 border border-red-200 rounded-2xl p-5 text-sm text-red-700">
@@ -146,6 +194,29 @@ export default function DashboardClient() {
 
         {data && (
           <>
+            {/* Active event banners */}
+            {data.events.active.length > 0 && (
+              <div className="space-y-2">
+                {data.events.active.map(event => {
+                  const cfg = EVENT_COLORS[event.type] ?? EVENT_COLORS.other
+                  const Icon = EVENT_ICONS[event.type] ?? Tag
+                  const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                  return (
+                    <div key={event.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${cfg.bg} ${cfg.border}`}>
+                      <Icon size={15} className={`${cfg.text} shrink-0`} />
+                      <div className="flex-1">
+                        <p className={`text-sm font-medium ${cfg.text}`}>{event.label}</p>
+                        <p className={`text-xs opacity-60 ${cfg.text}`}>
+                          {fmt(event.startDate)}{event.startDate !== event.endDate ? ` – ${fmt(event.endDate)}` : ''}
+                        </p>
+                      </div>
+                      <Link href="/events" className={`text-xs underline opacity-60 ${cfg.text}`}>Manage</Link>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
             {/* Weight card */}
             <div className="bg-white rounded-2xl shadow p-5">
               <div className="flex items-center justify-between mb-3">
@@ -161,15 +232,19 @@ export default function DashboardClient() {
                     <span className="text-3xl font-bold text-gray-900">{data.weight.latest.trueWeightKg}</span>
                     <span className="text-gray-400 text-sm">kg adjusted</span>
                     <TrendArrow v={data.weight.trend7} />
-                    {(() => {
-                      const conf = inferConfidenceFromGap(data.weight.latest!.scaleKg, data.weight.latest!.trueWeightKg)
-                      return (
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CONFIDENCE_STYLES[conf]}`}>
-                          {conf} confidence
-                        </span>
-                      )
-                    })()}
+                    {data.weight.latest.confidence && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CONFIDENCE_STYLES[data.weight.latest.confidence]}`}>
+                        {data.weight.latest.confidence} confidence
+                      </span>
+                    )}
                   </div>
+                  {data.weight.latest.confidence && (
+                    <p className="text-xs text-gray-400 flex items-center gap-1">
+                      <Info size={11} className="shrink-0" />
+                      {CONFIDENCE_DESCRIPTIONS[data.weight.latest.confidence]}
+                      {data.weight.latest.activeConfounders > 0 && ` · ${data.weight.latest.activeConfounders} active factor${data.weight.latest.activeConfounders > 1 ? 's' : ''}`}
+                    </p>
+                  )}
                   <div className="flex gap-4 text-sm text-gray-500">
                     <span>Scale: {data.weight.latest.scaleKg} kg</span>
                     {data.weight.avg7 && <span>7-day avg: {data.weight.avg7} kg</span>}
@@ -202,8 +277,8 @@ export default function DashboardClient() {
               <div className="grid grid-cols-3 gap-2 text-center">
                 {[
                   { label: 'Protein', val: data.food.today.proteinG, color: 'text-blue-600' },
-                  { label: 'Carbs', val: data.food.today.carbsG, color: 'text-amber-600' },
-                  { label: 'Fat', val: data.food.today.fatG, color: 'text-orange-500' },
+                  { label: 'Carbs',   val: data.food.today.carbsG,   color: 'text-amber-600' },
+                  { label: 'Fat',     val: data.food.today.fatG,     color: 'text-orange-500' },
                 ].map(({ label, val, color }) => (
                   <div key={label} className="bg-gray-50 rounded-xl py-2">
                     <p className={`text-sm font-bold ${color}`}>{Math.round(val)}g</p>
@@ -231,9 +306,7 @@ export default function DashboardClient() {
                     <span className="text-3xl font-bold text-gray-900">{data.sleep.latest.hours}h</span>
                     <QualityDots q={data.sleep.latest.quality} />
                   </div>
-                  <p className="text-sm text-gray-500">
-                    {data.sleep.latest.bedtime} → {data.sleep.latest.wakeTime}
-                  </p>
+                  <p className="text-sm text-gray-500">{data.sleep.latest.bedtime} → {data.sleep.latest.wakeTime}</p>
                   <div className="flex gap-4 text-xs text-gray-400">
                     {data.sleep.avgHours7 != null && <span>7-day avg: {data.sleep.avgHours7}h</span>}
                     {data.sleep.avgQuality7 != null && <span>Avg quality: {data.sleep.avgQuality7}/5</span>}
@@ -275,9 +348,7 @@ export default function DashboardClient() {
                   ))}
                 </div>
               )}
-              {!data.training.weekSessions && (
-                <p className="text-sm text-gray-400">No sessions this week</p>
-              )}
+              {!data.training.weekSessions && <p className="text-sm text-gray-400">No sessions this week</p>}
             </div>
 
             {/* Measurements card */}
@@ -317,21 +388,26 @@ export default function DashboardClient() {
               )}
             </div>
 
-            {/* Insights card */}
+            {/* Structured Insights */}
             {data.insights && data.insights.length > 0 && (
-              <div className="bg-white rounded-2xl shadow p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Lightbulb size={16} className="text-yellow-500" />
-                  <h2 className="font-semibold text-gray-800">Weekly Insights</h2>
-                </div>
-                <div className="space-y-3">
-                  {data.insights.map((insight, i) => (
-                    <p key={i} className="text-sm text-gray-600 leading-relaxed border-l-2 border-yellow-200 pl-3">
-                      {insight}
-                    </p>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-400 mt-3">Rule-based · Based on last 7 days of logged data</p>
+              <div className="space-y-3">
+                <h2 className="font-semibold text-gray-700 text-sm px-1">Weekly insights</h2>
+                {data.insights.map(insight => {
+                  const cfg = INSIGHT_SEVERITY_STYLES[insight.severity] ?? INSIGHT_SEVERITY_STYLES.info
+                  const Icon = cfg.icon
+                  return (
+                    <div key={insight.id} className={`rounded-2xl border p-4 ${cfg.bg} ${cfg.border}`}>
+                      <div className="flex items-start gap-3">
+                        <Icon size={16} className={`${cfg.iconColor} shrink-0 mt-0.5`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 mb-1">{insight.title}</p>
+                          <p className="text-sm text-gray-600 leading-relaxed">{insight.body}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                <p className="text-xs text-gray-400 px-1">Rule-based · Based on last 7 days of logged data</p>
               </div>
             )}
 
@@ -381,8 +457,49 @@ export default function DashboardClient() {
                 </button>
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                &quot;All modules&quot; exports each section separated by headers in one file.
+                &quot;All modules&quot; exports each section in one file.
               </p>
+            </div>
+
+            {/* Import */}
+            <div className="bg-white rounded-2xl shadow p-5">
+              <h2 className="font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                <Upload size={16} className="text-gray-500" />
+                Import from CSV
+              </h2>
+              <p className="text-xs text-gray-400 mb-3">
+                Upload a CSV previously exported from MY PENS. The module is auto-detected from the column headers.
+                Duplicate entries may be skipped (sleep and measurements upsert by date; weight and food always create new rows).
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer w-fit">
+                <span
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    importStatus === 'loading'
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  <Upload size={14} />
+                  {importStatus === 'loading' ? 'Importing…' : 'Choose CSV file'}
+                </span>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="sr-only"
+                  disabled={importStatus === 'loading'}
+                  onChange={handleImport}
+                />
+              </label>
+              {importStatus === 'success' && importResult && (
+                <p className="text-xs text-emerald-600 mt-2">
+                  ✓ Imported {importResult.inserted} rows into <strong>{importResult.module}</strong>
+                  {importResult.skipped > 0 && ` · ${importResult.skipped} skipped`}
+                </p>
+              )}
+              {importStatus === 'error' && importError && (
+                <p className="text-xs text-red-500 mt-2">{importError}</p>
+              )}
             </div>
 
             {/* Backup */}
@@ -392,7 +509,7 @@ export default function DashboardClient() {
                 Database Backup
               </h2>
               <p className="text-xs text-gray-400 mb-3">
-                Copies the SQLite database file to <code className="bg-gray-100 px-1 rounded">prisma/backups/</code> with a timestamp. Last 10 backups are kept automatically.
+                Copies the SQLite database to <code className="bg-gray-100 px-1 rounded">prisma/backups/</code> with a timestamp. Last 10 backups are kept automatically.
               </p>
               <button
                 type="button"
