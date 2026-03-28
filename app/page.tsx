@@ -1,7 +1,11 @@
 import Link from 'next/link'
-import { Scale, UtensilsCrossed, Moon, Dumbbell, LayoutDashboard, Ruler, CalendarDays, Activity } from 'lucide-react'
+import { Scale, UtensilsCrossed, Moon, Dumbbell, LayoutDashboard, Ruler, CalendarDays, Activity, Sparkles } from 'lucide-react'
 
-const modules = [
+const modules: {
+  href: string; icon: React.ElementType; title: string; description: string
+  color: string; iconColor: string; badge: string; badgeColor: string
+  titleColor?: string; descColor?: string
+}[] = [
   {
     href: '/dashboard',
     icon: LayoutDashboard,
@@ -82,6 +86,18 @@ const modules = [
     badge: 'Phase 5',
     badgeColor: 'bg-teal-100 text-teal-600',
   },
+  {
+    href: '/clubroom',
+    icon: Sparkles,
+    title: 'The Clubroom',
+    description: 'Your medals, weekly wrap and personal report to self. Private, always.',
+    color: 'bg-[#1B263B] border-[#2B2D42] hover:bg-[#0D1B2A]',
+    iconColor: 'text-[#C9A84C]',
+    badge: 'New',
+    badgeColor: 'bg-[#8B1E1E] text-[#F5E6D3]',
+    titleColor: 'text-[#F5E6D3]',
+    descColor: 'text-[#F5E6D3]/60',
+  },
 ]
 
 export default function Home() {
@@ -94,24 +110,24 @@ export default function Home() {
         </div>
 
         <div className="space-y-4">
-          {modules.map(({ href, icon: Icon, title, description, color, iconColor, badge, badgeColor }) => (
+          {modules.map(({ href, icon: Icon, title, description, color, iconColor, badge, badgeColor, titleColor, descColor }) => (
             <Link
               key={href}
               href={href}
               className={`block border rounded-2xl p-5 transition-colors ${color}`}
             >
               <div className="flex items-start gap-4">
-                <div className={`p-2.5 bg-white rounded-xl shadow-sm ${iconColor}`}>
+                <div className={`p-2.5 bg-white/10 rounded-xl shadow-sm ${iconColor}`}>
                   <Icon size={22} />
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <h2 className="font-semibold text-gray-900">{title}</h2>
+                    <h2 className={`font-semibold ${titleColor ?? 'text-gray-900'}`}>{title}</h2>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeColor}`}>
                       {badge}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500">{description}</p>
+                  <p className={`text-sm ${descColor ?? 'text-gray-500'}`}>{description}</p>
                 </div>
               </div>
             </Link>

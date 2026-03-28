@@ -6,7 +6,7 @@ import {
   ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Scale,
   UtensilsCrossed, Moon, Dumbbell, Ruler, DatabaseBackup,
   Plane, Thermometer, Palmtree, Salad, Trophy, Tag,
-  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Activity, Map, Target,
+  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Activity, Map, Target, Sparkles,
 } from 'lucide-react'
 import type { StructuredInsight } from '@/app/api/dashboard/route'
 import GoalsPanel from '@/components/goals/GoalsPanel'
@@ -168,6 +168,13 @@ export default function DashboardClient() {
             <h1 className="text-2xl font-bold text-gray-900">Weekly Overview</h1>
             <p className="text-sm text-gray-400 mt-0.5">Last 7 days at a glance</p>
           </div>
+          <Link
+            href="/clubroom"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1B263B] hover:bg-[#0D1B2A] rounded-xl text-xs font-medium text-[#C9A84C] transition-colors"
+          >
+            <Sparkles size={13} />
+            Clubroom
+          </Link>
           <Link
             href="/data"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-medium text-gray-600 transition-colors"

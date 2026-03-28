@@ -10,6 +10,16 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* ── The Continental P.E.N.S. palette ── */
+  --color-pens-deep:    #0D1B2A;
+  --color-pens-navy:    #1B263B;
+  --color-pens-surface: #2B2D42;
+  --color-pens-muted:   #3D405B;
+  --color-pens-crimson: #8B1E1E;
+  --color-pens-red:     #780000;
+  --color-pens-cream:   #F5E6D3;
+  --color-pens-gold:    #C9A84C;
 }
 
 @media (prefers-color-scheme: dark) {
