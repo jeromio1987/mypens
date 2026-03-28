@@ -230,7 +230,7 @@ function buildWeeklyWrap(
   const avgKcal = avg(Object.values(kcalByDate).map(Math.round))
 
   // Generate headline
-  let headline = 'A quiet week — data is sparse. Keep logging.'
+  let headline = 'A quiet week. That\'s fine.'
   if (weightDelta !== null) {
     if (weightDelta < -0.3) headline = `Adjusted weight down ${Math.abs(weightDelta)} kg — solid progress this week.`
     else if (weightDelta > 0.5) headline = `Adjusted weight up ${weightDelta} kg — worth reviewing what drove it.`
@@ -276,7 +276,7 @@ function buildReportToSelf(
   if (sessions > 0) parts.push(`${sessions} training session${sessions > 1 ? 's' : ''} completed.`)
   if (avgSleep !== null) parts.push(`Sleep averaged ${avgSleep}h at quality ${avgQuality}/5.`)
   if (avgKcal !== null) parts.push(`Food intake averaged around ${avgKcal} kcal/day.`)
-  const whatHappened = parts.length ? parts.join(' ') : 'Not enough data logged this week to summarise. Keep going.'
+  const whatHappened = parts.length ? parts.join(' ') : 'Nothing to report yet. Check back Sunday.'
 
   // What it means
   const meaning: string[] = []
@@ -286,7 +286,7 @@ function buildReportToSelf(
   if (avgSleep !== null && avgSleep < 6.5) meaning.push('Short sleep raises cortisol and can mask fat loss on the scale.')
   else if (avgSleep !== null && avgSleep >= 7.5) meaning.push('Good sleep creates the right conditions for body composition to shift.')
   if (sessions >= 4) meaning.push('Four or more sessions suggests a real training week — inflammation may add temporary scale weight.')
-  const whatItMeans = meaning.length ? meaning.join(' ') : 'Log more consistently to unlock meaningful interpretation.'
+  const whatItMeans = meaning.length ? meaning.join(' ') : 'A quiet week. The system is ready when you are.'
 
   // What next
   const next: string[] = []
@@ -294,7 +294,7 @@ function buildReportToSelf(
   else if (weekDelta !== null && weekDelta > 0.5) next.push('Audit last week\'s restaurant meals, late eating, and alcohol units. One of those is usually the culprit.')
   else next.push('Focus on consistency over perfection. Seven logged days beats one perfect day.')
   if (avgSleep !== null && avgSleep < 7) next.push('Prioritise 30 extra minutes of sleep — it\'s the highest-leverage recovery tool you have.')
-  if (sessions < 2) next.push('Even two short training sessions this week moves the needle on retention and recovery.')
+  if (sessions === 0 && weekDelta !== null && weekDelta > 0.3) next.push('One training session this week would support the recovery.')
   const whatNext = next.join(' ')
 
   return { whatHappened, whatItMeans, whatNext }

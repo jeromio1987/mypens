@@ -124,6 +124,16 @@ model Goal {
   startDate   String
 }
 
+// PENS — Daily Mode Entry
+model DayEntry {
+  id        String   @id @default(cuid())
+  date      String   @unique
+  mode      String   // locked_in | balanced | off
+  tags      String   @default("[]") // JSON array: alcohol | heavy_meal | travel | late_night | intense_training
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // Phase 4 — Presets (quick-entry templates per module)
 model Preset {
   id        String   @id @default(cuid())

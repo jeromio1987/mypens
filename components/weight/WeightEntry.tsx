@@ -32,7 +32,7 @@ interface EntryResult {
 
 export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
   const today = new Date().toISOString().split('T')[0]
-  const [quick, setQuick] = useState(false)
+  const [quick, setQuick] = useState(true)
   const [activeTab, setActiveTab] = useState<'scale' | 'context' | 'tanita'>('scale')
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<EntryResult | null>(null)
