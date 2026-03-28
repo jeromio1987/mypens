@@ -14,10 +14,10 @@ A personal health tracking Next.js application — an interpretation layer betwe
 - **Weight** (`/weight`): Scale readings with full v3 water retention model (creatine, alcohol, glycogen, sodium, hard training). Per-entry confidence scoring, EWMA baseline trend, outlier detection, dynamic uncertainty band.
 - **Food** (`/food`): Meal logging with macros (protein, carbs, fat, fiber). Preset-based quick entry.
 - **Sleep** (`/sleep`): Bedtime/wake tracking with HRV and quality scores. 30-day trend.
-- **Training** (`/training`): Exercise sets/reps/weight logging, auto-calculated volume.
+- **Training** (`/training`): Exercise sets/reps/weight logging, auto-calculated volume. Exercise names are clickable to open an all-time history drawer with personal best and progression charts.
 - **Measurements** (`/measurements`): Body tape measurements with delta tracking.
 - **Events** (`/events`): Trip/event tagging (travel, illness, holiday, diet-break, competition, other). Active events shown as banners on weight page and dashboard.
-- **Dashboard** (`/dashboard`): Weekly overview with structured insight cards (positive/info/warning), real confidence data, logging streaks widget, CSV export, CSV import, and database backup.
+- **Dashboard** (`/dashboard`): Weekly overview with structured insight cards (positive/info/warning), real confidence data, logging streaks widget, Goals panel (set weight/waist/session targets with progress bars and ETAs), CSV export, CSV import, and database backup.
 - **Data Health** (`/data-health`): 30-day logging calendar heatmap per module, current streaks, longest streaks, and coverage percentages.
 
 ## Key Files
@@ -26,6 +26,10 @@ A personal health tracking Next.js application — an interpretation layer betwe
 - `lib/db.ts` — Prisma singleton
 - `app/api/weight/route.ts` — Weight POST (calculates breakdown) + GET (enriched with v3 trend layer)
 - `app/api/dashboard/route.ts` — Dashboard aggregation with structured insights and real confidence data
+- `app/api/goals/route.ts` — Goals CRUD (GET/POST/DELETE), one goal per metricKey
+- `app/api/training/history/route.ts` — Per-exercise history (all sets, personal best) for drawer
+- `components/goals/GoalsPanel.tsx` — Modal panel for viewing/adding/deleting goals with progress bars and ETAs
+- `components/training/ExerciseHistoryDrawer.tsx` — Exercise history modal with personal best, weight/volume progression charts, all-time log
 - `app/api/events/route.ts` — Event tag CRUD
 - `app/api/streaks/route.ts` — Per-module streak calculation + 30-day coverage
 - `app/api/import/route.ts` — CSV import (auto-detects module from headers)

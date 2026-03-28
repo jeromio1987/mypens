@@ -113,6 +113,17 @@ model EventTag {
   notes     String?
 }
 
+// Phase 6 — Goals
+model Goal {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  module      String   // weight | measurements | training
+  metricKey   String   // scaleKg | waistCm | weeklySessions
+  targetValue Float
+  startValue  Float
+  startDate   String
+}
+
 // Phase 4 — Presets (quick-entry templates per module)
 model Preset {
   id        String   @id @default(cuid())

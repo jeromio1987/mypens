@@ -5,6 +5,7 @@ import { Trash2, Pencil, Check, X } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from 'recharts'
+import ExerciseHistoryDrawer from './ExerciseHistoryDrawer'
 
 interface TrainingEntry {
   id: string
@@ -84,6 +85,7 @@ export default function TrainingLog({ date, refresh }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
+  const [historyExercise, setHistoryExercise] = useState<string | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -196,7 +198,13 @@ export default function TrainingLog({ date, refresh }: Props) {
         key={e.id}
         className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-gray-50 group text-sm"
       >
-        <span className="font-medium flex-1">{e.exercise}</span>
+        <button
+          onClick={() => setHistoryExercise(e.exercise)}
+          className="font-medium flex-1 text-left hover:text-orange-600 transition-colors"
+          title="View exercise history"
+        >
+          {e.exercise}
+        </button>
         <span className="text-gray-500 text-xs">
           {e.sets}×{e.reps}
           {e.weightKg > 0 ? ` @ ${e.weightKg}kg` : ' BW'}
@@ -220,6 +228,12 @@ export default function TrainingLog({ date, refresh }: Props) {
 
   return (
     <div className="space-y-6">
+      {historyExercise && (
+        <ExerciseHistoryDrawer
+          exercise={historyExercise}
+          onClose={() => setHistoryExercise(null)}
+        />
+      )}
       <div className="bg-white rounded-2xl shadow p-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold">Today's Session</h2>
@@ -270,7 +284,12 @@ export default function TrainingLog({ date, refresh }: Props) {
                 <div className="space-y-px pl-2 border-l-2 border-orange-100">
                   {s.entries.map(e => (
                     <div key={e.id} className="flex items-center gap-2 text-xs text-gray-500 py-0.5">
-                      <span className="font-medium text-gray-700">{e.exercise}</span>
+                      <button
+                        onClick={() => setHistoryExercise(e.exercise)}
+                        className="font-medium text-gray-700 hover:text-orange-600 transition-colors text-left"
+                      >
+                        {e.exercise}
+                      </button>
                       <span>{e.sets}×{e.reps}{e.weightKg > 0 ? ` @ ${e.weightKg}kg` : ' BW'}</span>
                       {e.rpe && <span className="text-gray-400">RPE {e.rpe}</span>}
                     </div>

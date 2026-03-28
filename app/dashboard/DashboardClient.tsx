@@ -6,9 +6,10 @@ import {
   ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Upload, Scale,
   UtensilsCrossed, Moon, Dumbbell, Ruler, DatabaseBackup,
   Plane, Thermometer, Palmtree, Salad, Trophy, Tag,
-  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Activity, Map,
+  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Activity, Map, Target,
 } from 'lucide-react'
 import type { StructuredInsight } from '@/app/api/dashboard/route'
+import GoalsPanel from '@/components/goals/GoalsPanel'
 
 interface StreakModule { current: number; longest: number; lastLogged: string | null; coverage: number }
 interface StreaksData {
@@ -135,6 +136,7 @@ export default function DashboardClient() {
   const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [importResult, setImportResult] = useState<{ module: string; inserted: number; skipped: number; total: number } | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [showGoals, setShowGoals] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -187,6 +189,7 @@ export default function DashboardClient() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8">
       <div className="max-w-lg mx-auto space-y-5">
+        {showGoals && <GoalsPanel onClose={() => setShowGoals(false)} />}
         {/* Header */}
         <div className="flex items-center gap-3">
           <Link href="/" className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -203,6 +206,13 @@ export default function DashboardClient() {
             <Map size={13} className="text-gray-500" />
             Roadmap
           </Link>
+          <button
+            onClick={() => setShowGoals(true)}
+            className="flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-colors"
+          >
+            <Target size={14} />
+            Goals
+          </button>
         </div>
 
         {loading && <div className="text-center py-12 text-gray-400 text-sm">Loading…</div>}
