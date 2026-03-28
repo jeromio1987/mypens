@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Upload, Scale,
+  ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Scale,
   UtensilsCrossed, Moon, Dumbbell, Ruler, DatabaseBackup,
   Plane, Thermometer, Palmtree, Salad, Trophy, Tag,
   CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Activity, Map, Target,
 } from 'lucide-react'
 import type { StructuredInsight } from '@/app/api/dashboard/route'
 import GoalsPanel from '@/components/goals/GoalsPanel'
+import WeightExplanationCard from '@/components/weight/WeightExplanationCard'
 
 interface StreakModule { current: number; longest: number; lastLogged: string | null; coverage: number }
 interface StreaksData {
@@ -19,12 +20,19 @@ interface StreaksData {
 
 interface EventTag { id: string; type: string; label: string; startDate: string; endDate: string; notes?: string | null }
 
+interface WeightBreakdown {
+  creatineKg: number; alcoholKg: number; glycogenKg: number
+  sodiumKg: number; hardTrainingKg: number; totalAdjustmentKg: number
+  tanitaFlags: string[]
+}
+
 interface DashboardData {
   weight: {
     latest: {
       scaleKg: number; trueWeightKg: number; date: string
       confidence: 'high' | 'medium' | 'low' | null
       activeConfounders: number
+      breakdown: WeightBreakdown | null
     } | null
     avg7: number | null
     trend7: number | null
@@ -126,18 +134,11 @@ const STREAK_MODULES = [
 ]
 
 export default function DashboardClient() {
-  const [data, setData]             = useState<DashboardData | null>(null)
-  const [loading, setLoading]       = useState(true)
-  const [streaks, setStreaks]       = useState<StreaksData | null>(null)
-  const [apiError, setApiError]     = useState<string | null>(null)
-  const [exportModule, setExportModule] = useState<string>('all')
-  const [backupStatus, setBackupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const [backupInfo, setBackupInfo] = useState<{ filename: string; sizeKb: number } | null>(null)
-  const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const [importResult, setImportResult] = useState<{ module: string; inserted: number; skipped: number; total: number } | null>(null)
-  const [importError, setImportError] = useState<string | null>(null)
+  const [data, setData]         = useState<DashboardData | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [streaks, setStreaks]   = useState<StreaksData | null>(null)
+  const [apiError, setApiError] = useState<string | null>(null)
   const [showGoals, setShowGoals] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch('/api/dashboard')
@@ -154,38 +155,6 @@ export default function DashboardClient() {
     fetch('/api/streaks').then(r => r.json()).then(setStreaks).catch(() => null)
   }, [])
 
-  const handleExport = () => { window.location.href = `/api/export?module=${exportModule}` }
-
-  const handleBackup = async () => {
-    setBackupStatus('loading'); setBackupInfo(null)
-    try {
-      const res = await fetch('/api/backup', { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Backup failed')
-      setBackupStatus('success')
-      setBackupInfo({ filename: json.filename, sizeKb: json.sizeKb })
-    } catch { setBackupStatus('error') }
-  }
-
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImportStatus('loading'); setImportResult(null); setImportError(null)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch('/api/import', { method: 'POST', body: fd })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Import failed')
-      setImportStatus('success')
-      setImportResult(json)
-    } catch (err: unknown) {
-      setImportStatus('error')
-      setImportError(err instanceof Error ? err.message : 'Import failed')
-    }
-    if (fileRef.current) fileRef.current.value = ''
-  }
-
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8">
       <div className="max-w-lg mx-auto space-y-5">
@@ -199,6 +168,13 @@ export default function DashboardClient() {
             <h1 className="text-2xl font-bold text-gray-900">Weekly Overview</h1>
             <p className="text-sm text-gray-400 mt-0.5">Last 7 days at a glance</p>
           </div>
+          <Link
+            href="/data"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-medium text-gray-600 transition-colors"
+          >
+            <Download size={13} className="text-gray-500" />
+            Data
+          </Link>
           <Link
             href="/roadmap"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-medium text-gray-600 transition-colors"
@@ -293,6 +269,17 @@ export default function DashboardClient() {
                 <p className="text-sm text-gray-400">No data this week</p>
               )}
             </div>
+
+            {/* Weight explanation card */}
+            {data.weight.latest?.confidence && data.weight.latest.breakdown && (
+              <WeightExplanationCard
+                scaleKg={data.weight.latest.scaleKg}
+                trueWeightKg={data.weight.latest.trueWeightKg}
+                confidence={data.weight.latest.confidence}
+                activeConfounders={data.weight.latest.activeConfounders}
+                breakdown={data.weight.latest.breakdown}
+              />
+            )}
 
             {/* Food card */}
             <div className="bg-white rounded-2xl shadow p-5">
@@ -496,107 +483,20 @@ export default function DashboardClient() {
               </div>
             </div>
 
-            {/* Export */}
-            <div className="bg-white rounded-2xl shadow p-5">
-              <h2 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                <Download size={16} className="text-gray-500" />
-                Export to CSV
-              </h2>
-              <div className="flex gap-2">
-                <select
-                  value={exportModule}
-                  onChange={e => setExportModule(e.target.value)}
-                  className="flex-1 border rounded-lg px-3 py-2 text-sm text-gray-700"
-                >
-                  <option value="all">All modules</option>
-                  <option value="weight">Weight</option>
-                  <option value="food">Food</option>
-                  <option value="sleep">Sleep</option>
-                  <option value="training">Training</option>
-                  <option value="measurements">Measurements</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={handleExport}
-                  className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                >
-                  <Download size={14} />
-                  Download
-                </button>
-              </div>
-              <p className="text-xs text-gray-400 mt-2">
-                &quot;All modules&quot; exports each section in one file.
-              </p>
-            </div>
-
-            {/* Import */}
-            <div className="bg-white rounded-2xl shadow p-5">
-              <h2 className="font-semibold text-gray-800 mb-1 flex items-center gap-2">
-                <Upload size={16} className="text-gray-500" />
-                Import from CSV
-              </h2>
-              <p className="text-xs text-gray-400 mb-3">
-                Upload a CSV previously exported from MY PENS. The module is auto-detected from the column headers.
-                Duplicate entries may be skipped (sleep and measurements upsert by date; weight and food always create new rows).
-              </p>
-              <label className="flex items-center gap-2 cursor-pointer w-fit">
-                <span
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    importStatus === 'loading'
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                  }`}
-                >
-                  <Upload size={14} />
-                  {importStatus === 'loading' ? 'Importing…' : 'Choose CSV file'}
-                </span>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="sr-only"
-                  disabled={importStatus === 'loading'}
-                  onChange={handleImport}
-                />
-              </label>
-              {importStatus === 'success' && importResult && (
-                <p className="text-xs text-emerald-600 mt-2">
-                  ✓ Imported {importResult.inserted} rows into <strong>{importResult.module}</strong>
-                  {importResult.skipped > 0 && ` · ${importResult.skipped} skipped`}
-                </p>
-              )}
-              {importStatus === 'error' && importError && (
-                <p className="text-xs text-red-500 mt-2">{importError}</p>
-              )}
-            </div>
-
-            {/* Backup */}
-            <div className="bg-white rounded-2xl shadow p-5">
-              <h2 className="font-semibold text-gray-800 mb-1 flex items-center gap-2">
+            {/* Data management shortcut */}
+            <Link
+              href="/data"
+              className="flex items-center justify-between bg-white rounded-2xl shadow px-5 py-4 hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
                 <DatabaseBackup size={16} className="text-gray-500" />
-                Database Backup
-              </h2>
-              <p className="text-xs text-gray-400 mb-3">
-                Copies the SQLite database to <code className="bg-gray-100 px-1 rounded">prisma/backups/</code> with a timestamp. Last 10 backups are kept automatically.
-              </p>
-              <button
-                type="button"
-                onClick={handleBackup}
-                disabled={backupStatus === 'loading'}
-                className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <DatabaseBackup size={14} />
-                {backupStatus === 'loading' ? 'Backing up…' : 'Back up now'}
-              </button>
-              {backupStatus === 'success' && backupInfo && (
-                <p className="text-xs text-emerald-600 mt-2">
-                  ✓ Saved as <code className="bg-emerald-50 px-1 rounded">{backupInfo.filename}</code> ({backupInfo.sizeKb} KB)
-                </p>
-              )}
-              {backupStatus === 'error' && (
-                <p className="text-xs text-red-500 mt-2">Backup failed — check the server logs.</p>
-              )}
-            </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Data Management</p>
+                  <p className="text-xs text-gray-400">Export · Import · Backup</p>
+                </div>
+              </div>
+              <span className="text-xs text-gray-400">→</span>
+            </Link>
           </>
         )}
       </div>

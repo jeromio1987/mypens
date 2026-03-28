@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { calculateConfidence, estimateSodiumRetention, estimateHardTrainingRetention } from '@/lib/retentionModels'
+import { calculateConfidence, estimateSodiumRetention, estimateHardTrainingRetention, assessTanitaReliability } from '@/lib/retentionModels'
 import type { ConfidenceLevel } from '@/lib/retentionModels'
 
 export interface StructuredInsight {
@@ -284,6 +284,41 @@ export async function GET() {
       activeEvents,
     })
 
+    // ── Weight breakdown for explanation card ───────────────────────────────
+    let latestBreakdown: {
+      creatineKg: number; alcoholKg: number; glycogenKg: number
+      sodiumKg: number; hardTrainingKg: number; totalAdjustmentKg: number
+      tanitaFlags: string[]
+    } | null = null
+
+    if (latestWeight) {
+      const tanita = assessTanitaReliability({
+        creatineDoseG:     latestWeight.creatineDoseG,
+        creatineDaysOn:    latestWeight.creatineDaysOn,
+        hoursSinceAlcohol: latestWeight.alcoholUnits > 0 ? 12 : 999,
+        hardTraining:      latestWeight.hardTraining,
+        morningReading:    latestWeight.morningReading,
+        highSodium:        latestWeight.highSodium,
+        restaurantMeal:    latestWeight.restaurantMeal,
+        flightDay:         latestWeight.flightDay,
+        illnessDay:        latestWeight.illnessDay,
+      })
+      const sodiumKg       = estimateSodiumRetention(latestWeight.highSodium, latestWeight.restaurantMeal)
+      const hardTrainingKg = estimateHardTrainingRetention(latestWeight.hardTraining)
+      const total = parseFloat(
+        (latestWeight.creatineRetentionKg + latestWeight.alcoholRetentionKg + latestWeight.glycogenRetentionKg + sodiumKg + hardTrainingKg).toFixed(2)
+      )
+      latestBreakdown = {
+        creatineKg:        latestWeight.creatineRetentionKg,
+        alcoholKg:         latestWeight.alcoholRetentionKg,
+        glycogenKg:        latestWeight.glycogenRetentionKg,
+        sodiumKg,
+        hardTrainingKg,
+        totalAdjustmentKg: total,
+        tanitaFlags:       tanita.flags,
+      }
+    }
+
     return NextResponse.json({
       weight: {
         latest: latestWeight
@@ -293,6 +328,7 @@ export async function GET() {
               date: latestWeight.date,
               confidence: latestConfidence,
               activeConfounders: latestActiveConfounders,
+              breakdown: latestBreakdown,
             }
           : null,
         avg7: weightAvg7,
