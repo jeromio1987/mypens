@@ -6,7 +6,7 @@ import {
   ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Upload, Scale,
   UtensilsCrossed, Moon, Dumbbell, Ruler, DatabaseBackup,
   Plane, Thermometer, Palmtree, Salad, Trophy, Tag,
-  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Activity,
+  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Activity, Map,
 } from 'lucide-react'
 import type { StructuredInsight } from '@/app/api/dashboard/route'
 
@@ -192,10 +192,17 @@ export default function DashboardClient() {
           <Link href="/" className="text-gray-400 hover:text-gray-600 transition-colors">
             <ArrowLeft size={20} />
           </Link>
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900">Weekly Overview</h1>
             <p className="text-sm text-gray-400 mt-0.5">Last 7 days at a glance</p>
           </div>
+          <Link
+            href="/roadmap"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-medium text-gray-600 transition-colors"
+          >
+            <Map size={13} className="text-gray-500" />
+            Roadmap
+          </Link>
         </div>
 
         {loading && <div className="text-center py-12 text-gray-400 text-sm">Loading…</div>}
