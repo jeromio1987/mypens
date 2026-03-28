@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Scale, UtensilsCrossed, Moon, Dumbbell, LayoutDashboard, Ruler, CalendarDays } from 'lucide-react'
+import { Scale, UtensilsCrossed, Moon, Dumbbell, LayoutDashboard, Ruler, CalendarDays, Activity } from 'lucide-react'
 
 const modules = [
   {
@@ -71,6 +71,16 @@ const modules = [
     iconColor: 'text-sky-600',
     badge: 'Phase 5',
     badgeColor: 'bg-sky-100 text-sky-600',
+  },
+  {
+    href: '/data-health',
+    icon: Activity,
+    title: 'Data Health',
+    description: '30-day calendar heatmap showing logging coverage, current streaks, and gaps per module.',
+    color: 'bg-teal-50 border-teal-200 hover:bg-teal-100',
+    iconColor: 'text-teal-600',
+    badge: 'Phase 5',
+    badgeColor: 'bg-teal-100 text-teal-600',
   },
 ]
 

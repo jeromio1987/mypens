@@ -44,6 +44,31 @@ export async function GET(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json()
+    const { id, meal, name, kcal, proteinG, carbsG, fatG, fiberG, notes } = body
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+    const entry = await prisma.foodEntry.update({
+      where: { id },
+      data: {
+        ...(meal      !== undefined && { meal }),
+        ...(name      !== undefined && { name }),
+        ...(kcal      !== undefined && { kcal:     Number(kcal) }),
+        ...(proteinG  !== undefined && { proteinG: Number(proteinG) }),
+        ...(carbsG    !== undefined && { carbsG:   Number(carbsG) }),
+        ...(fatG      !== undefined && { fatG:     Number(fatG) }),
+        ...(fiberG    !== undefined && { fiberG:   Number(fiberG) }),
+        ...(notes     !== undefined && { notes }),
+      },
+    })
+    return NextResponse.json(entry)
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const { id } = await request.json()

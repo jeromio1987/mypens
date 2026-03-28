@@ -11,7 +11,7 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts'
-import { ChevronRight, ChevronDown } from 'lucide-react'
+import { ChevronRight, ChevronDown, Pencil, Check, X } from 'lucide-react'
 import type { ConfidenceLevel } from '@/lib/retentionModels'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -293,10 +293,25 @@ type ChartEntry = Entry & {
   __bandWidth: number
 }
 
+interface WeightEditForm {
+  scaleKg: string
+  carbsG: string
+  alcoholUnits: string
+  hardTraining: boolean
+  morningReading: boolean
+  highSodium: boolean
+  restaurantMeal: boolean
+  flightDay: boolean
+  illnessDay: boolean
+}
+
 export default function WeightTrend({ refresh }: { refresh?: number }) {
   const [data, setData]             = useState<ChartEntry[]>([])
   const [loading, setLoading]       = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [editingId, setEditingId]   = useState<string | null>(null)
+  const [editForm, setEditForm]     = useState<WeightEditForm | null>(null)
+  const [saving, setSaving]         = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -317,6 +332,69 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
       })
       .finally(() => setLoading(false))
   }, [refresh])
+
+  const loadData = () => {
+    setLoading(true)
+    fetch('/api/weight')
+      .then(r => r.json())
+      .then((entries: Entry[]) => {
+        const sorted = entries.map(e => ({
+          ...e,
+          label: new Date(e.date + 'T00:00:00').toLocaleDateString('en-GB', {
+            day: 'numeric', month: 'short',
+          }),
+          retention:    parseFloat((e.scaleKg - e.trueWeightKg).toFixed(2)),
+          __bandLow:    parseFloat((e.trueWeightKg - e.dynamicBandKg).toFixed(2)),
+          __bandWidth:  parseFloat((e.dynamicBandKg * 2).toFixed(2)),
+        }))
+        setData(sorted)
+      })
+      .finally(() => setLoading(false))
+  }
+
+  const startEdit = (e: ChartEntry) => {
+    setEditingId(e.id)
+    setExpandedId(null)
+    setEditForm({
+      scaleKg:       String(e.scaleKg),
+      carbsG:        String(e.carbsG ?? 0),
+      alcoholUnits:  String(e.alcoholUnits ?? 0),
+      hardTraining:  e.hardTraining,
+      morningReading: e.morningReading,
+      highSodium:    e.highSodium,
+      restaurantMeal: e.restaurantMeal,
+      flightDay:     e.flightDay,
+      illnessDay:    e.illnessDay,
+    })
+  }
+
+  const cancelEdit = () => { setEditingId(null); setEditForm(null) }
+
+  const saveEdit = async (id: string) => {
+    if (!editForm) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/weight', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          scaleKg:       parseFloat(editForm.scaleKg),
+          carbsG:        parseFloat(editForm.carbsG)       || 0,
+          alcoholUnits:  parseFloat(editForm.alcoholUnits) || 0,
+          hardTraining:  editForm.hardTraining,
+          morningReading: editForm.morningReading,
+          highSodium:    editForm.highSodium,
+          restaurantMeal: editForm.restaurantMeal,
+          flightDay:     editForm.flightDay,
+          illnessDay:    editForm.illnessDay,
+        }),
+      })
+      if (res.ok) { loadData(); cancelEdit() }
+    } finally {
+      setSaving(false)
+    }
+  }
 
   if (loading)
     return <div className="bg-white rounded-2xl shadow p-6 text-sm text-gray-400">Loading chart…</div>
@@ -397,39 +475,100 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
         </h3>
         <div className="space-y-px max-h-96 overflow-y-auto">
           {[...data].reverse().map(e => {
-            const bandKg   = e.dynamicBandKg
+            const bandKg     = e.dynamicBandKg
             const isExpanded = expandedId === e.id
+            const isEditing  = editingId  === e.id
 
             return (
               <div key={e.id}>
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(isExpanded ? null : e.id)}
-                  className="w-full flex items-center gap-2 text-sm py-2 px-2 rounded-lg hover:bg-gray-50 transition-colors text-left"
-                >
-                  <span className="text-gray-400 w-14 shrink-0 text-xs">{e.label}</span>
-                  <span className={`font-medium w-16 shrink-0 ${e.isOutlier ? 'text-red-500' : ''}`}>
-                    {e.scaleKg} kg{e.isOutlier && ' ⚠'}
-                  </span>
-                  <span className="text-emerald-600 font-medium flex-1">
-                    → {e.trueWeightKg}
-                    <span className="text-emerald-400 font-normal text-xs"> ±{bandKg}</span>
-                    {e.baselineTrendKg !== null && (
-                      <span className="text-slate-400 font-normal text-xs ml-1">(base {e.baselineTrendKg})</span>
-                    )}
-                  </span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${CONF_STYLES[e.confidence]}`}>
-                    {e.confidence}
-                  </span>
-                  <span className="text-amber-500 text-xs w-10 text-right shrink-0">
-                    {e.retention > 0 ? `+${e.retention}` : '—'}
-                  </span>
-                  {isExpanded
-                    ? <ChevronDown  size={13} className="text-gray-300 shrink-0" />
-                    : <ChevronRight size={13} className="text-gray-300 shrink-0" />
-                  }
-                </button>
-                {isExpanded && <ExplanationPanel entry={e} />}
+                {isEditing && editForm ? (
+                  <div className="bg-blue-50 rounded-xl p-3 space-y-2 my-0.5">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="col-span-2">
+                        <label className="text-xs text-gray-500 mb-0.5 block">Scale reading (kg)</label>
+                        <input
+                          type="number" step="0.01"
+                          className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          value={editForm.scaleKg}
+                          onChange={ev => setEditForm(f => f ? { ...f, scaleKg: ev.target.value } : f)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-0.5 block">Carbs today (g)</label>
+                        <input type="number" className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" value={editForm.carbsG}       onChange={ev => setEditForm(f => f ? { ...f, carbsG:       ev.target.value } : f)} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-0.5 block">Alcohol units</label>
+                        <input type="number" step="0.5" className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" value={editForm.alcoholUnits} onChange={ev => setEditForm(f => f ? { ...f, alcoholUnits: ev.target.value } : f)} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                      {([
+                        ['hardTraining',  'Hard training yesterday'],
+                        ['morningReading','Morning reading (fasted)'],
+                        ['highSodium',    'High-sodium meal'],
+                        ['restaurantMeal','Restaurant / eating out'],
+                        ['flightDay',     'Flight day'],
+                        ['illnessDay',    'Illness'],
+                      ] as [keyof WeightEditForm, string][]).map(([key, label]) => (
+                        <label key={key} className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="rounded accent-blue-500"
+                            checked={editForm[key] as boolean}
+                            onChange={ev => setEditForm(f => f ? { ...f, [key]: ev.target.checked } : f)}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={cancelEdit} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100"><X size={12} /> Cancel</button>
+                      <button onClick={() => saveEdit(e.id)} disabled={saving} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"><Check size={12} /> Save &amp; recalculate</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center group">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(isExpanded ? null : e.id)}
+                        className="flex-1 flex items-center gap-2 text-sm py-2 px-2 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <span className="text-gray-400 w-14 shrink-0 text-xs">{e.label}</span>
+                        <span className={`font-medium w-16 shrink-0 ${e.isOutlier ? 'text-red-500' : ''}`}>
+                          {e.scaleKg} kg{e.isOutlier && ' ⚠'}
+                        </span>
+                        <span className="text-emerald-600 font-medium flex-1">
+                          → {e.trueWeightKg}
+                          <span className="text-emerald-400 font-normal text-xs"> ±{bandKg}</span>
+                          {e.baselineTrendKg !== null && (
+                            <span className="text-slate-400 font-normal text-xs ml-1">(base {e.baselineTrendKg})</span>
+                          )}
+                        </span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${CONF_STYLES[e.confidence]}`}>
+                          {e.confidence}
+                        </span>
+                        <span className="text-amber-500 text-xs w-10 text-right shrink-0">
+                          {e.retention > 0 ? `+${e.retention}` : '—'}
+                        </span>
+                        {isExpanded
+                          ? <ChevronDown  size={13} className="text-gray-300 shrink-0" />
+                          : <ChevronRight size={13} className="text-gray-300 shrink-0" />
+                        }
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(e)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 ml-0.5 text-gray-300 hover:text-blue-400 shrink-0"
+                        title="Edit entry"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    </div>
+                    {isExpanded && <ExplanationPanel entry={e} />}
+                  </>
+                )}
               </div>
             )
           })}

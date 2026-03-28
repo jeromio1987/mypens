@@ -6,9 +6,15 @@ import {
   ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Upload, Scale,
   UtensilsCrossed, Moon, Dumbbell, Ruler, DatabaseBackup,
   Plane, Thermometer, Palmtree, Salad, Trophy, Tag,
-  CheckCircle, AlertTriangle, Info, CalendarDays,
+  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Activity,
 } from 'lucide-react'
 import type { StructuredInsight } from '@/app/api/dashboard/route'
+
+interface StreakModule { current: number; longest: number; lastLogged: string | null; coverage: number }
+interface StreaksData {
+  weight: StreakModule; food: StreakModule; sleep: StreakModule
+  training: StreakModule; measurements: StreakModule
+}
 
 interface EventTag { id: string; type: string; label: string; startDate: string; endDate: string; notes?: string | null }
 
@@ -110,9 +116,18 @@ const MODULES = [
   { href: '/events',       label: 'Events',       icon: CalendarDays,   color: 'text-sky-600' },
 ]
 
+const STREAK_MODULES = [
+  { key: 'weight'      , label: 'Weight',       icon: Scale,          color: 'text-blue-600' },
+  { key: 'food'        , label: 'Food',         icon: UtensilsCrossed,color: 'text-emerald-600' },
+  { key: 'sleep'       , label: 'Sleep',        icon: Moon,           color: 'text-violet-600' },
+  { key: 'training'    , label: 'Training',     icon: Dumbbell,       color: 'text-orange-500' },
+  { key: 'measurements', label: 'Measurements', icon: Ruler,          color: 'text-rose-600' },
+]
+
 export default function DashboardClient() {
   const [data, setData]             = useState<DashboardData | null>(null)
   const [loading, setLoading]       = useState(true)
+  const [streaks, setStreaks]       = useState<StreaksData | null>(null)
   const [apiError, setApiError]     = useState<string | null>(null)
   const [exportModule, setExportModule] = useState<string>('all')
   const [backupStatus, setBackupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -134,6 +149,7 @@ export default function DashboardClient() {
       })
       .catch(() => setApiError('Could not reach the dashboard API.'))
       .finally(() => setLoading(false))
+    fetch('/api/streaks').then(r => r.json()).then(setStreaks).catch(() => null)
   }, [])
 
   const handleExport = () => { window.location.href = `/api/export?module=${exportModule}` }
@@ -408,6 +424,41 @@ export default function DashboardClient() {
                   )
                 })}
                 <p className="text-xs text-gray-400 px-1">Rule-based · Based on last 7 days of logged data</p>
+              </div>
+            )}
+
+            {/* Streaks */}
+            {streaks && (
+              <div className="bg-white rounded-2xl shadow p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <Flame size={16} className="text-orange-500" />
+                    Logging Streaks
+                  </h2>
+                  <Link href="/data-health" className="flex items-center gap-1 text-xs text-teal-500 hover:underline">
+                    <Activity size={12} />
+                    Data health →
+                  </Link>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  {STREAK_MODULES.map(({ key, label, icon: Icon, color }) => {
+                    const s = streaks[key as keyof StreaksData]
+                    return (
+                      <div key={key} className="bg-gray-50 rounded-xl p-3 text-center">
+                        <Icon size={15} className={`${color} mx-auto mb-1`} />
+                        <p className="text-xs text-gray-500 mb-1">{label}</p>
+                        {s.current > 0 ? (
+                          <p className="text-lg font-bold text-orange-500 leading-none">
+                            {s.current}<span className="text-xs font-normal text-gray-400">d</span>
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-300 font-medium">—</p>
+                        )}
+                        <p className="text-[10px] text-gray-400 mt-0.5">{s.coverage}% / 30d</p>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
 

@@ -52,6 +52,36 @@ export async function GET(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json()
+    const { id, exercise, sets, reps, weightKg, rpe, notes } = body
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+    const existing = await prisma.trainingEntry.findUnique({ where: { id } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const s  = sets     !== undefined ? Number(sets)     : existing.sets
+    const r  = reps     !== undefined ? Number(reps)     : existing.reps
+    const kg = weightKg !== undefined ? Number(weightKg) : existing.weightKg
+    const volume = parseFloat((s * r * kg).toFixed(1))
+
+    const entry = await prisma.trainingEntry.update({
+      where: { id },
+      data: {
+        ...(exercise !== undefined && { exercise }),
+        sets: s, reps: r, weightKg: kg, volume,
+        ...(rpe   !== undefined && { rpe:   rpe === '' ? null : Number(rpe) }),
+        ...(notes !== undefined && { notes }),
+      },
+    })
+    return NextResponse.json(entry)
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const { id } = await request.json()

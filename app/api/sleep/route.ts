@@ -59,6 +59,37 @@ export async function GET(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json()
+    const { id, bedtime, wakeTime, quality, hrv, notes } = body
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+    const existing = await prisma.sleepEntry.findUnique({ where: { id } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const newBed  = bedtime   ?? existing.bedtime
+    const newWake = wakeTime  ?? existing.wakeTime
+    const hours   = calcHours(newBed, newWake)
+
+    const entry = await prisma.sleepEntry.update({
+      where: { id },
+      data: {
+        bedtime:  newBed,
+        wakeTime: newWake,
+        hours,
+        ...(quality !== undefined && { quality: Number(quality) }),
+        ...(hrv     !== undefined && { hrv: hrv === '' ? null : Number(hrv) }),
+        ...(notes   !== undefined && { notes }),
+      },
+    })
+    return NextResponse.json({ entry, hours })
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const { id } = await request.json()
