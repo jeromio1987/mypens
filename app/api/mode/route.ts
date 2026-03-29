@@ -5,11 +5,41 @@ function today() {
   return new Date().toISOString().slice(0, 10)
 }
 
+async function getModeStreak(): Promise<number> {
+  const todayStr = today()
+  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const allEntries = await prisma.dayEntry.findMany({
+    select: { date: true, mode: true },
+    orderBy: { date: 'desc' },
+  })
+  const sorted = [...new Set(allEntries.filter(e => e.mode).map(e => e.date))].sort((a, b) => b.localeCompare(a))
+  if (!sorted.length) return 0
+  const mostRecent = sorted[0]
+  const anchorStart = mostRecent === todayStr || mostRecent === yesterdayStr ? mostRecent : null
+  if (!anchorStart) return 0
+  let streak = 0
+  let cursor = anchorStart
+  for (const d of sorted) {
+    if (d === cursor) {
+      streak++
+      const prev = new Date(cursor + 'T00:00:00')
+      prev.setDate(prev.getDate() - 1)
+      cursor = prev.toISOString().slice(0, 10)
+    } else {
+      break
+    }
+  }
+  return streak
+}
+
 export async function GET() {
   try {
-    const entry = await prisma.dayEntry.findUnique({ where: { date: today() } })
-    if (!entry) return NextResponse.json({ mode: null, tags: [] })
-    return NextResponse.json({ mode: entry.mode, tags: JSON.parse(entry.tags) })
+    const [entry, streak] = await Promise.all([
+      prisma.dayEntry.findUnique({ where: { date: today() } }),
+      getModeStreak(),
+    ])
+    if (!entry) return NextResponse.json({ mode: null, tags: [], streak })
+    return NextResponse.json({ mode: entry.mode, tags: JSON.parse(entry.tags), streak })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Failed to load mode' }, { status: 500 })
@@ -27,7 +57,8 @@ export async function POST(req: Request) {
       update: { mode, tags: JSON.stringify(tags) },
       create: { date: today(), mode, tags: JSON.stringify(tags) },
     })
-    return NextResponse.json({ mode: entry.mode, tags: JSON.parse(entry.tags) })
+    const streak = await getModeStreak()
+    return NextResponse.json({ mode: entry.mode, tags: JSON.parse(entry.tags), streak })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Failed to save mode' }, { status: 500 })

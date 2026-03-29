@@ -9,6 +9,10 @@ A personal health tracking Next.js application — an interpretation layer betwe
 - **Styling**: Tailwind CSS v4
 - **Charts**: Recharts
 
+## Home Page (`/`)
+
+Editorial "Mode Selection" screen with immersive mode cards (Locked In / Balanced / Off), streak badge, context tags, Auditor's Note quote, "Why Mode Matters?" section, and fixed bottom nav. Mode streak count added to `/api/mode` GET + POST responses.
+
 ## Modules
 
 - **Weight** (`/weight`): Scale readings with full v3 water retention model (creatine, alcohol, glycogen, sodium, hard training). Per-entry confidence scoring, EWMA baseline trend, outlier detection, dynamic uncertainty band.
