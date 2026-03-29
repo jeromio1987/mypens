@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Scale, Moon, Ruler, LayoutDashboard, ArrowUpRight, Plus, ListChecks } from 'lucide-react'
+import { Scale, Moon, Ruler, LayoutDashboard, ArrowUpRight, Plus, ListChecks, FileText, BarChart2 } from 'lucide-react'
 
 const MODES = [
   {
@@ -135,6 +135,37 @@ export default function Home() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Today's Flow — quick-nav between the 3 main pages */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-1 bg-pens-crimson/15 border border-pens-crimson/40 rounded-xl px-3 py-2.5">
+            <BarChart2 size={13} className="text-pens-crimson shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[8px] uppercase tracking-widest text-pens-crimson/70 font-semibold leading-none mb-0.5">Today</p>
+              <p className="text-xs font-bold text-pens-cream truncate">Mode</p>
+            </div>
+          </div>
+          <Link
+            href="/context"
+            className="flex items-center gap-1.5 flex-1 bg-pens-surface/60 border border-pens-muted/20 hover:border-pens-muted/40 rounded-xl px-3 py-2.5 transition-colors"
+          >
+            <ListChecks size={13} className="text-pens-cream/40 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[8px] uppercase tracking-widest text-pens-cream/30 font-semibold leading-none mb-0.5">Log</p>
+              <p className="text-xs font-bold text-pens-cream/60 truncate">Context</p>
+            </div>
+          </Link>
+          <Link
+            href="/verdict"
+            className="flex items-center gap-1.5 flex-1 bg-pens-surface/60 border border-pens-muted/20 hover:border-pens-muted/40 rounded-xl px-3 py-2.5 transition-colors"
+          >
+            <FileText size={13} className="text-pens-cream/40 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[8px] uppercase tracking-widest text-pens-cream/30 font-semibold leading-none mb-0.5">Review</p>
+              <p className="text-xs font-bold text-pens-cream/60 truncate">Verdict</p>
+            </div>
+          </Link>
         </div>
 
         {/* Mode cards */}

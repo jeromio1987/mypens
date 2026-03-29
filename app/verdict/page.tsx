@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, ArrowUpRight, Activity, Utensils, Moon,
-  Download, TrendingUp, TrendingDown,
+  Download, TrendingUp, TrendingDown, BarChart2, ListChecks, FileText,
 } from 'lucide-react'
 import type { VerdictData, VerdictPillar, LedgerItem } from '@/app/api/verdict/route'
 
@@ -122,6 +122,37 @@ export default function VerdictPage() {
               {data.weekRange}
             </p>
           )}
+        </div>
+
+        {/* Today's Flow — page nav */}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 flex-1 bg-pens-surface/60 border border-pens-muted/20 hover:border-pens-muted/40 rounded-xl px-3 py-2.5 transition-colors"
+          >
+            <BarChart2 size={13} className="text-pens-cream/40 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[8px] uppercase tracking-widest text-pens-cream/30 font-semibold leading-none mb-0.5">Today</p>
+              <p className="text-xs font-bold text-pens-cream/60 truncate">Mode</p>
+            </div>
+          </Link>
+          <Link
+            href="/context"
+            className="flex items-center gap-1.5 flex-1 bg-pens-surface/60 border border-pens-muted/20 hover:border-pens-muted/40 rounded-xl px-3 py-2.5 transition-colors"
+          >
+            <ListChecks size={13} className="text-pens-cream/40 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[8px] uppercase tracking-widest text-pens-cream/30 font-semibold leading-none mb-0.5">Log</p>
+              <p className="text-xs font-bold text-pens-cream/60 truncate">Context</p>
+            </div>
+          </Link>
+          <div className="flex items-center gap-1.5 flex-1 bg-pens-crimson/15 border border-pens-crimson/40 rounded-xl px-3 py-2.5">
+            <FileText size={13} className="text-pens-crimson shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[8px] uppercase tracking-widest text-pens-crimson/70 font-semibold leading-none mb-0.5">Review</p>
+              <p className="text-xs font-bold text-pens-cream truncate">Verdict</p>
+            </div>
+          </div>
         </div>
 
         {/* Pillar scores */}
