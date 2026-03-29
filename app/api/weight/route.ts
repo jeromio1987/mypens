@@ -35,42 +35,50 @@ export async function POST(request: Request) {
       visceralFat,
     } = body
 
+    // Input validation — catch NaN and missing required fields early
+    if (!date || typeof date !== 'string') {
+      return NextResponse.json({ error: 'date is required' }, { status: 400 })
+    }
+    const parsedScale = Number(scaleKg)
+    if (isNaN(parsedScale) || parsedScale <= 0 || parsedScale > 500) {
+      return NextResponse.json({ error: 'scaleKg must be a valid positive number' }, { status: 400 })
+    }
+
     const breakdown = calculateWeightBreakdown({
-      scaleKg,
-      creatineDoseG,
-      creatineDaysOn,
-      alcoholUnits,
-      hoursSinceAlcohol,
-      carbsG,
-      hardTraining,
-      morningReading,
-      highSodium,
-      restaurantMeal,
-      flightDay,
-      illnessDay,
+      scaleKg: parsedScale,
+      creatineDoseG:     Number(creatineDoseG)     || 0,
+      creatineDaysOn:    Number(creatineDaysOn)     || 0,
+      alcoholUnits:      Number(alcoholUnits)       || 0,
+      hoursSinceAlcohol: Number(hoursSinceAlcohol)  || 48,
+      carbsG:            Number(carbsG)             || 0,
+      hardTraining:      Boolean(hardTraining),
+      morningReading:    Boolean(morningReading),
+      highSodium:        Boolean(highSodium),
+      restaurantMeal:    Boolean(restaurantMeal),
+      flightDay:         Boolean(flightDay),
+      illnessDay:        Boolean(illnessDay),
     })
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const entry = await (prisma.weightEntry.create as any)({
+    const entry = await prisma.weightEntry.create({
       data: {
         date,
-        scaleKg,
-        creatineDoseG,
-        creatineDaysOn,
-        alcoholUnits,
-        hoursSinceAlcohol,
-        carbsG,
-        hardTraining,
-        morningReading,
-        highSodium,
-        restaurantMeal,
-        flightDay,
-        illnessDay,
-        bodyFatPct,
-        muscleMassKg,
-        boneMassKg,
-        bodyWaterPct,
-        visceralFat,
+        scaleKg:           parsedScale,
+        creatineDoseG:     Number(creatineDoseG)     || 0,
+        creatineDaysOn:    Number(creatineDaysOn)     || 0,
+        alcoholUnits:      Number(alcoholUnits)       || 0,
+        hoursSinceAlcohol: Number(hoursSinceAlcohol)  || 48,
+        carbsG:            Number(carbsG)             || 0,
+        hardTraining:      Boolean(hardTraining),
+        morningReading:    Boolean(morningReading),
+        highSodium:        Boolean(highSodium),
+        restaurantMeal:    Boolean(restaurantMeal),
+        flightDay:         Boolean(flightDay),
+        illnessDay:        Boolean(illnessDay),
+        bodyFatPct:        bodyFatPct   != null ? Number(bodyFatPct)   : undefined,
+        muscleMassKg:      muscleMassKg != null ? Number(muscleMassKg) : undefined,
+        boneMassKg:        boneMassKg   != null ? Number(boneMassKg)   : undefined,
+        bodyWaterPct:      bodyWaterPct != null ? Number(bodyWaterPct) : undefined,
+        visceralFat:       visceralFat  != null ? Number(visceralFat)  : undefined,
         creatineRetentionKg: breakdown.creatineKg,
         alcoholRetentionKg:  breakdown.alcoholKg,
         glycogenRetentionKg: breakdown.glycogenKg,
@@ -95,6 +103,14 @@ export async function PATCH(request: Request) {
     const existing = await prisma.weightEntry.findUnique({ where: { id } })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    if (fields.scaleKg !== undefined) {
+      const parsed = Number(fields.scaleKg)
+      if (isNaN(parsed) || parsed <= 0 || parsed > 500) {
+        return NextResponse.json({ error: 'scaleKg must be a valid positive number' }, { status: 400 })
+      }
+      fields.scaleKg = parsed
+    }
+
     const merged = {
       scaleKg:           fields.scaleKg           ?? existing.scaleKg,
       creatineDoseG:     fields.creatineDoseG     ?? existing.creatineDoseG,
@@ -112,16 +128,15 @@ export async function PATCH(request: Request) {
 
     const breakdown = calculateWeightBreakdown(merged)
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const entry = await (prisma.weightEntry.update as any)({
+    const entry = await prisma.weightEntry.update({
       where: { id },
       data: {
         ...merged,
-        bodyFatPct:          fields.bodyFatPct    !== undefined ? fields.bodyFatPct    : existing.bodyFatPct,
-        muscleMassKg:        fields.muscleMassKg  !== undefined ? fields.muscleMassKg  : existing.muscleMassKg,
-        boneMassKg:          fields.boneMassKg    !== undefined ? fields.boneMassKg    : existing.boneMassKg,
-        bodyWaterPct:        fields.bodyWaterPct  !== undefined ? fields.bodyWaterPct  : existing.bodyWaterPct,
-        visceralFat:         fields.visceralFat   !== undefined ? fields.visceralFat   : existing.visceralFat,
+        bodyFatPct:          fields.bodyFatPct    !== undefined ? Number(fields.bodyFatPct)    : existing.bodyFatPct,
+        muscleMassKg:        fields.muscleMassKg  !== undefined ? Number(fields.muscleMassKg)  : existing.muscleMassKg,
+        boneMassKg:          fields.boneMassKg    !== undefined ? Number(fields.boneMassKg)    : existing.boneMassKg,
+        bodyWaterPct:        fields.bodyWaterPct  !== undefined ? Number(fields.bodyWaterPct)  : existing.bodyWaterPct,
+        visceralFat:         fields.visceralFat   !== undefined ? Number(fields.visceralFat)   : existing.visceralFat,
         creatineRetentionKg: breakdown.creatineKg,
         alcoholRetentionKg:  breakdown.alcoholKg,
         glycogenRetentionKg: breakdown.glycogenKg,
@@ -138,26 +153,21 @@ export async function PATCH(request: Request) {
 
 export async function GET() {
   try {
-    // Fetch ascending — we need chronological order to build rolling history
+    // Fetch ascending — chronological order needed to build rolling history
     const rawEntries = await prisma.weightEntry.findMany({
       orderBy: { date: 'asc' },
       take: 30,
     })
 
-    // Build enriched entries with v3 trend layer.
-    // We process chronologically, accumulating history before each entry (no lookahead).
     const history: HistoryEntry[] = []
 
     const enriched = rawEntries.map(e => {
-      // Re-derive v3 true weight from stored components + on-the-fly sodium/hardTraining.
-      // (These are deterministic from stored flags so no schema change needed.)
       const sodiumKg       = estimateSodiumRetention(e.highSodium, e.restaurantMeal)
       const hardTrainingKg = estimateHardTrainingRetention(e.hardTraining)
       const trueWeightKg   = parseFloat(
         (e.scaleKg - e.creatineRetentionKg - e.alcoholRetentionKg - e.glycogenRetentionKg - sodiumKg - hardTrainingKg).toFixed(2),
       )
 
-      // Confidence (computed from stored retention values + flags)
       const confidence: ConfidenceLevel = calculateConfidence({
         creatineRetentionKg: e.creatineRetentionKg,
         alcoholRetentionKg:  e.alcoholRetentionKg,
@@ -170,21 +180,17 @@ export async function GET() {
         illnessDay:      e.illnessDay,
       }).level
 
-      // Trend layer — uses only prior history (strict no-lookahead)
-      const baselineTrendKg                       = calculateRollingBaseline(history)
+      const baselineTrendKg                         = calculateRollingBaseline(history)
       const { bandKg: dynamicBandKg, source: dynamicBandSource } = calculateDynamicBand(history, confidence)
-      const isOutlier                             = detectOutlier(e.scaleKg, baselineTrendKg, dynamicBandKg)
+      const isOutlier                               = detectOutlier(e.scaleKg, baselineTrendKg, dynamicBandKg)
 
-      // Advance history for the next entry
       history.push({ date: e.date, trueWeightKg, confidence })
 
       return {
         ...e,
-        // Override stored v2 trueWeightKg with v3 (sodium + hardTraining included)
         trueWeightKg,
         sodiumKg,
         hardTrainingKg,
-        // Trend context
         confidence,
         baselineTrendKg,
         dynamicBandKg,

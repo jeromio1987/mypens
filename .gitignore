@@ -24,6 +24,12 @@
 .DS_Store
 *.pem
 
+# SQLite database — contains personal health data, never commit
+prisma/*.db
+prisma/*.db-journal
+prisma/*.db-wal
+prisma/*.db-shm
+
 # debug
 npm-debug.log*
 yarn-debug.log*
