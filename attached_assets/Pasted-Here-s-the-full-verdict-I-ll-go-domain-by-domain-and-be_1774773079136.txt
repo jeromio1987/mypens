@@ -1,0 +1,147 @@
+Here's the full verdict. I'll go domain by domain and be direct.
+
+---
+
+## Overall verdict: above-average personal project, but with some real gaps
+
+The architecture is clean, the retention model is conceptually thoughtful, and the backtest harness is genuinely impressive. That said, there are concrete bugs and structural weaknesses that would cause silent failures in production.
+
+---
+
+## 1. API Routes
+
+**Weight (`app/api/weight/route.ts`) — the most important, and the most problematic**
+
+The biggest red flag is this line in `POST`:
+```typescript
+const entry = await (prisma.weightEntry.create as any)({
+```
+This `as any` cast bypasses TypeScript entirely on the most critical write path. It almost certainly means the Prisma schema hasn't been regenerated after adding v3 fields (`sodiumKg`, `hardTrainingKg`, etc.). If the field names are off by even a character, this silently writes wrong or null data to the DB with no compile-time error.
+
+There's also **zero input validation** on `POST`. `scaleKg` could be `undefined`, `NaN`, or a string, and it flows directly into `calculateWeightBreakdown` and then into the DB. No Zod, no type guards, nothing.
+
+The `GET` correctly recomputes v3 values from stored flags — but only works because `highSodium`, `hardTraining`, etc. are stored. If those flags are missing from an old entry, recomputed values silently go to zero. Also, `take: 30` means the EWMA baseline silently drops older entries — so after 30+ entries, your rolling trend is computed on a truncated history without any warning.
+
+The stored `trueWeightKg` in the DB is v2 (no sodium/hardTraining) and is never corrected — only overridden on the way out of GET. The DB is gradually accumulating stale data.
+
+**Food (`app/api/food/route.ts`) — cleanest of the four**
+
+Validates `name`. Has GET/POST/DELETE. The DELETE takes `id` from the request body rather than a URL param — unconventional but functional. No authorization check means any caller can delete any entry by ID (no user scope — relevant when you add multi-user support).
+
+**Sleep (`app/api/sleep/route.ts`) — solid, two issues**
+
+Uses upsert correctly (one sleep entry per date makes sense). But `toMinutes` doesn't validate the `"HH:MM"` format — `"abc:xyz".split(':').map(Number)` yields `[NaN, NaN]`, and the hours calculation returns NaN silently. Also `quality` is coerced to `Number()` without checking it's in the 1–5 range.
+
+**Training (`app/api/training/route.ts`) — fine**
+
+Validates the required fields. Volume calculation (`sets × reps × weightKg`) is correct for tonnage. One minor issue: GET returns unlimited entries when a date filter is provided — no upper bound.
+
+---
+
+## 2. Retention Model Logic (`lib/retentionModels.ts`)
+
+The model is thoughtful and honestly documented. But there are correctness issues worth calling out.
+
+**Creatine: loading → maintenance transition is wrong**
+
+The backtest creatine scenario actually fails its own pass condition. Walk through the numbers:
+
+- Day 7 (loading, 20g, daysOn=7): ramp = 1.0 → retention = 1.0 kg → adjusted = 83.0 ✓
+- Day 14 (maintenance, 5g, daysOn=14): saturation = 14/28 = 0.5 → retention = 0.2 kg → adjusted = 83.4 − 0.2 = **83.2**
+- Day 28 (maintenance, 5g, daysOn=28): saturation = 1.0 → retention = 0.4 kg → adjusted = 83.0
+
+Variance across all days = 83.2 − 83.0 = **0.20 kg**, which exceeds the pass condition of ≤ 0.15 kg. The scenario reports "Pass" only if the evaluator code also has a rounding issue — but the physics is wrong regardless.
+
+The real problem: when someone finishes a loading phase and drops to maintenance, they don't lose creatine retention overnight. The model treats `creatineDaysOn` as days at the *current* dose, resetting the saturation curve as if loading never happened. Physiologically, post-loading creatine stores stay near full saturation and deplete slowly (weeks). The model needs either a "saturation state" carried forward, or separate loading-phase vs. maintenance-phase retention values that don't reset on dose change.
+
+**EWMA doesn't account for date gaps**
+
+```typescript
+const ageInDays = recent.length - 1 - idx
+```
+
+This uses array position as a proxy for age in days. If you log daily, fine. But if you skip days, a gap of 5 days between entries is treated the same as a gap of 1 day. The `date` field is available in `HistoryEntry` but never used in the EWMA calculation. For irregular logging patterns, the baseline will be wrong.
+
+**Alcohol: `hoursImpaired` formula is confusing**
+
+```typescript
+const hoursImpaired = Math.max(0, units - hoursSince)
+```
+
+This treats 1 unit as impairing for exactly 1 hour, which conflates units with hours in a non-physiological way. 3 units, 4 hours later → 0 hours impaired. That's not how alcohol metabolism works (it's roughly 0.015% BAC cleared per hour, which at typical doses is about 1 unit/hour — so it's not *wrong*, but it reads like an accident rather than an intentional metabolic model).
+
+**Alcohol retention peak (0.25 kg/unit) is likely overstated**
+
+Alcohol is primarily a diuretic. The near-term net effect on scale weight is typically a *decrease* via ADH suppression. The morning-after scale increase is real but it's from food consumed, disrupted sleep, and glycogen effects — not direct water retention from the ethanol. 0.25 kg/unit is generous. It may work empirically as a "something happened" correction, but it's not mechanistically accurate.
+
+**Glycogen model: the 50% conversion factor is arbitrary**
+
+`excessCarbs * 0.5 * 3.5` — the 3.5 g water per gram glycogen is well-sourced (research supports 3–4 g). But the 50% conversion rate (only half the excess goes to glycogen) is not cited and is doing a lot of work in the formula. Worth flagging explicitly in the comments.
+
+**Dynamic band: population variance, not sample variance**
+
+```typescript
+const variance = recent.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / recent.length
+```
+
+Divides by N instead of N-1. For 5–7 entries this gives a band that's ~10% too narrow. Minor, but systematically underestimates uncertainty.
+
+**`highSodium` + `restaurantMeal` can double-count**
+
+If both flags are true, confidence count gets +2 and the band widens more than if only `highSodium` is true. Since `restaurantMeal` is described as a "hidden sodium proxy" for cases *without* explicit `highSodium`, having both true simultaneously is an edge case the model doesn't guard against. In practice a user could tick both, and the model would penalise confidence twice for the same confounder.
+
+**What's good:**
+
+The EWMA confidence weighting (high=1.2×, low=0.7×) is smart — noisy days don't anchor the baseline. The `detectOutlier` threshold (2.5× dynamic band) is reasonable. The modular separation of `assessTanitaReliability`, `calculateConfidence`, and `calculateWeightBreakdown` is clean. The static fallback band is honest about its limitations.
+
+---
+
+## 3. WeightTrend and TrueWeightBacktest components
+
+**WeightTrend** is clean and well-structured for its complexity. `buildExplanation` is nicely factored out. The `ScaleDot` component uses `props: any` — Recharts dot props should be typed properly but it's a minor sin. The stacked Area chart trick for uncertainty bands (base + width as two separate series) is a legitimate Recharts workaround.
+
+**TrueWeightBacktest** is the most impressive thing in the repo. A client-side harness that replays the actual algorithm against synthetic scenarios with pass/fail criteria is not something most personal projects have. The 5-scenario coverage (loading, refeed, travel, deload, multi-day retention) is well-designed.
+
+One efficiency issue: in the main export, `runScenario` is called twice per scenario:
+```typescript
+const allResults = SCENARIOS.map((s) => ({
+  ...s,
+  results: runScenario(s.days),     // call 1
+  pass: evaluateScenario(s, runScenario(s.days)),  // call 2
+}))
+```
+Double computation. Should memoize or restructure. Not a correctness issue, just waste.
+
+---
+
+## 4. TypeScript and overall code quality
+
+The reported language breakdown (91.8% JavaScript, 8.2% TypeScript) is almost certainly because the `my-pens-mobile-test/.next/` build artifacts were committed to the repo — those are compiled JavaScript and they swamp the actual TypeScript source. The source files themselves are properly TypeScript. But this raises its own issue: **build artifacts and `.next/` directories should be in `.gitignore`** and not committed.
+
+The committed `dev.db` is already a known issue. It's worse than it sounds — it means your actual weight entries and personal health data are in the public repo.
+
+**What's missing across the whole codebase:**
+
+- No input validation library (Zod would take 20 minutes to add and would catch every `NaN` and missing field)
+- No `PATCH` endpoint for updating existing entries (you can create and delete, but not edit — so a typo in a weight entry requires delete + recreate)
+- No authentication or user scoping — the app is designed as single-user but there's nothing enforcing it
+- No tests beyond the visual backtest (which itself has a failing scenario due to the creatine model issue)
+- Error messages are all generic ("Failed to save", "Failed to fetch") — impossible to debug from client logs
+
+---
+
+## Summary
+
+| Area | Grade | Key issue |
+|---|---|---|
+| Architecture / structure | B+ | Clean, well-factored |
+| TypeScript usage | C+ | `as any` on critical path; good elsewhere |
+| API error handling | C | Generic errors, no input validation |
+| Weight API specifically | C | Schema drift, `as any` cast, no validation |
+| Retention model — structure | A- | Clean, well-documented |
+| Retention model — physics | C+ | Creatine transition wrong, EWMA ignores date gaps, alcohol peak overstated |
+| WeightTrend component | B+ | Minor `any` on dot props |
+| TrueWeightBacktest | A- | Impressive, double-runs scenarios, creatine scenario silently fails |
+| Security / data hygiene | D | dev.db in repo with personal data, build artifacts committed |
+
+The `as any` cast on `prisma.weightEntry.create` is the single highest-priority fix — it means the v3 model additions may not actually be persisting correctly, and you won't know until you query the DB directly and see null fields.
