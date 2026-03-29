@@ -16,13 +16,19 @@ export interface WeightBreakdown {
 
 // ── Existing retention models (v2 unchanged) ─────────────────────────────────
 
-export function estimateCreatineRetention(doseG: number, daysOn: number) {
+export function estimateCreatineRetention(doseG: number, daysOn: number, postLoad = false) {
   if (doseG === 0 || daysOn === 0) return { retentionKg: 0, phase: 'none' }
   const isLoading = doseG >= 10
   if (isLoading) {
     const ramp = Math.min(daysOn / 7, 1)
     return { retentionKg: parseFloat((ramp * 1.0).toFixed(2)), phase: 'loading' }
   }
+  // Post-load maintenance: stores remain fully saturated from the loading phase.
+  // Maintenance dose keeps phosphocreatine topped up — retention stays at 1.0 kg indefinitely.
+  if (postLoad) {
+    return { retentionKg: 1.0, phase: 'saturated' }
+  }
+  // Cold-start maintenance (no prior loading): gradual saturation to ~0.4 kg over 28 days.
   const saturation = Math.min(daysOn / 28, 1)
   return {
     retentionKg: parseFloat((saturation * 0.4).toFixed(2)),
@@ -144,6 +150,7 @@ export function calculateWeightBreakdown(input: {
   scaleKg: number
   creatineDoseG: number
   creatineDaysOn: number
+  creatinePostLoad?: boolean
   alcoholUnits: number
   hoursSinceAlcohol: number
   carbsG: number
@@ -154,7 +161,7 @@ export function calculateWeightBreakdown(input: {
   flightDay?: boolean
   illnessDay?: boolean
 }): WeightBreakdown {
-  const creatine       = estimateCreatineRetention(input.creatineDoseG, input.creatineDaysOn)
+  const creatine       = estimateCreatineRetention(input.creatineDoseG, input.creatineDaysOn, input.creatinePostLoad ?? false)
   const alcohol        = estimateAlcoholImpact(input.alcoholUnits, input.hoursSinceAlcohol)
   const glycogen       = estimateGlycogenRetention(input.carbsG)
   const sodiumKg       = estimateSodiumRetention(input.highSodium ?? false, input.restaurantMeal ?? false)
@@ -216,11 +223,17 @@ export function calculateRollingBaseline(history: HistoryEntry[]): number | null
   const recent = history.slice(-7)
   const DECAY  = 0.85
 
+  // Use actual calendar distance from the most recent entry so that logging
+  // gaps (e.g. skipping 5 days) decay correctly rather than treating every
+  // entry as exactly 1 day apart.
+  const latestMs = new Date(recent[recent.length - 1].date).getTime()
+
   let weightedSum = 0
   let totalWeight = 0
 
-  recent.forEach((entry, idx) => {
-    const ageInDays = recent.length - 1 - idx
+  recent.forEach((entry) => {
+    const entryMs   = new Date(entry.date).getTime()
+    const ageInDays = (latestMs - entryMs) / 86_400_000  // ms → days
     const base      = Math.pow(DECAY, ageInDays)
     const confMult  = entry.confidence === 'high' ? 1.2 : entry.confidence === 'medium' ? 1.0 : 0.7
     const w         = base * confMult

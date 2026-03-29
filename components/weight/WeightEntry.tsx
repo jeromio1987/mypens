@@ -48,6 +48,7 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
     visceralFat: '',
     creatineDoseG: '0',
     creatineDaysOn: '0',
+    creatinePostLoad: false,
     alcoholUnits: '0',
     hoursSinceAlcohol: '48',
     carbsG: '0',
@@ -87,6 +88,7 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
         visceralFat: form.visceralFat ? parseInt(form.visceralFat) : undefined,
         creatineDoseG: parseFloat(form.creatineDoseG),
         creatineDaysOn: parseInt(form.creatineDaysOn),
+        creatinePostLoad: form.creatinePostLoad,
         alcoholUnits: parseFloat(form.alcoholUnits),
         hoursSinceAlcohol: parseFloat(form.hoursSinceAlcohol),
         carbsG: parseFloat(form.carbsG),
@@ -275,6 +277,22 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
                   className="w-full border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
+              {Number(form.creatineDoseG) > 0 && Number(form.creatineDoseG) < 10 && (
+                <div className="col-span-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.creatinePostLoad}
+                      onChange={e => set('creatinePostLoad', e.target.checked)}
+                      className="w-4 h-4 accent-blue-600"
+                    />
+                    <div>
+                      <p className="text-sm font-medium">Post-load maintenance</p>
+                      <p className="text-xs text-gray-400">Switched from loading (≥10g) — stores stay fully saturated</p>
+                    </div>
+                  </label>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">
                   Alcohol units

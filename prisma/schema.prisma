@@ -21,6 +21,7 @@ model WeightEntry {
 
   creatineDoseG     Float   @default(0)
   creatineDaysOn    Int     @default(0)
+  creatinePostLoad  Boolean @default(false) // true = transitioned from loading phase → stays saturated
   alcoholUnits      Float   @default(0)
   hoursSinceAlcohol Float   @default(48)
   carbsG            Float   @default(0)
