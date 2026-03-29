@@ -455,6 +455,21 @@ export default function DashboardClient() {
               </div>
             </div>
 
+            {/* Verdict shortcut */}
+            <Link
+              href="/verdict"
+              className="flex items-center justify-between bg-pens-crimson/10 border border-pens-crimson/20 rounded-2xl px-5 py-4 hover:bg-pens-crimson/20 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Sparkles size={16} className="text-pens-crimson" />
+                <div>
+                  <p className="text-sm font-semibold text-pens-cream">Member Dashboard</p>
+                  <p className="text-xs text-pens-cream/40">P.E.N.S. scores · Ledger · Verdict</p>
+                </div>
+              </div>
+              <span className="text-xs text-pens-cream/40">→</span>
+            </Link>
+
             {/* Data management shortcut */}
             <Link
               href="/data"
