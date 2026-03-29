@@ -36,18 +36,33 @@ const PILLAR_TAG_STYLES: Record<string, string> = {
   SLEP: 'bg-violet-900/30 text-violet-300',
 }
 
-function PillarCard({ p }: { p: VerdictPillar }) {
+const MODE_LABEL: Record<string, { label: string; color: string }> = {
+  locked_in: { label: 'Locked In', color: 'text-pens-crimson' },
+  balanced:   { label: 'Balanced',  color: 'text-pens-gold'   },
+  off:        { label: 'Rest Day',  color: 'text-pens-cream/40' },
+}
+
+function PillarCard({ p, hasEnoughData }: { p: VerdictPillar; hasEnoughData: boolean }) {
   const Icon = PILLAR_ICONS[p.icon] ?? ArrowUpRight
-  const isWeak = p.score < 40
+  const noData = !hasEnoughData || !p.hasData
+  const isWeak = !noData && p.score < 40
   return (
-    <div className={`rounded-2xl border border-pens-muted/20 p-5 ${scoreBg(p.score)} ${isWeak ? 'border-pens-crimson/30' : ''}`}>
+    <div className={`rounded-2xl border p-5 transition-all ${
+      noData
+        ? 'bg-pens-surface/30 border-pens-muted/10'
+        : `${scoreBg(p.score)} border-pens-muted/20 ${isWeak ? 'border-pens-crimson/30' : ''}`
+    }`}>
       <div className="flex items-start justify-between mb-4">
-        <Icon size={18} className={`${scoreColor(p.score)} shrink-0 mt-0.5`} />
-        <span className={`text-5xl font-black leading-none ${scoreColor(p.score)}`}>
-          {p.score}
-        </span>
+        <Icon size={18} className={`${noData ? 'text-pens-cream/20' : scoreColor(p.score)} shrink-0 mt-0.5`} />
+        {noData ? (
+          <span className="text-4xl font-black leading-none text-pens-cream/15 tracking-tight">—</span>
+        ) : (
+          <span className={`text-5xl font-black leading-none ${scoreColor(p.score)}`}>
+            {p.score}
+          </span>
+        )}
       </div>
-      <p className="text-[10px] uppercase tracking-widest text-pens-cream/40 font-semibold mb-2">
+      <p className={`text-[10px] uppercase tracking-widest font-semibold mb-2 ${noData ? 'text-pens-cream/20' : 'text-pens-cream/40'}`}>
         {p.label}
       </p>
       <p className="text-xs text-pens-cream/50 leading-relaxed">
@@ -155,6 +170,27 @@ export default function VerdictPage() {
           </div>
         </div>
 
+        {/* Mode context banner */}
+        {!loading && data?.modeNote && (
+          <div className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
+            data.todayMode === 'off'
+              ? 'bg-pens-muted/20 border-pens-muted/30'
+              : data.todayMode === 'locked_in'
+              ? 'bg-pens-crimson/10 border-pens-crimson/30'
+              : 'bg-pens-surface/60 border-pens-muted/20'
+          }`}>
+            <div className="min-w-0">
+              <p className={`text-[9px] uppercase tracking-widest font-bold mb-0.5 ${
+                data.todayMode === 'locked_in' ? 'text-pens-crimson' :
+                data.todayMode === 'off' ? 'text-pens-cream/40' : 'text-pens-gold'
+              }`}>
+                Today · {data.todayMode ? (MODE_LABEL[data.todayMode]?.label ?? data.todayMode) : 'No mode set'}
+              </p>
+              <p className="text-xs text-pens-cream/50 leading-relaxed">{data.modeNote}</p>
+            </div>
+          </div>
+        )}
+
         {/* Pillar scores */}
         {loading ? (
           <div className="space-y-3">
@@ -162,9 +198,28 @@ export default function VerdictPage() {
               <div key={i} className="h-28 rounded-2xl bg-pens-surface/30 animate-pulse" />
             ))}
           </div>
+        ) : !data?.hasEnoughData ? (
+          <div className="space-y-3">
+            {data?.pillars.map(p => <PillarCard key={p.key} p={p} hasEnoughData={false} />)}
+            <div className="bg-pens-surface/40 border border-pens-muted/20 rounded-2xl p-5 space-y-2">
+              <p className="text-[10px] uppercase tracking-widest text-pens-cream/30 font-semibold">How scores unlock</p>
+              <div className="space-y-1.5">
+                {[
+                  { step: '1', text: 'Select a mode each morning on the home screen' },
+                  { step: '2', text: 'Log sleep each night — even one entry unlocks Sleep + Endurance' },
+                  { step: '3', text: 'Record one training session to unlock Performance' },
+                ].map(s => (
+                  <div key={s.step} className="flex items-start gap-3">
+                    <span className="text-[10px] font-bold text-pens-crimson/60 shrink-0 mt-0.5">{s.step}</span>
+                    <p className="text-xs text-pens-cream/40 leading-relaxed">{s.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="space-y-3">
-            {data?.pillars.map(p => <PillarCard key={p.key} p={p} />)}
+            {data?.pillars.map(p => <PillarCard key={p.key} p={p} hasEnoughData={data.hasEnoughData} />)}
           </div>
         )}
 
