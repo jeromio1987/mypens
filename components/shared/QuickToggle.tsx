@@ -9,12 +9,14 @@ interface Props {
 
 export default function QuickToggle({ quick, onChange }: Props) {
   return (
-    <div className="flex rounded-lg border border-gray-200 overflow-hidden w-fit text-xs font-medium">
+    <div className="flex rounded-lg border border-pens-muted/30 overflow-hidden w-fit text-xs font-medium">
       <button
         type="button"
         onClick={() => onChange(true)}
         className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${
-          quick ? 'bg-amber-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+          quick
+            ? 'bg-pens-gold/20 text-pens-gold'
+            : 'bg-transparent text-pens-cream/40 hover:text-pens-cream/70'
         }`}
       >
         <Zap size={12} />
@@ -23,8 +25,10 @@ export default function QuickToggle({ quick, onChange }: Props) {
       <button
         type="button"
         onClick={() => onChange(false)}
-        className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors border-l border-gray-200 ${
-          !quick ? 'bg-gray-700 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+        className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors border-l border-pens-muted/30 ${
+          !quick
+            ? 'bg-pens-navy text-pens-cream'
+            : 'bg-transparent text-pens-cream/40 hover:text-pens-cream/70'
         }`}
       >
         <Settings2 size={12} />

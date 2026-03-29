@@ -10,7 +10,6 @@ import {
   Legend,
   ResponsiveContainer,
   CartesianGrid,
-  ReferenceLine,
 } from 'recharts'
 
 interface WeightEntry {
@@ -56,22 +55,13 @@ export default function BodyCompTrend({ refresh }: { refresh?: number }) {
   }, [refresh])
 
   if (loading)
-    return (
-      <div className="bg-white rounded-2xl shadow p-6 text-sm text-gray-400">
-        Loading body comp…
-      </div>
-    )
+    return <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 text-sm text-pens-cream/40">Loading body comp…</div>
 
   if (data.length === 0)
-    return (
-      <div className="bg-white rounded-2xl shadow p-6 text-sm text-gray-400">
-        No Tanita data yet — log body fat % or muscle mass in a weight entry.
-      </div>
-    )
+    return <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 text-sm text-pens-cream/40">No Tanita data yet — log body fat % or muscle mass in a weight entry.</div>
 
   const filtered = showUnreliable ? data : data.filter(d => d.reliable)
 
-  // Latest stats
   const latest = [...filtered].reverse().find(d => d.bodyFatPct != null || d.muscleMassKg != null)
   const fatEntries = filtered.filter(d => d.bodyFatPct != null)
   const muscleEntries = filtered.filter(d => d.muscleMassKg != null)
@@ -83,13 +73,13 @@ export default function BodyCompTrend({ refresh }: { refresh?: number }) {
     : null
 
   return (
-    <div className="bg-white rounded-2xl shadow p-6 w-full space-y-4">
+    <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 w-full space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-xl font-semibold">Body Composition Trend</h2>
-        <div className="flex items-center gap-3 text-sm text-gray-500">
-          {avgFat && <span>Avg fat <strong className="text-rose-500">{avgFat}%</strong></span>}
-          {avgMuscle && <span>Avg muscle <strong className="text-emerald-600">{avgMuscle} kg</strong></span>}
-          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+        <h2 className="text-xl font-semibold text-pens-cream">Body Composition Trend</h2>
+        <div className="flex items-center gap-3 text-sm text-pens-cream/50">
+          {avgFat && <span>Avg fat <strong className="text-rose-400">{avgFat}%</strong></span>}
+          {avgMuscle && <span>Avg muscle <strong className="text-emerald-400">{avgMuscle} kg</strong></span>}
+          <label className="flex items-center gap-1.5 text-xs text-pens-cream/40 cursor-pointer">
             <input
               type="checkbox"
               checked={showUnreliable}
@@ -102,7 +92,7 @@ export default function BodyCompTrend({ refresh }: { refresh?: number }) {
       </div>
 
       {filtered.length < 2 ? (
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-pens-cream/40">
           {showUnreliable
             ? 'Need at least 2 data points to draw a trend.'
             : 'All readings flagged as unreliable. Enable "Include ⚠ readings" to see them.'}
@@ -110,12 +100,12 @@ export default function BodyCompTrend({ refresh }: { refresh?: number }) {
       ) : (
         <ResponsiveContainer width="100%" height={260}>
           <ComposedChart data={filtered} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#3D405B50" />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#F5E6D360' }} />
             <YAxis
               yAxisId="fat"
               domain={['auto', 'auto']}
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: '#F5E6D360' }}
               unit="%"
               width={38}
               label={{ value: 'Fat %', angle: -90, position: 'insideLeft', offset: 8, style: { fontSize: 10, fill: '#f43f5e' } }}
@@ -124,12 +114,13 @@ export default function BodyCompTrend({ refresh }: { refresh?: number }) {
               yAxisId="muscle"
               orientation="right"
               domain={['auto', 'auto']}
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: '#F5E6D360' }}
               unit=" kg"
               width={44}
               label={{ value: 'Muscle', angle: 90, position: 'insideRight', offset: 10, style: { fontSize: 10, fill: '#10b981' } }}
             />
             <Tooltip
+              contentStyle={{ backgroundColor: '#2B2D42', border: '1px solid #3D405B80', borderRadius: '8px', color: '#F5E6D3' }}
               formatter={(value, name) => {
                 if (name === 'bodyFatPct') return [`${value}%`, 'Body fat']
                 if (name === 'muscleMassKg') return [`${value} kg`, 'Muscle mass']
@@ -137,45 +128,29 @@ export default function BodyCompTrend({ refresh }: { refresh?: number }) {
               }}
             />
             <Legend
+              wrapperStyle={{ color: '#F5E6D380', fontSize: '11px' }}
               formatter={(v) =>
                 v === 'bodyFatPct' ? 'Body fat %' : v === 'muscleMassKg' ? 'Muscle mass (kg)' : v
               }
             />
-            <Line
-              yAxisId="fat"
-              type="monotone"
-              dataKey="bodyFatPct"
-              stroke="#f43f5e"
-              strokeWidth={2}
-              dot={{ r: 3 }}
-              connectNulls
-            />
-            <Line
-              yAxisId="muscle"
-              type="monotone"
-              dataKey="muscleMassKg"
-              stroke="#10b981"
-              strokeWidth={2}
-              dot={{ r: 3 }}
-              connectNulls
-            />
+            <Line yAxisId="fat" type="monotone" dataKey="bodyFatPct" stroke="#f43f5e" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+            <Line yAxisId="muscle" type="monotone" dataKey="muscleMassKg" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} connectNulls />
           </ComposedChart>
         </ResponsiveContainer>
       )}
 
-      {/* Latest reading summary */}
       {latest && (
-        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-pens-muted/20">
           {latest.bodyFatPct != null && (
-            <div className="bg-rose-50 rounded-xl p-3">
+            <div className="bg-rose-900/20 border border-rose-500/20 rounded-xl p-3">
               <p className="text-xs font-medium text-rose-400 mb-0.5">Body fat</p>
-              <p className="text-2xl font-bold text-rose-600">{latest.bodyFatPct}%</p>
+              <p className="text-2xl font-bold text-rose-300">{latest.bodyFatPct}%</p>
             </div>
           )}
           {latest.muscleMassKg != null && (
-            <div className="bg-emerald-50 rounded-xl p-3">
-              <p className="text-xs font-medium text-emerald-500 mb-0.5">Muscle mass</p>
-              <p className="text-2xl font-bold text-emerald-600">{latest.muscleMassKg} kg</p>
+            <div className="bg-emerald-900/20 border border-emerald-500/20 rounded-xl p-3">
+              <p className="text-xs font-medium text-emerald-400 mb-0.5">Muscle mass</p>
+              <p className="text-2xl font-bold text-emerald-300">{latest.muscleMassKg} kg</p>
             </div>
           )}
         </div>

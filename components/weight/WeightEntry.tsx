@@ -20,15 +20,19 @@ interface WeightBreakdown {
 }
 
 const CONF_STYLES = {
-  high:   { badge: 'bg-emerald-50 text-emerald-700 border border-emerald-200', label: 'High confidence', sub: 'No confounders — reading is clean' },
-  medium: { badge: 'bg-amber-50 text-amber-700 border border-amber-200',       label: 'Medium confidence', sub: 'Minor factors logged — small uncertainty' },
-  low:    { badge: 'bg-red-50 text-red-600 border border-red-200',             label: 'Low confidence', sub: 'Multiple confounders — adjusted weight is approximate' },
+  high:   { badge: 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30', label: 'High confidence', sub: 'No confounders — reading is clean' },
+  medium: { badge: 'bg-amber-900/30 text-pens-gold border border-amber-500/30',       label: 'Medium confidence', sub: 'Minor factors logged — small uncertainty' },
+  low:    { badge: 'bg-pens-crimson/10 text-red-400 border border-pens-crimson/30',   label: 'Low confidence', sub: 'Multiple confounders — adjusted weight is approximate' },
 }
 
 interface EntryResult {
   entry: Record<string, unknown>
   breakdown: WeightBreakdown
 }
+
+const inputCls = 'w-full bg-pens-navy border border-pens-muted/40 rounded-lg px-3 py-2 text-sm text-pens-cream placeholder:text-pens-cream/30 focus:outline-none focus:border-pens-cream/30'
+const labelCls = 'block text-sm font-medium text-pens-cream/80 mb-1'
+const labelSmCls = 'block text-xs font-medium text-pens-cream/50 mb-1'
 
 export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
   const today = new Date().toISOString().split('T')[0]
@@ -122,9 +126,9 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
   ]
 
   return (
-    <div className="bg-white rounded-2xl shadow p-6 max-w-lg w-full">
+    <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 max-w-lg w-full">
       <div className="flex items-start justify-between mb-4">
-        <h2 className="text-xl font-semibold">Log Weight</h2>
+        <h2 className="text-xl font-semibold text-pens-cream">Log Weight</h2>
         <QuickToggle quick={quick} onChange={v => { setQuick(v); if (v) setActiveTab('scale') }} />
       </div>
 
@@ -137,7 +141,6 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
         />
       </div>
 
-      {/* Tabs — hidden in quick mode */}
       {!quick && (
         <div className="flex gap-2 mb-6">
           {tabs.map(({ id, label, icon: Icon }) => (
@@ -147,8 +150,8 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
               onClick={() => setActiveTab(id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === id
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-pens-crimson text-pens-cream'
+                  : 'bg-pens-navy/60 text-pens-cream/60 hover:bg-pens-navy hover:text-pens-cream'
               }`}
             >
               <Icon size={14} />
@@ -159,62 +162,28 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* Quick mode: just date + scale weight */}
         {quick && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-              <input
-                type="date"
-                value={form.date}
-                onChange={e => set('date', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                required
-              />
+              <label className={labelCls}>Date</label>
+              <input type="date" value={form.date} onChange={e => set('date', e.target.value)} className={inputCls} required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Scale weight (kg) <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="number"
-                step="0.05"
-                value={form.scaleKg}
-                onChange={e => set('scaleKg', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                placeholder="e.g. 82.4"
-                required
-              />
+              <label className={labelCls}>Scale weight (kg) <span className="text-pens-crimson">*</span></label>
+              <input type="number" step="0.05" value={form.scaleKg} onChange={e => set('scaleKg', e.target.value)} className={inputCls} placeholder="e.g. 82.4" required />
             </div>
           </div>
         )}
 
-        {/* Scale Tab */}
         {!quick && activeTab === 'scale' && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-              <input
-                type="date"
-                value={form.date}
-                onChange={e => set('date', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                required
-              />
+              <label className={labelCls}>Date</label>
+              <input type="date" value={form.date} onChange={e => set('date', e.target.value)} className={inputCls} required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Scale weight (kg) <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="number"
-                step="0.05"
-                value={form.scaleKg}
-                onChange={e => set('scaleKg', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                placeholder="e.g. 82.4"
-                required
-              />
+              <label className={labelCls}>Scale weight (kg) <span className="text-pens-crimson">*</span></label>
+              <input type="number" step="0.05" value={form.scaleKg} onChange={e => set('scaleKg', e.target.value)} className={inputCls} placeholder="e.g. 82.4" required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -224,116 +193,57 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
                 { key: 'bodyWaterPct', label: 'Body water %', placeholder: '55.0' },
               ].map(({ key, label, placeholder }) => (
                 <div key={key}>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={(form as unknown as Record<string, string>)[key]}
-                    onChange={e => set(key, e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
-                    placeholder={placeholder}
-                  />
+                  <label className={labelSmCls}>{label}</label>
+                  <input type="number" step="0.1" value={(form as unknown as Record<string, string>)[key]} onChange={e => set(key, e.target.value)} className={inputCls} placeholder={placeholder} />
                 </div>
               ))}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Visceral fat</label>
-                <input
-                  type="number"
-                  value={form.visceralFat}
-                  onChange={e => set('visceralFat', e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  placeholder="5"
-                />
+                <label className={labelSmCls}>Visceral fat</label>
+                <input type="number" value={form.visceralFat} onChange={e => set('visceralFat', e.target.value)} className={inputCls} placeholder="5" />
               </div>
             </div>
           </div>
         )}
 
-        {/* Context Tab */}
         {!quick && activeTab === 'context' && (
           <div className="space-y-4">
-            <p className="text-xs text-gray-400">These inputs drive the water retention model.</p>
+            <p className="text-xs text-pens-cream/40">These inputs drive the water retention model.</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Creatine dose (g/day)
-                </label>
-                <input
-                  type="number"
-                  step="1"
-                  value={form.creatineDoseG}
-                  onChange={e => set('creatineDoseG', e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
+                <label className={labelSmCls}>Creatine dose (g/day)</label>
+                <input type="number" step="1" value={form.creatineDoseG} onChange={e => set('creatineDoseG', e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Days on creatine
-                </label>
-                <input
-                  type="number"
-                  value={form.creatineDaysOn}
-                  onChange={e => set('creatineDaysOn', e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
+                <label className={labelSmCls}>Days on creatine</label>
+                <input type="number" value={form.creatineDaysOn} onChange={e => set('creatineDaysOn', e.target.value)} className={inputCls} />
               </div>
               {Number(form.creatineDoseG) > 0 && Number(form.creatineDoseG) < 10 && (
                 <div className="col-span-2">
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.creatinePostLoad}
-                      onChange={e => set('creatinePostLoad', e.target.checked)}
-                      className="w-4 h-4 accent-blue-600"
-                    />
+                    <input type="checkbox" checked={form.creatinePostLoad} onChange={e => set('creatinePostLoad', e.target.checked)} className="w-4 h-4 accent-blue-500" />
                     <div>
-                      <p className="text-sm font-medium">Post-load maintenance</p>
-                      <p className="text-xs text-gray-400">Switched from loading (≥10g) — stores stay fully saturated</p>
+                      <p className="text-sm font-medium text-pens-cream">Post-load maintenance</p>
+                      <p className="text-xs text-pens-cream/40">Switched from loading (≥10g) — stores stay fully saturated</p>
                     </div>
                   </label>
                 </div>
               )}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Alcohol units
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  value={form.alcoholUnits}
-                  onChange={e => set('alcoholUnits', e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
+                <label className={labelSmCls}>Alcohol units</label>
+                <input type="number" step="0.5" value={form.alcoholUnits} onChange={e => set('alcoholUnits', e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Hours since alcohol
-                </label>
-                <input
-                  type="number"
-                  step="1"
-                  value={form.hoursSinceAlcohol}
-                  onChange={e => set('hoursSinceAlcohol', e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
+                <label className={labelSmCls}>Hours since alcohol</label>
+                <input type="number" step="1" value={form.hoursSinceAlcohol} onChange={e => set('hoursSinceAlcohol', e.target.value)} className={inputCls} />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Carbs yesterday (g)
-                </label>
-                <input
-                  type="number"
-                  step="10"
-                  value={form.carbsG}
-                  onChange={e => set('carbsG', e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
+                <label className={labelSmCls}>Carbs yesterday (g)</label>
+                <input type="number" step="10" value={form.carbsG} onChange={e => set('carbsG', e.target.value)} className={inputCls} />
               </div>
             </div>
 
-            {/* Phase 5 confounders */}
-            <div className="space-y-2 pt-1 border-t border-gray-100">
-              <p className="text-xs text-gray-400">Additional confounders (affect confidence score)</p>
+            <div className="space-y-2 pt-1 border-t border-pens-muted/20">
+              <p className="text-xs text-pens-cream/40">Additional confounders (affect confidence score)</p>
               {[
                 { key: 'highSodium', label: 'High sodium day', sub: 'Salty meals → water retention' },
                 { key: 'restaurantMeal', label: 'Restaurant meal(s)', sub: 'Hidden sodium / large portions' },
@@ -341,15 +251,10 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
                 { key: 'illnessDay', label: 'Illness / inflammation', sub: 'Scale and Tanita both unreliable' },
               ].map(({ key, label, sub }) => (
                 <label key={key} className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form[key as keyof typeof form] as boolean}
-                    onChange={e => set(key, e.target.checked)}
-                    className="w-4 h-4 accent-blue-600"
-                  />
+                  <input type="checkbox" checked={form[key as keyof typeof form] as boolean} onChange={e => set(key, e.target.checked)} className="w-4 h-4 accent-blue-500" />
                   <div>
-                    <p className="text-sm font-medium">{label}</p>
-                    <p className="text-xs text-gray-400">{sub}</p>
+                    <p className="text-sm font-medium text-pens-cream">{label}</p>
+                    <p className="text-xs text-pens-cream/40">{sub}</p>
                   </div>
                 </label>
               ))}
@@ -357,35 +262,21 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
           </div>
         )}
 
-        {/* Tanita Tab */}
         {!quick && activeTab === 'tanita' && (
           <div className="space-y-5">
-            <p className="text-xs text-gray-400">
-              Tanita BIA readings are affected by hydration, training, and timing. Check what
-              applies.
-            </p>
+            <p className="text-xs text-pens-cream/40">Tanita BIA readings are affected by hydration, training, and timing. Check what applies.</p>
             <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.hardTraining}
-                onChange={e => set('hardTraining', e.target.checked)}
-                className="w-4 h-4 accent-blue-600"
-              />
+              <input type="checkbox" checked={form.hardTraining} onChange={e => set('hardTraining', e.target.checked)} className="w-4 h-4 accent-blue-500" />
               <div>
-                <p className="text-sm font-medium">Hard training yesterday</p>
-                <p className="text-xs text-gray-400">Muscle inflammation temporarily raises water</p>
+                <p className="text-sm font-medium text-pens-cream">Hard training yesterday</p>
+                <p className="text-xs text-pens-cream/40">Muscle inflammation temporarily raises water</p>
               </div>
             </label>
             <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.morningReading}
-                onChange={e => set('morningReading', e.target.checked)}
-                className="w-4 h-4 accent-blue-600"
-              />
+              <input type="checkbox" checked={form.morningReading} onChange={e => set('morningReading', e.target.checked)} className="w-4 h-4 accent-blue-500" />
               <div>
-                <p className="text-sm font-medium">Morning reading</p>
-                <p className="text-xs text-gray-400">Fasted, post-toilet — most accurate</p>
+                <p className="text-sm font-medium text-pens-cream">Morning reading</p>
+                <p className="text-xs text-pens-cream/40">Fasted, post-toilet — most accurate</p>
               </div>
             </label>
           </div>
@@ -394,17 +285,16 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
         <button
           type="submit"
           disabled={saving}
-          className="mt-6 w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+          className="mt-6 w-full bg-pens-crimson hover:bg-pens-crimson/80 disabled:opacity-50 text-pens-cream font-medium py-2.5 rounded-lg text-sm transition-colors"
         >
           {saving ? 'Saving…' : quick ? 'Quick save' : 'Save entry'}
         </button>
       </form>
 
-      {/* Result */}
       {result && (
-        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl text-sm space-y-3">
+        <div className="mt-4 p-4 bg-emerald-900/20 border border-emerald-500/20 rounded-xl text-sm space-y-3">
           <div className="flex items-center justify-between">
-            <p className="font-semibold text-green-800">Saved ✓</p>
+            <p className="font-semibold text-emerald-400">Saved ✓</p>
             {result.breakdown.confidence && (
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CONF_STYLES[result.breakdown.confidence].badge}`}>
                 {CONF_STYLES[result.breakdown.confidence].label}
@@ -412,11 +302,11 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
             )}
           </div>
           {result.breakdown.confidence && (
-            <p className="text-xs text-gray-500">{CONF_STYLES[result.breakdown.confidence].sub}
+            <p className="text-xs text-pens-cream/50">{CONF_STYLES[result.breakdown.confidence].sub}
               {result.breakdown.activeConfounders > 0 && ` · ${result.breakdown.activeConfounders} active factor${result.breakdown.activeConfounders > 1 ? 's' : ''}`}
             </p>
           )}
-          <div className="grid grid-cols-2 gap-x-4 text-green-700 text-xs">
+          <div className="grid grid-cols-2 gap-x-4 text-pens-cream/80 text-xs">
             <span>Scale: <strong>{result.breakdown.scaleKg} kg</strong></span>
             <span>Adjusted: <strong>{result.breakdown.trueWeightKg} kg</strong></span>
             {result.breakdown.creatineKg > 0 && <span>Creatine: −{result.breakdown.creatineKg} kg</span>}
@@ -426,10 +316,10 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
             {result.breakdown.hardTrainingKg > 0 && <span>Training: −{result.breakdown.hardTrainingKg} kg</span>}
           </div>
           {!result.breakdown.tanitaReliable && (
-            <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-amber-700 font-medium text-xs">⚠ Tanita reading may be unreliable</p>
+            <div className="p-2 bg-amber-900/20 border border-amber-500/20 rounded-lg">
+              <p className="text-pens-gold font-medium text-xs">⚠ Tanita reading may be unreliable</p>
               {result.breakdown.tanitaFlags.map((f, i) => (
-                <p key={i} className="text-amber-600 text-xs mt-0.5">• {f}</p>
+                <p key={i} className="text-amber-400/80 text-xs mt-0.5">• {f}</p>
               ))}
             </div>
           )}
@@ -437,7 +327,7 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
       )}
 
       {error && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="mt-4 p-3 bg-pens-crimson/10 border border-pens-crimson/30 rounded-lg text-red-400 text-sm">
           {error}
         </div>
       )}

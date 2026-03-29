@@ -10,15 +10,16 @@ export default function MeasurementsClient() {
   const [refreshKey, setRefreshKey] = useState(0)
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8">
+    <main className="min-h-screen bg-pens-deep px-4 py-8">
       <div className="max-w-lg mx-auto space-y-6">
         <div className="flex items-center gap-3">
-          <Link href="/" className="text-gray-400 hover:text-gray-600 transition-colors">
+          <Link href="/" className="text-pens-cream/40 hover:text-pens-cream/70 transition-colors">
             <ArrowLeft size={20} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Body Measurements</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Waist, chest, hips and more</p>
+            <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">P.E.N.S.</p>
+            <h1 className="text-2xl font-bold text-pens-cream mt-0.5">Body Measurements</h1>
+            <p className="text-xs text-pens-cream/40 mt-0.5">Waist, chest, hips and more</p>
           </div>
         </div>
 

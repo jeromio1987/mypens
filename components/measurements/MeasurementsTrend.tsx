@@ -33,6 +33,8 @@ const LINES = [
 
 interface Props { refreshKey?: number }
 
+const editInputCls = 'w-full text-sm bg-pens-navy border border-pens-muted/40 rounded-lg px-2 py-1.5 text-pens-cream placeholder:text-pens-cream/30 focus:outline-none focus:border-rose-500/60'
+
 export default function MeasurementsTrend({ refreshKey }: Props) {
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
@@ -101,8 +103,8 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
     })
   }
 
-  if (loading) return <div className="text-sm text-gray-400 py-6 text-center">Loading…</div>
-  if (!entries.length) return <div className="text-sm text-gray-400 py-6 text-center">No measurements logged yet</div>
+  if (loading) return <div className="text-sm text-pens-cream/40 py-6 text-center">Loading…</div>
+  if (!entries.length) return <div className="text-sm text-pens-cream/40 py-6 text-center">No measurements logged yet</div>
 
   const chartData = [...entries].reverse().map(e => ({
     date: e.date.slice(5),
@@ -117,8 +119,8 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
   return (
     <div className="space-y-6">
       {latest && (
-        <div className="bg-white rounded-2xl shadow p-5">
-          <h3 className="font-semibold text-gray-800 mb-3">Latest — {latest.date}</h3>
+        <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
+          <h3 className="font-semibold text-pens-cream mb-3">Latest — {latest.date}</h3>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {LINES.map(({ key, label, color }) => {
               const val     = (latest as unknown as Record<string, number | null>)[key]
@@ -126,11 +128,11 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
               const delta   = val != null && prevVal != null ? val - prevVal : null
               if (val == null) return null
               return (
-                <div key={key} className="bg-gray-50 rounded-xl p-3">
+                <div key={key} className="bg-pens-navy/40 rounded-xl p-3">
                   <p className="text-xs font-medium mb-0.5" style={{ color }}>{label}</p>
-                  <p className="text-lg font-bold text-gray-900">{val} cm</p>
+                  <p className="text-lg font-bold text-pens-cream">{val} cm</p>
                   {delta != null && (
-                    <p className={`text-xs font-medium ${delta > 0 ? 'text-red-500' : delta < 0 ? 'text-green-500' : 'text-gray-400'}`}>
+                    <p className={`text-xs font-medium ${delta > 0 ? 'text-red-400' : delta < 0 ? 'text-emerald-400' : 'text-pens-cream/40'}`}>
                       {delta > 0 ? '+' : ''}{delta.toFixed(1)} cm
                     </p>
                   )}
@@ -142,13 +144,13 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
       )}
 
       {chartData.length >= 2 && (
-        <div className="bg-white rounded-2xl shadow p-5">
+        <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
           <div className="flex flex-wrap gap-2 mb-4">
             {LINES.map(({ key, label, color }) => (
               <button
                 key={key} type="button" onClick={() => toggleLine(key)}
                 className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-                  visible.has(key) ? 'text-white border-transparent' : 'bg-white text-gray-400 border-gray-200'
+                  visible.has(key) ? 'text-white border-transparent' : 'bg-transparent text-pens-cream/40 border-pens-muted/30 hover:border-pens-muted/60'
                 }`}
                 style={visible.has(key) ? { backgroundColor: color, borderColor: color } : {}}
               >
@@ -158,10 +160,13 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} domain={['auto', 'auto']} unit=" cm" />
-              <Tooltip formatter={(v) => [`${v} cm`]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#3D405B50" />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#F5E6D360' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#F5E6D360' }} domain={['auto', 'auto']} unit=" cm" />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#2B2D42', border: '1px solid #3D405B80', borderRadius: '8px', color: '#F5E6D3' }}
+                formatter={(v) => [`${v} cm`]}
+              />
               {LINES.filter(l => visible.has(l.key)).map(({ key, label, color }) => (
                 <Line key={key} type="monotone" dataKey={key} name={label} stroke={color} strokeWidth={2} dot={false} connectNulls />
               ))}
@@ -170,33 +175,33 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">History</h3>
+      <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-pens-muted/20">
+          <h3 className="font-semibold text-pens-cream">History</h3>
         </div>
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-pens-muted/10">
           {entries.map(e => (
             <div key={e.id}>
               {editingId === e.id && editForm ? (
-                <div className="px-5 py-4 bg-rose-50">
+                <div className="px-5 py-4 bg-rose-900/10 border-l-2 border-rose-500/30">
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 mb-3">
                     {LINES.map(({ key, label }) => (
                       <div key={key}>
-                        <label className="text-xs text-gray-500 mb-0.5 block">{label} (cm)</label>
+                        <label className="text-xs text-pens-cream/50 mb-0.5 block">{label} (cm)</label>
                         <input
                           type="number"
                           step="0.1"
                           placeholder="—"
-                          className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                          className={editInputCls}
                           value={editForm[key]}
                           onChange={ev => setEditForm(f => f ? { ...f, [key]: ev.target.value } : f)}
                         />
                       </div>
                     ))}
                     <div className="col-span-2 sm:col-span-4">
-                      <label className="text-xs text-gray-500 mb-0.5 block">Notes</label>
+                      <label className="text-xs text-pens-cream/50 mb-0.5 block">Notes</label>
                       <input
-                        className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                        className={editInputCls}
                         placeholder="Notes (optional)"
                         value={editForm.notes}
                         onChange={ev => setEditForm(f => f ? { ...f, notes: ev.target.value } : f)}
@@ -204,25 +209,25 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
                     </div>
                   </div>
                   <div className="flex gap-2 justify-end">
-                    <button onClick={cancelEdit} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100"><X size={12} /> Cancel</button>
-                    <button onClick={() => saveEdit(e.id)} disabled={saving} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"><Check size={12} /> Save</button>
+                    <button onClick={cancelEdit} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-pens-muted/40 text-pens-cream/50 hover:text-pens-cream"><X size={12} /> Cancel</button>
+                    <button onClick={() => saveEdit(e.id)} disabled={saving} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"><Check size={12} /> Save</button>
                   </div>
                 </div>
               ) : (
-                <div className="px-5 py-3 flex items-start justify-between group">
+                <div className="px-5 py-3 flex items-start justify-between group hover:bg-pens-navy/20 transition-colors">
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{e.date}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="text-sm font-medium text-pens-cream">{e.date}</p>
+                    <p className="text-xs text-pens-cream/50 mt-0.5">
                       {LINES.map(({ key, label }) => {
                         const v = (e as unknown as Record<string, number | null>)[key]
                         return v != null ? `${label}: ${v}` : null
                       }).filter(Boolean).join(' · ')}
                     </p>
-                    {e.notes && <p className="text-xs text-gray-400 mt-0.5 italic">{e.notes}</p>}
+                    {e.notes && <p className="text-xs text-pens-cream/40 mt-0.5 italic">{e.notes}</p>}
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                    <button type="button" onClick={() => startEdit(e)} className="text-gray-300 hover:text-rose-400 p-1 rounded" title="Edit"><Pencil size={14} /></button>
-                    <button type="button" onClick={() => handleDelete(e.id)} className="text-red-400 hover:text-red-600 p-1 rounded"><Trash2 size={14} /></button>
+                    <button type="button" onClick={() => startEdit(e)} className="text-pens-cream/30 hover:text-rose-400 p-1 rounded" title="Edit"><Pencil size={14} /></button>
+                    <button type="button" onClick={() => handleDelete(e.id)} className="text-pens-cream/30 hover:text-red-400 p-1 rounded"><Trash2 size={14} /></button>
                   </div>
                 </div>
               )}

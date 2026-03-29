@@ -17,6 +17,9 @@ const QUALITY_LABELS: Record<number, string> = {
   5: '🌟 Excellent',
 }
 
+const inputCls = 'w-full bg-pens-navy border border-pens-muted/40 rounded-lg px-3 py-2 text-sm text-pens-cream focus:outline-none focus:border-pens-cream/30'
+const labelCls = 'block text-sm font-medium text-pens-cream/80 mb-1'
+
 export default function SleepEntry({ date, onSaved }: Props) {
   const [quick, setQuick] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -72,9 +75,9 @@ export default function SleepEntry({ date, onSaved }: Props) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow p-6">
+    <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6">
       <div className="flex items-start justify-between mb-4">
-        <h2 className="text-xl font-semibold">Log Sleep</h2>
+        <h2 className="text-xl font-semibold text-pens-cream">Log Sleep</h2>
         <QuickToggle quick={quick} onChange={setQuick} />
       </div>
 
@@ -90,31 +93,18 @@ export default function SleepEntry({ date, onSaved }: Props) {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Bedtime</label>
-            <input
-              type="time"
-              value={form.bedtime}
-              onChange={e => set('bedtime', e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              required
-            />
+            <label className={labelCls}>Bedtime</label>
+            <input type="time" value={form.bedtime} onChange={e => set('bedtime', e.target.value)} className={inputCls} required />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Wake time</label>
-            <input
-              type="time"
-              value={form.wakeTime}
-              onChange={e => set('wakeTime', e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              required
-            />
+            <label className={labelCls}>Wake time</label>
+            <input type="time" value={form.wakeTime} onChange={e => set('wakeTime', e.target.value)} className={inputCls} required />
           </div>
         </div>
 
-        {/* Quality — always visible */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Quality — <span className="text-violet-600">{QUALITY_LABELS[form.quality]}</span>
+          <label className={labelCls}>
+            Quality — <span className="text-violet-400">{QUALITY_LABELS[form.quality]}</span>
           </label>
           <div className="flex gap-2">
             {[1, 2, 3, 4, 5].map(q => (
@@ -125,7 +115,7 @@ export default function SleepEntry({ date, onSaved }: Props) {
                 className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                   form.quality === q
                     ? 'bg-violet-600 text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    : 'bg-pens-navy/60 text-pens-cream/50 hover:bg-pens-navy hover:text-pens-cream'
                 }`}
               >
                 {q}
@@ -134,32 +124,15 @@ export default function SleepEntry({ date, onSaved }: Props) {
           </div>
         </div>
 
-        {/* Detailed only: HRV + notes */}
         {!quick && (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                HRV <span className="text-gray-400 font-normal">(ms, optional)</span>
-              </label>
-              <input
-                type="number" step="1" min="0"
-                value={form.hrv}
-                onChange={e => set('hrv', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                placeholder="e.g. 58"
-              />
+              <label className={labelCls}>HRV <span className="text-pens-cream/40 font-normal">(ms, optional)</span></label>
+              <input type="number" step="1" min="0" value={form.hrv} onChange={e => set('hrv', e.target.value)} className={inputCls} placeholder="e.g. 58" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Notes <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={form.notes}
-                onChange={e => set('notes', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                placeholder="Woke up twice, vivid dreams…"
-              />
+              <label className={labelCls}>Notes <span className="text-pens-cream/40 font-normal">(optional)</span></label>
+              <input type="text" value={form.notes} onChange={e => set('notes', e.target.value)} className={inputCls} placeholder="Woke up twice, vivid dreams…" />
             </div>
           </>
         )}
@@ -174,16 +147,16 @@ export default function SleepEntry({ date, onSaved }: Props) {
       </form>
 
       {saved && (
-        <div className="mt-4 p-4 bg-violet-50 border border-violet-200 rounded-xl text-sm">
-          <p className="font-semibold text-violet-800">Saved ✓</p>
-          <p className="text-violet-600 mt-1">
+        <div className="mt-4 p-4 bg-violet-900/20 border border-violet-500/20 rounded-xl text-sm">
+          <p className="font-semibold text-violet-400">Saved ✓</p>
+          <p className="text-violet-300 mt-1">
             <strong>{saved.hours}h</strong> — {QUALITY_LABELS[saved.quality]}
           </p>
         </div>
       )}
 
       {error && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="mt-4 p-3 bg-pens-crimson/10 border border-pens-crimson/30 rounded-lg text-red-400 text-sm">
           {error}
         </div>
       )}

@@ -54,9 +54,9 @@ interface Entry {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const CONF_STYLES: Record<ConfidenceLevel, string> = {
-  high:   'bg-emerald-50 text-emerald-700',
-  medium: 'bg-amber-50 text-amber-700',
-  low:    'bg-red-50 text-red-600',
+  high:   'bg-emerald-900/30 text-emerald-400',
+  medium: 'bg-amber-900/30 text-pens-gold',
+  low:    'bg-pens-crimson/10 text-red-400',
 }
 
 // ─── Explanation panel ────────────────────────────────────────────────────────
@@ -168,15 +168,15 @@ function ExplanationPanel({ entry }: { entry: Entry }) {
   )
 
   const bandBg =
-    conf === 'high'   ? 'bg-emerald-50 border-emerald-100' :
-    conf === 'medium' ? 'bg-amber-50 border-amber-100'     :
-                        'bg-red-50 border-red-100'
+    conf === 'high'   ? 'bg-emerald-900/20 border-emerald-500/20' :
+    conf === 'medium' ? 'bg-amber-900/20 border-amber-500/20'     :
+                        'bg-pens-crimson/10 border-pens-crimson/20'
 
   return (
-    <div className="mx-1 mb-2 px-3 py-3 bg-gray-50 rounded-xl border border-gray-100 text-xs space-y-3">
+    <div className="mx-1 mb-2 px-3 py-3 bg-pens-deep rounded-xl border border-pens-muted/20 text-xs space-y-3">
 
       <div className="flex items-center justify-between">
-        <span className="font-semibold text-gray-700">Why adjusted ≠ scale weight</span>
+        <span className="font-semibold text-pens-cream/80">Why adjusted ≠ scale weight</span>
         <span className={`px-2 py-0.5 rounded-full font-medium ${CONF_STYLES[conf]}`}>
           {conf} confidence
         </span>
@@ -187,30 +187,30 @@ function ExplanationPanel({ entry }: { entry: Entry }) {
           {factors.map((f, i) => (
             <div key={i} className="flex items-start gap-2">
               <span className={`font-medium ${f.color} shrink-0 w-36`}>{f.label}</span>
-              <span className="text-gray-400 flex-1">{f.detail}</span>
+              <span className="text-pens-cream/40 flex-1">{f.detail}</span>
               <span className={`font-semibold ${f.color} shrink-0`}>−{f.kg} kg</span>
             </div>
           ))}
-          <div className="border-t border-gray-200 pt-1.5 flex justify-between font-medium text-gray-600">
+          <div className="border-t border-pens-muted/20 pt-1.5 flex justify-between font-medium text-pens-cream/60">
             <span>Total retention stripped</span>
-            <span className="text-gray-800">−{totalRetention} kg</span>
+            <span className="text-pens-cream">−{totalRetention} kg</span>
           </div>
         </div>
       ) : (
-        <p className="text-gray-400">No quantified retention — scale weight ≈ adjusted weight.</p>
+        <p className="text-pens-cream/40">No quantified retention — scale weight ≈ adjusted weight.</p>
       )}
 
       {flags.length > 0 && (
         <div className="space-y-1">
-          <p className="font-medium text-gray-500">Context flags:</p>
+          <p className="font-medium text-pens-cream/50">Context flags:</p>
           {flags.map((f, i) => {
             const isInfo = f.type === 'info'
             return (
-              <div key={i} className={`flex gap-1.5 ${isInfo ? 'text-blue-600' : 'text-amber-700'}`}>
+              <div key={i} className={`flex gap-1.5 ${isInfo ? 'text-blue-400' : 'text-amber-400'}`}>
                 <span className="shrink-0">{isInfo ? 'ℹ' : '⚠'}</span>
                 <span>
                   <span className="font-medium">{f.label}</span>
-                  <span className={`${isInfo ? 'text-blue-500' : 'text-amber-600'}`}> — {f.detail}</span>
+                  <span className={`${isInfo ? 'text-blue-300/80' : 'text-amber-300/80'}`}> — {f.detail}</span>
                 </span>
               </div>
             )
@@ -219,18 +219,18 @@ function ExplanationPanel({ entry }: { entry: Entry }) {
       )}
 
       <div className={`rounded-lg p-2.5 border ${bandBg}`}>
-        <p className="font-medium text-gray-800">
+        <p className="font-medium text-pens-cream/80">
           Adjusted:{' '}
-          <span className="text-gray-900">{entry.trueWeightKg} kg</span>
-          <span className="text-gray-500"> ± {bandKg} kg</span>
-          <span className="text-gray-400 font-normal"> ({lo}–{hi} kg plausible range)</span>
+          <span className="text-pens-cream">{entry.trueWeightKg} kg</span>
+          <span className="text-pens-cream/50"> ± {bandKg} kg</span>
+          <span className="text-pens-cream/40 font-normal"> ({lo}–{hi} kg plausible range)</span>
         </p>
         {bandSource === 'dynamic' && (
-          <p className="text-gray-400 mt-0.5 text-xs">Band from your actual recent volatility — more personalised than the default rule.</p>
+          <p className="text-pens-cream/40 mt-0.5 text-xs">Band from your actual recent volatility — more personalised than the default rule.</p>
         )}
         {entry.baselineTrendKg !== null && (
-          <p className="text-gray-500 mt-1">
-            7-day baseline: <span className="font-medium text-gray-700">{entry.baselineTrendKg} kg</span>
+          <p className="text-pens-cream/50 mt-1">
+            7-day baseline: <span className="font-medium text-pens-cream/80">{entry.baselineTrendKg} kg</span>
           </p>
         )}
       </div>
@@ -254,11 +254,11 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   if (!visible.length) return null
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-md px-3 py-2 text-xs">
-      <p className="font-medium text-gray-600 mb-1">{label}</p>
+    <div className="bg-pens-surface border border-pens-muted/40 rounded-lg px-3 py-2 text-xs">
+      <p className="font-medium text-pens-cream/70 mb-1">{label}</p>
       {visible.map((p, i) => (
         p.value != null && (
-          <p key={i} style={{ color: p.color ?? '#374151' }}>
+          <p key={i} style={{ color: p.color ?? '#F5E6D3' }}>
             {KEY_LABELS[p.dataKey as string] ?? p.dataKey}: {p.value} kg
           </p>
         )
@@ -397,27 +397,27 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
   }
 
   if (loading)
-    return <div className="bg-white rounded-2xl shadow p-6 text-sm text-gray-400">Loading chart…</div>
+    return <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 text-sm text-pens-cream/40">Loading chart…</div>
 
   if (data.length === 0)
     return (
-      <div className="bg-white rounded-2xl shadow p-6 text-sm text-gray-400">
+      <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 text-sm text-pens-cream/40">
         No entries yet — log your first weight above.
       </div>
     )
 
   return (
-    <div className="bg-white rounded-2xl shadow p-6 w-full">
-      <h2 className="text-xl font-semibold mb-0.5">30-Day Trend</h2>
-      <p className="text-xs text-gray-400 mb-4">
+    <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 w-full">
+      <h2 className="text-xl font-semibold text-pens-cream mb-0.5">30-Day Trend</h2>
+      <p className="text-xs text-pens-cream/40 mb-4">
         Green band = uncertainty interval · Dashed = 7-day baseline trend · Red dots = statistical outliers
       </p>
 
       <ResponsiveContainer width="100%" height={300}>
         <ComposedChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-          <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11 }} unit=" kg" width={52} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#3D405B50" />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#F5E6D360' }} />
+          <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: '#F5E6D360' }} unit=" kg" width={52} />
           <Tooltip content={<ChartTooltip />} />
 
           {/* Confidence band — stacked area trick */}
@@ -447,7 +447,7 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
       </ResponsiveContainer>
 
       {/* Manual legend */}
-      <div className="flex flex-wrap gap-4 mt-2 mb-5 text-xs text-gray-500 justify-center">
+      <div className="flex flex-wrap gap-4 mt-2 mb-5 text-xs text-pens-cream/50 justify-center">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-4 h-0.5 bg-indigo-500 rounded" />Scale
         </span>
@@ -470,7 +470,7 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
 
       {/* Tappable history */}
       <div>
-        <h3 className="text-sm font-medium text-gray-600 mb-2">
+        <h3 className="text-sm font-medium text-pens-cream/60 mb-2">
           History — tap any entry for breakdown
         </h3>
         <div className="space-y-px max-h-96 overflow-y-auto">
@@ -482,24 +482,24 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
             return (
               <div key={e.id}>
                 {isEditing && editForm ? (
-                  <div className="bg-blue-50 rounded-xl p-3 space-y-2 my-0.5">
+                  <div className="bg-pens-navy/60 border border-pens-muted/30 rounded-xl p-3 space-y-2 my-0.5">
                     <div className="grid grid-cols-2 gap-2">
                       <div className="col-span-2">
-                        <label className="text-xs text-gray-500 mb-0.5 block">Scale reading (kg)</label>
+                        <label className="text-xs text-pens-cream/50 mb-0.5 block">Scale reading (kg)</label>
                         <input
                           type="number" step="0.01"
-                          className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          className="w-full text-sm bg-pens-deep border border-pens-muted/40 rounded-lg px-2 py-1.5 text-pens-cream focus:outline-none focus:border-blue-500/50"
                           value={editForm.scaleKg}
                           onChange={ev => setEditForm(f => f ? { ...f, scaleKg: ev.target.value } : f)}
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500 mb-0.5 block">Carbs today (g)</label>
-                        <input type="number" className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" value={editForm.carbsG}       onChange={ev => setEditForm(f => f ? { ...f, carbsG:       ev.target.value } : f)} />
+                        <label className="text-xs text-pens-cream/50 mb-0.5 block">Carbs today (g)</label>
+                        <input type="number" className="w-full text-sm bg-pens-deep border border-pens-muted/40 rounded-lg px-2 py-1.5 text-pens-cream focus:outline-none focus:border-blue-500/50" value={editForm.carbsG}       onChange={ev => setEditForm(f => f ? { ...f, carbsG:       ev.target.value } : f)} />
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500 mb-0.5 block">Alcohol units</label>
-                        <input type="number" step="0.5" className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" value={editForm.alcoholUnits} onChange={ev => setEditForm(f => f ? { ...f, alcoholUnits: ev.target.value } : f)} />
+                        <label className="text-xs text-pens-cream/50 mb-0.5 block">Alcohol units</label>
+                        <input type="number" step="0.5" className="w-full text-sm bg-pens-deep border border-pens-muted/40 rounded-lg px-2 py-1.5 text-pens-cream focus:outline-none focus:border-blue-500/50" value={editForm.alcoholUnits} onChange={ev => setEditForm(f => f ? { ...f, alcoholUnits: ev.target.value } : f)} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1">
@@ -511,7 +511,7 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
                         ['flightDay',     'Flight day'],
                         ['illnessDay',    'Illness'],
                       ] as [keyof WeightEditForm, string][]).map(([key, label]) => (
-                        <label key={key} className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                        <label key={key} className="flex items-center gap-2 text-xs text-pens-cream/60 cursor-pointer">
                           <input
                             type="checkbox"
                             className="rounded accent-blue-500"
@@ -523,8 +523,8 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
                       ))}
                     </div>
                     <div className="flex gap-2 justify-end">
-                      <button onClick={cancelEdit} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100"><X size={12} /> Cancel</button>
-                      <button onClick={() => saveEdit(e.id)} disabled={saving} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"><Check size={12} /> Save &amp; recalculate</button>
+                      <button onClick={cancelEdit} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-pens-muted/40 text-pens-cream/50 hover:text-pens-cream"><X size={12} /> Cancel</button>
+                      <button onClick={() => saveEdit(e.id)} disabled={saving} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"><Check size={12} /> Save &amp; recalculate</button>
                     </div>
                   </div>
                 ) : (
@@ -533,34 +533,34 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
                       <button
                         type="button"
                         onClick={() => setExpandedId(isExpanded ? null : e.id)}
-                        className="flex-1 flex items-center gap-2 text-sm py-2 px-2 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                        className="flex-1 flex items-center gap-2 text-sm py-2 px-2 rounded-lg hover:bg-pens-navy/30 transition-colors text-left"
                       >
-                        <span className="text-gray-400 w-14 shrink-0 text-xs">{e.label}</span>
-                        <span className={`font-medium w-16 shrink-0 ${e.isOutlier ? 'text-red-500' : ''}`}>
+                        <span className="text-pens-cream/40 w-14 shrink-0 text-xs">{e.label}</span>
+                        <span className={`font-medium w-16 shrink-0 text-pens-cream ${e.isOutlier ? 'text-red-400' : ''}`}>
                           {e.scaleKg} kg{e.isOutlier && ' ⚠'}
                         </span>
-                        <span className="text-emerald-600 font-medium flex-1">
+                        <span className="text-emerald-400 font-medium flex-1">
                           → {e.trueWeightKg}
-                          <span className="text-emerald-400 font-normal text-xs"> ±{bandKg}</span>
+                          <span className="text-emerald-400/60 font-normal text-xs"> ±{bandKg}</span>
                           {e.baselineTrendKg !== null && (
-                            <span className="text-slate-400 font-normal text-xs ml-1">(base {e.baselineTrendKg})</span>
+                            <span className="text-pens-cream/30 font-normal text-xs ml-1">(base {e.baselineTrendKg})</span>
                           )}
                         </span>
                         <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${CONF_STYLES[e.confidence]}`}>
                           {e.confidence}
                         </span>
-                        <span className="text-amber-500 text-xs w-10 text-right shrink-0">
+                        <span className="text-amber-400 text-xs w-10 text-right shrink-0">
                           {e.retention > 0 ? `+${e.retention}` : '—'}
                         </span>
                         {isExpanded
-                          ? <ChevronDown  size={13} className="text-gray-300 shrink-0" />
-                          : <ChevronRight size={13} className="text-gray-300 shrink-0" />
+                          ? <ChevronDown  size={13} className="text-pens-cream/30 shrink-0" />
+                          : <ChevronRight size={13} className="text-pens-cream/30 shrink-0" />
                         }
                       </button>
                       <button
                         type="button"
                         onClick={() => startEdit(e)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 ml-0.5 text-gray-300 hover:text-blue-400 shrink-0"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 ml-0.5 text-pens-cream/30 hover:text-blue-400 shrink-0"
                         title="Edit entry"
                       >
                         <Pencil size={13} />

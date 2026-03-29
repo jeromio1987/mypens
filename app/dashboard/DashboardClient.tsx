@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Scale,
-  UtensilsCrossed, Moon, Dumbbell, Ruler, DatabaseBackup,
+  Moon, Dumbbell, Ruler, DatabaseBackup,
   Plane, Thermometer, Palmtree, Salad, Trophy, Tag,
-  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Activity, Map, Target, Sparkles,
+  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Map, Target, Sparkles,
 } from 'lucide-react'
 import type { StructuredInsight } from '@/app/api/dashboard/route'
 import GoalsPanel from '@/components/goals/GoalsPanel'
@@ -68,9 +68,9 @@ interface DashboardData {
 type ConfidenceLevel = 'high' | 'medium' | 'low'
 
 const CONFIDENCE_STYLES: Record<ConfidenceLevel, string> = {
-  high:   'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  medium: 'bg-amber-50 text-amber-700 border border-amber-200',
-  low:    'bg-red-50 text-red-600 border border-red-200',
+  high:   'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30',
+  medium: 'bg-amber-900/30 text-pens-gold border border-amber-500/30',
+  low:    'bg-pens-crimson/10 text-red-400 border border-pens-crimson/30',
 }
 
 const CONFIDENCE_DESCRIPTIONS: Record<ConfidenceLevel, string> = {
@@ -85,18 +85,18 @@ const EVENT_ICONS: Record<string, React.ElementType> = {
 }
 
 const EVENT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  travel:       { bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
-  illness:      { bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-200' },
-  holiday:      { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-  'diet-break': { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200' },
-  competition:  { bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-200' },
-  other:        { bg: 'bg-gray-50',    text: 'text-gray-700',    border: 'border-gray-200' },
+  travel:       { bg: 'bg-blue-900/20',    text: 'text-blue-300',    border: 'border-blue-500/30' },
+  illness:      { bg: 'bg-red-900/20',     text: 'text-red-300',     border: 'border-red-500/30' },
+  holiday:      { bg: 'bg-emerald-900/20', text: 'text-emerald-300', border: 'border-emerald-500/30' },
+  'diet-break': { bg: 'bg-amber-900/20',   text: 'text-pens-gold',   border: 'border-amber-500/30' },
+  competition:  { bg: 'bg-violet-900/20',  text: 'text-violet-300',  border: 'border-violet-500/30' },
+  other:        { bg: 'bg-pens-navy/40',   text: 'text-pens-cream/70', border: 'border-pens-muted/30' },
 }
 
 const INSIGHT_SEVERITY_STYLES: Record<string, { icon: React.ElementType; border: string; iconColor: string; bg: string }> = {
-  positive: { icon: CheckCircle,  border: 'border-emerald-200', iconColor: 'text-emerald-500', bg: 'bg-emerald-50' },
-  warning:  { icon: AlertTriangle,border: 'border-amber-200',   iconColor: 'text-amber-500',   bg: 'bg-amber-50' },
-  info:     { icon: Info,         border: 'border-blue-200',    iconColor: 'text-blue-400',    bg: 'bg-blue-50' },
+  positive: { icon: CheckCircle,  border: 'border-emerald-500/30', iconColor: 'text-emerald-400', bg: 'bg-emerald-900/20' },
+  warning:  { icon: AlertTriangle,border: 'border-amber-500/30',   iconColor: 'text-pens-gold',   bg: 'bg-amber-900/20' },
+  info:     { icon: Info,         border: 'border-blue-500/30',    iconColor: 'text-blue-400',    bg: 'bg-blue-900/20' },
 }
 
 function TrendArrow({ v }: { v: number | null }) {
@@ -110,27 +110,25 @@ function QualityDots({ q }: { q: number }) {
   return (
     <span className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map(i => (
-        <span key={i} className={`w-2 h-2 rounded-full ${i <= q ? 'bg-violet-500' : 'bg-gray-200'}`} />
+        <span key={i} className={`w-2 h-2 rounded-full ${i <= q ? 'bg-violet-500' : 'bg-pens-muted/40'}`} />
       ))}
     </span>
   )
 }
 
 const MODULES = [
-  { href: '/weight',       label: 'Weight',       icon: Scale,          color: 'text-blue-600' },
-  { href: '/food',         label: 'Food',         icon: UtensilsCrossed,color: 'text-emerald-600' },
-  { href: '/sleep',        label: 'Sleep',        icon: Moon,           color: 'text-violet-600' },
-  { href: '/training',     label: 'Training',     icon: Dumbbell,       color: 'text-orange-500' },
-  { href: '/measurements', label: 'Measurements', icon: Ruler,          color: 'text-rose-600' },
-  { href: '/events',       label: 'Events',       icon: CalendarDays,   color: 'text-sky-600' },
+  { href: '/weight',       label: 'Weight',       icon: Scale,        color: 'text-blue-400' },
+  { href: '/sleep',        label: 'Sleep',        icon: Moon,         color: 'text-violet-400' },
+  { href: '/training',     label: 'Training',     icon: Dumbbell,     color: 'text-orange-400' },
+  { href: '/measurements', label: 'Measurements', icon: Ruler,        color: 'text-rose-400' },
+  { href: '/events',       label: 'Events',       icon: CalendarDays, color: 'text-sky-400' },
 ]
 
 const STREAK_MODULES = [
-  { key: 'weight'      , label: 'Weight',       icon: Scale,          color: 'text-blue-600' },
-  { key: 'food'        , label: 'Food',         icon: UtensilsCrossed,color: 'text-emerald-600' },
-  { key: 'sleep'       , label: 'Sleep',        icon: Moon,           color: 'text-violet-600' },
-  { key: 'training'    , label: 'Training',     icon: Dumbbell,       color: 'text-orange-500' },
-  { key: 'measurements', label: 'Measurements', icon: Ruler,          color: 'text-rose-600' },
+  { key: 'weight'      , label: 'Weight',       icon: Scale,   color: 'text-blue-400' },
+  { key: 'sleep'       , label: 'Sleep',        icon: Moon,    color: 'text-violet-400' },
+  { key: 'training'    , label: 'Training',     icon: Dumbbell,color: 'text-orange-400' },
+  { key: 'measurements', label: 'Measurements', icon: Ruler,   color: 'text-rose-400' },
 ]
 
 export default function DashboardClient() {
@@ -156,55 +154,55 @@ export default function DashboardClient() {
   }, [])
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8">
+    <main className="min-h-screen bg-pens-deep px-4 py-8">
       <div className="max-w-lg mx-auto space-y-5">
         {showGoals && <GoalsPanel onClose={() => setShowGoals(false)} />}
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <Link href="/" className="text-gray-400 hover:text-gray-600 transition-colors">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/" className="text-pens-cream/40 hover:text-pens-cream/70 transition-colors">
             <ArrowLeft size={20} />
           </Link>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900">Weekly Overview</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Last 7 days at a glance</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">P.E.N.S.</p>
+            <h1 className="text-2xl font-bold text-pens-cream">Weekly Overview</h1>
           </div>
           <Link
             href="/clubroom"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1B263B] hover:bg-[#0D1B2A] rounded-xl text-xs font-medium text-[#C9A84C] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy hover:bg-pens-deep rounded-xl text-xs font-medium text-pens-gold transition-colors border border-pens-gold/20"
           >
             <Sparkles size={13} />
             Clubroom
           </Link>
           <Link
             href="/data"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-medium text-gray-600 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-pens-cream/60 transition-colors border border-pens-muted/30"
           >
-            <Download size={13} className="text-gray-500" />
+            <Download size={13} />
             Data
           </Link>
           <Link
             href="/roadmap"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-medium text-gray-600 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-pens-cream/60 transition-colors border border-pens-muted/30"
           >
-            <Map size={13} className="text-gray-500" />
+            <Map size={13} />
             Roadmap
           </Link>
           <button
             onClick={() => setShowGoals(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-colors"
+            className="flex items-center gap-1.5 text-sm font-medium text-pens-cream/70 bg-pens-navy/60 hover:bg-pens-navy px-3 py-1.5 rounded-xl transition-colors border border-pens-muted/30"
           >
             <Target size={14} />
             Goals
           </button>
         </div>
 
-        {loading && <div className="text-center py-12 text-gray-400 text-sm">Loading…</div>}
+        {loading && <div className="text-center py-12 text-pens-cream/40 text-sm">Loading…</div>}
 
         {apiError && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-5 text-sm text-red-700">
+          <div className="bg-pens-crimson/10 border border-pens-crimson/30 rounded-2xl p-5 text-sm text-red-400">
             <p className="font-semibold mb-1">Dashboard failed to load</p>
             <p>{apiError}</p>
-            <p className="mt-3 text-red-500 font-mono text-xs">npx prisma db push</p>
+            <p className="mt-3 text-red-400/70 font-mono text-xs">npx prisma db push</p>
           </div>
         )}
 
@@ -234,19 +232,19 @@ export default function DashboardClient() {
             )}
 
             {/* Weight card */}
-            <div className="bg-white rounded-2xl shadow p-5">
+            <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Scale size={16} className="text-blue-600" />
-                  <h2 className="font-semibold text-gray-800">Weight</h2>
+                  <Scale size={16} className="text-blue-400" />
+                  <h2 className="font-semibold text-pens-cream">Weight</h2>
                 </div>
-                <Link href="/weight" className="text-xs text-blue-500 hover:underline">Log →</Link>
+                <Link href="/weight" className="text-xs text-pens-cream/40 hover:text-pens-cream/70 transition-colors">Log →</Link>
               </div>
               {data.weight.latest ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-3xl font-bold text-gray-900">{data.weight.latest.trueWeightKg}</span>
-                    <span className="text-gray-400 text-sm">kg adjusted</span>
+                    <span className="text-3xl font-bold text-pens-cream">{data.weight.latest.trueWeightKg}</span>
+                    <span className="text-pens-cream/40 text-sm">kg adjusted</span>
                     <TrendArrow v={data.weight.trend7} />
                     {data.weight.latest.confidence && (
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CONFIDENCE_STYLES[data.weight.latest.confidence]}`}>
@@ -255,25 +253,25 @@ export default function DashboardClient() {
                     )}
                   </div>
                   {data.weight.latest.confidence && (
-                    <p className="text-xs text-gray-400 flex items-center gap-1">
+                    <p className="text-xs text-pens-cream/40 flex items-center gap-1">
                       <Info size={11} className="shrink-0" />
                       {CONFIDENCE_DESCRIPTIONS[data.weight.latest.confidence]}
                       {data.weight.latest.activeConfounders > 0 && ` · ${data.weight.latest.activeConfounders} active factor${data.weight.latest.activeConfounders > 1 ? 's' : ''}`}
                     </p>
                   )}
-                  <div className="flex gap-4 text-sm text-gray-500">
+                  <div className="flex gap-4 text-sm text-pens-cream/50">
                     <span>Scale: {data.weight.latest.scaleKg} kg</span>
                     {data.weight.avg7 && <span>7-day avg: {data.weight.avg7} kg</span>}
                   </div>
                   {data.weight.trend7 != null && (
-                    <p className={`text-xs font-medium ${data.weight.trend7 <= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    <p className={`text-xs font-medium ${data.weight.trend7 <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {data.weight.trend7 > 0 ? '+' : ''}{data.weight.trend7} kg vs 7 days ago
                     </p>
                   )}
-                  <p className="text-xs text-gray-400">Last logged: {data.weight.latest.date}</p>
+                  <p className="text-xs text-pens-cream/40">Last logged: {data.weight.latest.date}</p>
                 </div>
               ) : (
-                <p className="text-sm text-gray-400">No data this week</p>
+                <p className="text-sm text-pens-cream/40">No data this week</p>
               )}
             </div>
 
@@ -288,115 +286,86 @@ export default function DashboardClient() {
               />
             )}
 
-            {/* Food card */}
-            <div className="bg-white rounded-2xl shadow p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <UtensilsCrossed size={16} className="text-emerald-600" />
-                  <h2 className="font-semibold text-gray-800">Food — Today</h2>
-                </div>
-                <Link href="/food" className="text-xs text-emerald-500 hover:underline">Log →</Link>
-              </div>
-              <div className="flex items-end gap-2 mb-3">
-                <span className="text-3xl font-bold text-gray-900">{Math.round(data.food.today.kcal)}</span>
-                <span className="text-gray-400 text-sm mb-1">kcal · {data.food.today.entries} items</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                {[
-                  { label: 'Protein', val: data.food.today.proteinG, color: 'text-blue-600' },
-                  { label: 'Carbs',   val: data.food.today.carbsG,   color: 'text-amber-600' },
-                  { label: 'Fat',     val: data.food.today.fatG,     color: 'text-orange-500' },
-                ].map(({ label, val, color }) => (
-                  <div key={label} className="bg-gray-50 rounded-xl py-2">
-                    <p className={`text-sm font-bold ${color}`}>{Math.round(val)}g</p>
-                    <p className="text-xs text-gray-400">{label}</p>
-                  </div>
-                ))}
-              </div>
-              {data.food.avgKcal7 != null && (
-                <p className="text-xs text-gray-400 mt-2">7-day avg: {Math.round(data.food.avgKcal7)} kcal/day</p>
-              )}
-            </div>
 
             {/* Sleep card */}
-            <div className="bg-white rounded-2xl shadow p-5">
+            <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Moon size={16} className="text-violet-600" />
-                  <h2 className="font-semibold text-gray-800">Sleep — Last night</h2>
+                  <Moon size={16} className="text-violet-400" />
+                  <h2 className="font-semibold text-pens-cream">Sleep — Last night</h2>
                 </div>
-                <Link href="/sleep" className="text-xs text-violet-500 hover:underline">Log →</Link>
+                <Link href="/sleep" className="text-xs text-pens-cream/40 hover:text-pens-cream/70 transition-colors">Log →</Link>
               </div>
               {data.sleep.latest ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
-                    <span className="text-3xl font-bold text-gray-900">{data.sleep.latest.hours}h</span>
+                    <span className="text-3xl font-bold text-pens-cream">{data.sleep.latest.hours}h</span>
                     <QualityDots q={data.sleep.latest.quality} />
                   </div>
-                  <p className="text-sm text-gray-500">{data.sleep.latest.bedtime} → {data.sleep.latest.wakeTime}</p>
-                  <div className="flex gap-4 text-xs text-gray-400">
+                  <p className="text-sm text-pens-cream/50">{data.sleep.latest.bedtime} → {data.sleep.latest.wakeTime}</p>
+                  <div className="flex gap-4 text-xs text-pens-cream/40">
                     {data.sleep.avgHours7 != null && <span>7-day avg: {data.sleep.avgHours7}h</span>}
                     {data.sleep.avgQuality7 != null && <span>Avg quality: {data.sleep.avgQuality7}/5</span>}
                     {data.sleep.avgHrv7 != null && <span>Avg HRV: {data.sleep.avgHrv7} ms</span>}
                   </div>
-                  <p className="text-xs text-gray-400">{data.sleep.daysLogged}/7 nights logged</p>
+                  <p className="text-xs text-pens-cream/40">{data.sleep.daysLogged}/7 nights logged</p>
                 </div>
               ) : (
-                <p className="text-sm text-gray-400">No data this week</p>
+                <p className="text-sm text-pens-cream/40">No data this week</p>
               )}
             </div>
 
             {/* Training card */}
-            <div className="bg-white rounded-2xl shadow p-5">
+            <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Dumbbell size={16} className="text-orange-500" />
-                  <h2 className="font-semibold text-gray-800">Training — This week</h2>
+                  <Dumbbell size={16} className="text-orange-400" />
+                  <h2 className="font-semibold text-pens-cream">Training — This week</h2>
                 </div>
-                <Link href="/training" className="text-xs text-orange-500 hover:underline">Log →</Link>
+                <Link href="/training" className="text-xs text-pens-cream/40 hover:text-pens-cream/70 transition-colors">Log →</Link>
               </div>
               <div className="flex gap-6 mb-3">
                 <div>
-                  <p className="text-3xl font-bold text-gray-900">{data.training.weekSessions}</p>
-                  <p className="text-xs text-gray-400">sessions</p>
+                  <p className="text-3xl font-bold text-pens-cream">{data.training.weekSessions}</p>
+                  <p className="text-xs text-pens-cream/40">sessions</p>
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-gray-900">{data.training.weekVolume.toLocaleString()}</p>
-                  <p className="text-xs text-gray-400">kg volume</p>
+                  <p className="text-3xl font-bold text-pens-cream">{data.training.weekVolume.toLocaleString()}</p>
+                  <p className="text-xs text-pens-cream/40">kg volume</p>
                 </div>
               </div>
               {data.training.topExercises.length > 0 && (
                 <div className="space-y-1">
                   {data.training.topExercises.map(({ exercise, volume }) => (
-                    <div key={exercise} className="flex justify-between text-xs text-gray-600">
+                    <div key={exercise} className="flex justify-between text-xs text-pens-cream/60">
                       <span>{exercise}</span>
-                      <span className="text-gray-400">{volume.toLocaleString()} kg</span>
+                      <span className="text-pens-cream/40">{volume.toLocaleString()} kg</span>
                     </div>
                   ))}
                 </div>
               )}
-              {!data.training.weekSessions && <p className="text-sm text-gray-400">No sessions this week</p>}
+              {!data.training.weekSessions && <p className="text-sm text-pens-cream/40">No sessions this week</p>}
             </div>
 
             {/* Measurements card */}
-            <div className="bg-white rounded-2xl shadow p-5">
+            <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Ruler size={16} className="text-rose-600" />
-                  <h2 className="font-semibold text-gray-800">Measurements</h2>
+                  <Ruler size={16} className="text-rose-400" />
+                  <h2 className="font-semibold text-pens-cream">Measurements</h2>
                 </div>
-                <Link href="/measurements" className="text-xs text-rose-500 hover:underline">Log →</Link>
+                <Link href="/measurements" className="text-xs text-pens-cream/40 hover:text-pens-cream/70 transition-colors">Log →</Link>
               </div>
               {data.measurements.latest ? (
                 <div className="space-y-2">
-                  <p className="text-xs text-gray-400">{data.measurements.latest.date}</p>
+                  <p className="text-xs text-pens-cream/40">{data.measurements.latest.date}</p>
                   <div className="flex gap-4 text-sm">
                     {data.measurements.latest.waistCm != null && (
                       <div>
-                        <span className="font-bold text-gray-900">{data.measurements.latest.waistCm}</span>
-                        <span className="text-gray-400 text-xs"> cm waist</span>
+                        <span className="font-bold text-pens-cream">{data.measurements.latest.waistCm}</span>
+                        <span className="text-pens-cream/40 text-xs"> cm waist</span>
                         {data.measurements.delta?.waistCm != null && (
-                          <span className={`ml-1 text-xs font-medium ${data.measurements.delta.waistCm <= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          <span className={`ml-1 text-xs font-medium ${data.measurements.delta.waistCm <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                             ({data.measurements.delta.waistCm > 0 ? '+' : ''}{data.measurements.delta.waistCm})
                           </span>
                         )}
@@ -404,21 +373,21 @@ export default function DashboardClient() {
                     )}
                     {data.measurements.latest.chestCm != null && (
                       <div>
-                        <span className="font-bold text-gray-900">{data.measurements.latest.chestCm}</span>
-                        <span className="text-gray-400 text-xs"> cm chest</span>
+                        <span className="font-bold text-pens-cream">{data.measurements.latest.chestCm}</span>
+                        <span className="text-pens-cream/40 text-xs"> cm chest</span>
                       </div>
                     )}
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-gray-400">No measurements logged yet</p>
+                <p className="text-sm text-pens-cream/40">No measurements logged yet</p>
               )}
             </div>
 
             {/* Structured Insights */}
             {data.insights && data.insights.length > 0 && (
               <div className="space-y-3">
-                <h2 className="font-semibold text-gray-700 text-sm px-1">Weekly insights</h2>
+                <h2 className="font-semibold text-pens-cream/60 text-sm px-1">Weekly insights</h2>
                 {data.insights.map(insight => {
                   const cfg = INSIGHT_SEVERITY_STYLES[insight.severity] ?? INSIGHT_SEVERITY_STYLES.info
                   const Icon = cfg.icon
@@ -427,45 +396,41 @@ export default function DashboardClient() {
                       <div className="flex items-start gap-3">
                         <Icon size={16} className={`${cfg.iconColor} shrink-0 mt-0.5`} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 mb-1">{insight.title}</p>
-                          <p className="text-sm text-gray-600 leading-relaxed">{insight.body}</p>
+                          <p className="text-sm font-semibold text-pens-cream mb-1">{insight.title}</p>
+                          <p className="text-sm text-pens-cream/70 leading-relaxed">{insight.body}</p>
                         </div>
                       </div>
                     </div>
                   )
                 })}
-                <p className="text-xs text-gray-400 px-1">Rule-based · Based on last 7 days of logged data</p>
+                <p className="text-xs text-pens-cream/40 px-1">Rule-based · Based on last 7 days of logged data</p>
               </div>
             )}
 
             {/* Streaks */}
             {streaks && (
-              <div className="bg-white rounded-2xl shadow p-5">
+              <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-semibold text-gray-800 flex items-center gap-2">
-                    <Flame size={16} className="text-orange-500" />
+                  <h2 className="font-semibold text-pens-cream flex items-center gap-2">
+                    <Flame size={16} className="text-orange-400" />
                     Logging Streaks
                   </h2>
-                  <Link href="/data-health" className="flex items-center gap-1 text-xs text-teal-500 hover:underline">
-                    <Activity size={12} />
-                    Data health →
-                  </Link>
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {STREAK_MODULES.map(({ key, label, icon: Icon, color }) => {
                     const s = streaks[key as keyof StreaksData]
                     return (
-                      <div key={key} className="bg-gray-50 rounded-xl p-3 text-center">
+                      <div key={key} className="bg-pens-navy/40 rounded-xl p-3 text-center">
                         <Icon size={15} className={`${color} mx-auto mb-1`} />
-                        <p className="text-xs text-gray-500 mb-1">{label}</p>
+                        <p className="text-xs text-pens-cream/50 mb-1">{label}</p>
                         {s.current > 0 ? (
-                          <p className="text-lg font-bold text-orange-500 leading-none">
-                            {s.current}<span className="text-xs font-normal text-gray-400">d</span>
+                          <p className="text-lg font-bold text-orange-400 leading-none">
+                            {s.current}<span className="text-xs font-normal text-pens-cream/40">d</span>
                           </p>
                         ) : (
-                          <p className="text-sm text-gray-300 font-medium">—</p>
+                          <p className="text-sm text-pens-cream/20 font-medium">—</p>
                         )}
-                        <p className="text-[10px] text-gray-400 mt-0.5">{s.coverage}% / 30d</p>
+                        <p className="text-[10px] text-pens-cream/40 mt-0.5">{s.coverage}% / 30d</p>
                       </div>
                     )
                   })}
@@ -474,14 +439,14 @@ export default function DashboardClient() {
             )}
 
             {/* Quick-log bar */}
-            <div className="bg-white rounded-2xl shadow p-4">
-              <p className="text-xs font-medium text-gray-500 mb-3">Quick log</p>
+            <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-4">
+              <p className="text-xs font-medium text-pens-cream/50 mb-3">Quick log</p>
               <div className="flex gap-2 flex-wrap">
                 {MODULES.map(({ href, label, icon: Icon, color }) => (
                   <Link
                     key={href}
                     href={href}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm font-medium text-gray-700 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-pens-navy/40 hover:bg-pens-navy rounded-xl text-sm font-medium text-pens-cream/70 hover:text-pens-cream transition-colors"
                   >
                     <Icon size={14} className={color} />
                     {label}
@@ -493,16 +458,16 @@ export default function DashboardClient() {
             {/* Data management shortcut */}
             <Link
               href="/data"
-              className="flex items-center justify-between bg-white rounded-2xl shadow px-5 py-4 hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-between bg-pens-surface/80 border border-pens-muted/20 rounded-2xl px-5 py-4 hover:bg-pens-navy/40 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <DatabaseBackup size={16} className="text-gray-500" />
+                <DatabaseBackup size={16} className="text-pens-cream/40" />
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">Data Management</p>
-                  <p className="text-xs text-gray-400">Export · Import · Backup</p>
+                  <p className="text-sm font-semibold text-pens-cream">Data Management</p>
+                  <p className="text-xs text-pens-cream/40">Export · Import · Backup</p>
                 </div>
               </div>
-              <span className="text-xs text-gray-400">→</span>
+              <span className="text-xs text-pens-cream/40">→</span>
             </Link>
           </>
         )}
