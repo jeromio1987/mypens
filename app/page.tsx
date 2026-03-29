@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Scale, Moon, Ruler, LayoutDashboard, ArrowUpRight, Plus } from 'lucide-react'
+import { Scale, Moon, Ruler, LayoutDashboard, ArrowUpRight, Plus, ListChecks } from 'lucide-react'
 
 const MODES = [
   {
@@ -206,9 +206,18 @@ export default function Home() {
         {/* Context tags — shown once a mode is set */}
         {entry.mode && (
           <div className="space-y-3">
-            <p className="text-[10px] uppercase tracking-widest text-pens-cream/30 font-semibold">
-              Context <span className="normal-case tracking-normal font-normal text-pens-cream/20">— optional</span>
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-widest text-pens-cream/30 font-semibold">
+                Context <span className="normal-case tracking-normal font-normal text-pens-cream/20">— optional</span>
+              </p>
+              <Link
+                href="/context"
+                className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-pens-cream/30 hover:text-pens-cream/60 transition-colors font-medium"
+              >
+                <ListChecks size={12} />
+                Full report
+              </Link>
+            </div>
             <div className="flex flex-wrap gap-2">
               {CONTEXT_TAGS.map(tag => {
                 const active = entry.tags.includes(tag.id)
