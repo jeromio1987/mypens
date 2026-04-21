@@ -82,6 +82,9 @@ interface Status {
   pendingCount?: number
   lastSyncAt: string | null
   expiresAt?: number | null
+  webhookActive?: boolean
+  lastError?: string | null
+  lastErrorAt?: string | null
 }
 
 interface Draft {
@@ -267,6 +270,11 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
               {typeof status.pendingCount === 'number' && (
                 <div>{status.pendingCount} pending</div>
               )}
+              {provider.id === 'strava' && (
+                <div className={status.webhookActive ? 'text-green-600' : 'text-gray-400'}>
+                  Webhook: {status.webhookActive ? 'active' : 'inactive'}
+                </div>
+              )}
               {status.lastSyncAt && (
                 <div>Last sync: {new Date(status.lastSyncAt).toLocaleString()}</div>
               )}
@@ -322,6 +330,15 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
           </button>
         )}
       </div>
+
+      {status?.connected && status.lastError && (
+        <div className="text-xs bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2">
+          <span className="font-medium">Last sync error:</span> {status.lastError}
+          {status.lastErrorAt && (
+            <span className="text-red-500"> · {new Date(status.lastErrorAt).toLocaleString()}</span>
+          )}
+        </div>
+      )}
 
       {!status?.configured && !loadingStatus && provider.authMode === 'oauth' && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">

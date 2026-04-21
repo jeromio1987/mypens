@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { exchangeCode, getAppBaseUrl, persistConnection, STRAVA_STATE_COOKIE } from '@/lib/integrations/strava/oauth'
+import { ensureSubscription } from '@/lib/integrations/strava/webhook'
+import { prisma } from '@/lib/db'
 import { cookies } from 'next/headers'
 
 export async function GET(request: Request) {
@@ -45,6 +47,32 @@ export async function GET(request: Request) {
   try {
     const token = await exchangeCode(code)
     await persistConnection(token)
+
+    // Best-effort: subscribe the app's webhook so future activity events
+    // auto-import. We do NOT fail the connect if this throws — the user can
+    // still use the manual "Sync now" + daily cron fallback.
+    try {
+      const callbackUrl = `${redirectBase}/api/integrations/strava/webhook`
+      // ensureSubscription persists the verify token to the connection row
+      // BEFORE calling Strava, so the handshake GET succeeds.
+      const sub = await ensureSubscription(callbackUrl)
+      await prisma.stravaConnection.update({
+        where: { userId: 'default' },
+        data: {
+          webhookId: sub.subscriptionId,
+          lastError: null,
+          lastErrorAt: null,
+        },
+      })
+    } catch (subErr) {
+      console.error('[strava] webhook subscribe failed', subErr)
+      const msg = subErr instanceof Error ? subErr.message : 'webhook subscribe failed'
+      await prisma.stravaConnection.updateMany({
+        where: { userId: 'default' },
+        data: { lastError: msg, lastErrorAt: new Date() },
+      })
+    }
+
     return clearStateCookie(
       NextResponse.redirect(`${redirectBase}/integrations?strava_connected=1`),
     )

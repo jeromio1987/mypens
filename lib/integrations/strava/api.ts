@@ -31,6 +31,19 @@ async function stravaFetch(path: string, init?: RequestInit): Promise<Response> 
   return res
 }
 
+/** Fetch a single activity by id. */
+export async function getActivity(id: string | number): Promise<StravaActivity> {
+  const res = await stravaFetch(`/activities/${id}`)
+  if (!res.ok) {
+    const text = await res.text()
+    if (res.status === 401) throw new Error('STRAVA_UNAUTHORIZED')
+    if (res.status === 404) throw new Error('STRAVA_NOT_FOUND')
+    if (res.status === 429) throw new Error('STRAVA_RATE_LIMITED')
+    throw new Error(`Strava API error: ${res.status} ${text}`)
+  }
+  return (await res.json()) as StravaActivity
+}
+
 /** Fetch recent activities (last `days` days, default 30). */
 export async function listRecentActivities(days = 30): Promise<StravaActivity[]> {
   const after = Math.floor((Date.now() - days * 86_400_000) / 1000)

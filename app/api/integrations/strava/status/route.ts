@@ -14,6 +14,9 @@ export async function GET() {
       scope: conn?.scope ?? null,
       lastSyncAt: conn?.lastSyncAt ?? null,
       expiresAt: conn?.expiresAt ?? null,
+      webhookActive: Boolean(conn?.webhookId),
+      lastError: conn?.lastError ?? null,
+      lastErrorAt: conn?.lastErrorAt ?? null,
     })
   } catch (err) {
     console.error(err)
