@@ -12,7 +12,7 @@ export async function syncRecentActivities(days = 7): Promise<{
 }> {
   try {
     const activities = await listRecentActivities(days)
-    const drafts = activities.map(mapActivityToDraft)
+    const drafts = activities.flatMap(mapActivityToDraft)
     const result = await importDrafts('strava', drafts)
     await prisma.stravaConnection.updateMany({
       where: { userId: 'default' },
@@ -36,8 +36,8 @@ export async function syncSingleActivity(activityId: string | number): Promise<{
 }> {
   try {
     const a = await getActivity(activityId)
-    const draft = mapActivityToDraft(a)
-    const result = await importDrafts('strava', [draft])
+    const drafts = mapActivityToDraft(a)
+    const result = await importDrafts('strava', drafts)
     await prisma.stravaConnection.updateMany({
       where: { userId: 'default' },
       data: { lastSyncAt: new Date(), lastError: null, lastErrorAt: null },
@@ -55,8 +55,15 @@ export async function syncSingleActivity(activityId: string | number): Promise<{
 
 /** Delete the imported TrainingEntry corresponding to a Strava activity (webhook delete). */
 export async function deleteImportedActivity(activityId: string | number): Promise<number> {
+  const id = String(activityId)
   const res = await prisma.trainingEntry.deleteMany({
-    where: { source: 'strava', externalId: String(activityId) },
+    where: {
+      source: 'strava',
+      OR: [
+        { externalId: id },
+        { externalId: { startsWith: `${id}#` } },
+      ],
+    },
   })
   return res.count
 }

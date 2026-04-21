@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const days = Math.max(1, Math.min(90, Number(searchParams.get('days') || 30)))
 
     const activities = await listRecentActivities(days)
-    const drafts = activities.map(mapActivityToDraft)
+    const drafts = activities.flatMap(mapActivityToDraft)
 
     const ids = drafts.map(d => d.externalId)
     const existing = ids.length
