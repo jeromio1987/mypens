@@ -232,6 +232,22 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
                 <label className={labelSmCls}>Alcohol units</label>
                 <input type="number" step="0.5" value={form.alcoholUnits} onChange={e => set('alcoholUnits', e.target.value)} className={inputCls} />
               </div>
+              {Number(form.creatineDoseG) > 0 && Number(form.creatineDoseG) < 10 && (
+                <div className="col-span-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.creatinePostLoad}
+                      onChange={e => set('creatinePostLoad', e.target.checked)}
+                      className="w-4 h-4 accent-blue-600"
+                    />
+                    <div>
+                      <p className="text-sm font-medium">Post-load maintenance</p>
+                      <p className="text-xs text-gray-400">Switched from loading (≥10g) — stores stay fully saturated</p>
+                    </div>
+                  </label>
+                </div>
+              )}
               <div>
                 <label className={labelSmCls}>Hours since alcohol</label>
                 <input type="number" step="1" value={form.hoursSinceAlcohol} onChange={e => set('hoursSinceAlcohol', e.target.value)} className={inputCls} />

@@ -123,6 +123,12 @@ model GarminConnection {
   expiresAt      Int       // unix seconds
   scope          String?
   lastSyncAt     DateTime?
+  // Background sync state — Garmin Push (Activity Ping Service) is configured
+  // app-level in the developer portal, but we still record whether the initial
+  // backfill has been kicked off so the UI can reflect it.
+  pingSubscribed Boolean   @default(false)
+  lastError      String?
+  lastErrorAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }

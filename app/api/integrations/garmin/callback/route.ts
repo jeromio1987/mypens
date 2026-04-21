@@ -52,6 +52,14 @@ export async function GET(request: Request) {
     const token = await exchangeCode(request, code, verifier)
     const garminUserId = await fetchUserId(token.access_token).catch(() => '')
     await persistConnection(token, garminUserId)
+
+    // Best-effort: kick off the initial backfill so prior activities arrive
+    // via the configured Push (Activity Ping Service) endpoint. Errors are
+    // captured on the connection row but never block the connect flow — the
+    // user can still rely on the daily cron + manual "Sync now".
+    const { ensurePushSubscription } = await import('@/lib/integrations/garmin/webhook')
+    await ensurePushSubscription()
+
     return clearCookies(
       NextResponse.redirect(`${redirectBase}/integrations?garmin_connected=1`),
     )
