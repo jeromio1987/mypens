@@ -22,12 +22,21 @@ export default function TrainingPage() {
             <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Training</h1>
             <p className="text-sm text-gray-400">Sets · Reps · Volume</p>
           </div>
-          <input
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm"
-          />
+          <div className="flex items-center gap-2">
+            <Link
+              href="/integrations"
+              className="text-xs text-orange-500 hover:text-orange-600 border border-orange-200 hover:border-orange-300 rounded-lg px-2.5 py-2"
+              title="Integrations & Strava sync"
+            >
+              Strava ↗
+            </Link>
+            <input
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="border rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
         </div>
 
         <TrainingEntry date={date} onSaved={() => setRefresh(r => r + 1)} />

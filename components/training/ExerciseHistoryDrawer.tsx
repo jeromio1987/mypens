@@ -16,6 +16,8 @@ interface TrainingEntry {
   rpe?: number | null
   notes?: string | null
   volume: number
+  source?: string
+  externalUrl?: string | null
 }
 
 interface Props {
@@ -148,6 +150,17 @@ export default function ExerciseHistoryDrawer({ exercise, onClose }: Props) {
                       {e.rpe && <span className="text-gray-400">RPE {e.rpe}</span>}
                       {e.volume > 0 && (
                         <span className="ml-auto text-orange-500 font-medium">{e.volume} kg</span>
+                      )}
+                      {e.source === 'strava' && e.externalUrl && (
+                        <a
+                          href={e.externalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`text-[9px] uppercase tracking-wide font-bold bg-orange-100 text-orange-600 rounded px-1 py-0.5 hover:bg-orange-200 ${e.volume > 0 ? '' : 'ml-auto'}`}
+                          title="Open on Strava"
+                        >
+                          Strava ↗
+                        </a>
                       )}
                     </div>
                   ))}

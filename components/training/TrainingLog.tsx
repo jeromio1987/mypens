@@ -17,6 +17,8 @@ interface TrainingEntry {
   rpe?: number
   notes?: string
   volume: number
+  source?: string
+  externalUrl?: string | null
 }
 
 interface EditForm {
@@ -200,10 +202,18 @@ export default function TrainingLog({ date, refresh }: Props) {
       >
         <button
           onClick={() => setHistoryExercise(e.exercise)}
-          className="font-medium flex-1 text-left hover:text-orange-600 transition-colors"
+          className="font-medium flex-1 text-left hover:text-orange-600 transition-colors flex items-center gap-1.5"
           title="View exercise history"
         >
-          {e.exercise}
+          <span className="truncate">{e.exercise}</span>
+          {e.source === 'strava' && (
+            <span
+              className="inline-flex items-center text-[9px] uppercase tracking-wide font-bold bg-orange-100 text-orange-600 rounded px-1 py-0.5"
+              title="Imported from Strava"
+            >
+              Strava
+            </span>
+          )}
         </button>
         <span className="text-gray-500 text-xs">
           {e.sets}×{e.reps}
@@ -286,9 +296,14 @@ export default function TrainingLog({ date, refresh }: Props) {
                     <div key={e.id} className="flex items-center gap-2 text-xs text-gray-500 py-0.5">
                       <button
                         onClick={() => setHistoryExercise(e.exercise)}
-                        className="font-medium text-gray-700 hover:text-orange-600 transition-colors text-left"
+                        className="font-medium text-gray-700 hover:text-orange-600 transition-colors text-left flex items-center gap-1"
                       >
-                        {e.exercise}
+                        <span>{e.exercise}</span>
+                        {e.source === 'strava' && (
+                          <span className="text-[9px] uppercase tracking-wide font-bold bg-orange-100 text-orange-600 rounded px-1" title="Strava">
+                            S
+                          </span>
+                        )}
                       </button>
                       <span>{e.sets}×{e.reps}{e.weightKg > 0 ? ` @ ${e.weightKg}kg` : ' BW'}</span>
                       {e.rpe && <span className="text-gray-400">RPE {e.rpe}</span>}

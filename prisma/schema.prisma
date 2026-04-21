@@ -84,6 +84,28 @@ model TrainingEntry {
   rpe      Int?     // 1–10
   notes    String?
   volume   Float    @default(0) // sets × reps × weightKg (computed on save)
+
+  // Provenance — where this entry came from
+  source      String  @default("manual") // manual | strava | (future: garmin, healthkit, ...)
+  externalId  String? // unique id at the source (e.g. Strava activity id) — used for de-duplication
+  externalUrl String? // deep link back to the source activity
+  externalRaw String? // JSON blob of the raw source payload, kept for reference
+
+  @@unique([source, externalId])
+}
+
+// Strava — OAuth connection (single-user app, so userId is a placeholder for now)
+model StravaConnection {
+  id           String   @id @default(cuid())
+  userId       String   @unique @default("default")
+  athleteId    String
+  accessToken  String
+  refreshToken String
+  expiresAt    Int      // unix seconds
+  scope        String?
+  lastSyncAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 // Phase 4 — Body Measurements
