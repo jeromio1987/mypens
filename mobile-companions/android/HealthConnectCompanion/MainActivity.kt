@@ -79,11 +79,18 @@ class MainActivity : ComponentActivity() {
     private lateinit var prefs: android.content.SharedPreferences
     private val permissions = setOf(
         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+        // Required on Android 14+ for the WorkManager periodic worker to
+        // actually return new sessions while the app isn't foregrounded.
+        // Older Android versions ignore this permission silently.
+        HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("hc-companion", Context.MODE_PRIVATE)
+
+        // Idempotent — `KEEP` policy means subsequent launches are no-ops.
+        SyncScheduler.schedule(applicationContext)
 
         val requestPermissions = registerForActivityResult(
             PermissionController.createRequestPermissionResultContract()

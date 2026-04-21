@@ -115,10 +115,93 @@ real app.
 4. Install the **Health Connect** app from the Play Store on the test device.
 5. Run on a real device.
 
-## 5. Limitations
+## 5. Background sync
 
-- No background sync — user has to open the app and tap **Sync now**.
-- No retry queue — failed POSTs are simply re-attempted on the next sync.
+Both samples now push new workouts automatically — the user only has to open
+the app once to paste the token and grant permission. After that, workouts
+land server-side without any further interaction.
+
+### iOS
+
+`ios/HealthKitCompanion/BackgroundSync.swift` wires up two complementary
+mechanisms:
+
+1. **HealthKit background delivery** — `HKHealthStore.enableBackgroundDelivery`
+   plus an `HKObserverQuery` on `HKObjectType.workoutType()`. The OS wakes the
+   app within minutes of a new `HKWorkout` being recorded.
+2. **`BGAppRefreshTask`** — a periodic safety net (~hourly, scheduled at iOS's
+   discretion) that runs even when no observer event fired, e.g. after a
+   force-quit or while the device was offline.
+
+Setup:
+
+1. Add the **Background Modes** capability with *Background fetch* and
+   *Background processing* enabled (keep **HealthKit** enabled too).
+2. In `Info.plist`, declare the refresh task identifier:
+   ```xml
+   <key>BGTaskSchedulerPermittedIdentifiers</key>
+   <array>
+     <string>com.example.mypens.healthkit.refresh</string>
+   </array>
+   ```
+3. In your `@main App` struct, register the task before any scene appears:
+   ```swift
+   @main
+   struct MyPensApp: App {
+     init() { BackgroundSync.shared.register() }
+     var body: some Scene { WindowGroup { ContentView() } }
+   }
+   ```
+   `ContentView` already calls `BackgroundSync.shared.enable()` once both the
+   base URL and pairing token are populated.
+
+OS limitations to be aware of:
+
+- The refresh task is a *hint* — iOS may run it less often than hourly when
+  the device is on low power, or never if the user has Background App Refresh
+  disabled for the app.
+- `enableBackgroundDelivery(frequency: .immediate)` is the most aggressive
+  setting allowed; HealthKit still coalesces deliveries.
+- Background runs swallow errors silently. Failures only surface when the
+  user opens the app and taps **Sync now**.
+
+### Android
+
+`android/HealthConnectCompanion/SyncWorker.kt` registers a `WorkManager`
+periodic worker (1 hour minimum interval, gated on network availability). The
+worker re-uses the same `SharedPreferences` cursor as the foreground sync, so
+the two paths can't double-push.
+
+Setup:
+
+1. Add the WorkManager dependency to `app/build.gradle.kts`:
+   ```kotlin
+   implementation("androidx.work:work-runtime-ktx:2.9.1")
+   ```
+2. Add the background-read permission to `AndroidManifest.xml` (already in the
+   reference manifest):
+   ```xml
+   <uses-permission
+     android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+   ```
+3. `MainActivity.onCreate` now calls `SyncScheduler.schedule(applicationContext)`
+   and asks for `HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND`
+   alongside the foreground read permission.
+
+OS limitations to be aware of:
+
+- `READ_HEALTH_DATA_IN_BACKGROUND` is **Android 14 (API 34) only**. On older
+  devices the worker still runs but Health Connect returns no sessions in the
+  background — the next foreground launch picks them up.
+- WorkManager guarantees periodic work *eventually*, not on the dot. Doze, App
+  Standby Buckets, and battery-optimisation whitelists all delay execution.
+- The user must grant the background permission separately in the Health
+  Connect app's permissions screen — Android shows a dedicated rationale.
+
+## 6. Limitations
+
+- No retry queue — failed POSTs are re-attempted on the next sync (the
+  Android worker uses WorkManager's exponential backoff via `Result.retry`).
 - No conflict UI — promote / discard happens server-side in `/integrations`.
 - Heart-rate, distance and calorie aggregates that aren't on the workout
   record itself are not fetched. Add `HKStatisticsQuery` (iOS) /

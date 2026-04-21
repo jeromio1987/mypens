@@ -42,6 +42,16 @@ struct ContentView: View {
             }
             .navigationTitle("My Pens · HealthKit")
         }
+        .onChange(of: pairingToken) { _, _ in enableBackgroundIfReady() }
+        .onChange(of: baseUrl)      { _, _ in enableBackgroundIfReady() }
+        .task { enableBackgroundIfReady() }
+    }
+
+    /// Once the user has pasted both fields, hand off to `BackgroundSync` so
+    /// future workouts push without the app being open.
+    private func enableBackgroundIfReady() {
+        guard !baseUrl.isEmpty, !pairingToken.isEmpty else { return }
+        Task { await BackgroundSync.shared.enable() }
     }
 
     private func sync() {

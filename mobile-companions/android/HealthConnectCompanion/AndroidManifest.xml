@@ -9,6 +9,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <!--
+        Android 14+ only. Lets the WorkManager periodic worker read new
+        ExerciseSessionRecords while the app is in the background. Older
+        platforms ignore this permission silently.
+    -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
