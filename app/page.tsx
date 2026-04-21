@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Scale, UtensilsCrossed, Moon, Dumbbell, LayoutDashboard, Ruler } from 'lucide-react'
+import { Scale, UtensilsCrossed, Moon, Dumbbell, LayoutDashboard, Ruler, Activity } from 'lucide-react'
 
 const modules = [
   {
@@ -62,6 +62,16 @@ const modules = [
     badge: 'Phase 4',
     badgeColor: 'bg-rose-100 text-rose-600',
   },
+  {
+    href: '/garmin',
+    icon: Activity,
+    title: 'Garmin Activities',
+    description: '1,345 activities imported from Garmin Connect (2019–2026). Filter by year and sport.',
+    color: 'bg-teal-50 border-teal-200 hover:bg-teal-100',
+    iconColor: 'text-teal-600',
+    badge: 'Phase 5',
+    badgeColor: 'bg-teal-100 text-teal-600',
+  },
 ]
 
 export default function Home() {
@@ -87,17 +97,4 @@ export default function Home() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <h2 className="font-semibold text-gray-900">{title}</h2>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeColor}`}>
-                      {badge}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-500">{description}</p>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </main>
-  )
-}
+                    <sp

@@ -96,12 +96,10 @@ model BodyMeasurement {
   notes        String?
 }
 
-// Phase 4 — Presets (quick-entry templates per module)
-model Preset {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  module    String   // weight | food | sleep | training
-  name      String
-  data      String   // JSON blob of form fields
-  usedCount Int      @default(0)
-}
+// Phase 5 — Garmin Activities (imported from .fit files)
+model GarminActivity {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  fitFileId    String   @unique // numeric ID from filename, e.g. "119087856800"
+
+  date         String   // YYYY-MM-DD (local date at activity 
