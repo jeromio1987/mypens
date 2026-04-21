@@ -167,6 +167,26 @@ model PushedWorkout {
   @@unique([source, externalId])
 }
 
+// Garmin — bulk historical activity archive imported from .fit files
+// (separate from GarminConnection which handles live OAuth sync).
+model GarminActivity {
+  id          String   @id
+  createdAt   DateTime @default(now())
+  fitFileId   String   @unique
+  date        String
+  name        String
+  sport       String
+  subSport    String?
+  durationSec Float
+  distanceM   Float?
+  elevationM  Float?
+  avgHr       Int?
+  maxHr       Int?
+  calories    Int?
+  avgSpeedMs  Float?
+  maxSpeedMs  Float?
+}
+
 // Phase 4 — Body Measurements
 model BodyMeasurement {
   id        String   @id @default(cuid())

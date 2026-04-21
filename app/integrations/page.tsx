@@ -549,6 +549,14 @@ function IntegrationsInner() {
           <p className="text-sm text-gray-400">Connect external sources to MY PENS.</p>
         </div>
 
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 flex items-center justify-between gap-3 text-sm">
+          <div>
+            <p className="font-medium text-gray-800">Garmin historical archive</p>
+            <p className="text-xs text-gray-500">Bulk-import years of <code>.fit</code> files (separate from the live OAuth sync below).</p>
+          </div>
+          <Link href="/garmin" className="px-3 py-2 rounded-lg bg-sky-600 text-white text-xs font-medium hover:bg-sky-700">Open archive →</Link>
+        </div>
+
         {PROVIDERS.map(p => (
           <ProviderCard key={p.id} provider={p} banner={bannerFor(p.id)} />
         ))}
