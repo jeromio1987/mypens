@@ -108,6 +108,60 @@ model StravaConnection {
   updatedAt    DateTime @updatedAt
 }
 
+// Garmin Connect — OAuth2 PKCE connection
+model GarminConnection {
+  id             String    @id @default(cuid())
+  userId         String    @unique @default("default")
+  garminUserId   String    @default("")
+  accessToken    String
+  refreshToken   String
+  expiresAt      Int       // unix seconds
+  scope          String?
+  lastSyncAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// Apple HealthKit — pairing token issued to a companion mobile client
+model HealthkitConnection {
+  id          String    @id @default(cuid())
+  userId      String    @unique @default("default")
+  pairingToken String   @unique
+  deviceLabel String?
+  lastSyncAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Android Health Connect — pairing token issued to a companion mobile client
+model HealthConnectConnection {
+  id          String    @id @default(cuid())
+  userId      String    @unique @default("default")
+  pairingToken String   @unique
+  deviceLabel String?
+  lastSyncAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Inbox of workouts pushed by mobile companions (HealthKit / Health Connect)
+// awaiting review before being promoted to TrainingEntry.
+model PushedWorkout {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  source      String   // healthkit | healthconnect
+  externalId  String
+  date        String   // yyyy-mm-dd local
+  exercise    String
+  notes       String?
+  durationSec Int      @default(0)
+  distanceM   Float    @default(0)
+  calories    Float    @default(0)
+  raw         String   // JSON blob
+
+  @@unique([source, externalId])
+}
+
 // Phase 4 — Body Measurements
 model BodyMeasurement {
   id        String   @id @default(cuid())

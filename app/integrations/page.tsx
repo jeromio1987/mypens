@@ -1,16 +1,87 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useState, Suspense, useCallback } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+
+type ProviderId = 'strava' | 'garmin' | 'healthkit' | 'healthconnect'
+
+interface ProviderConfig {
+  id: ProviderId
+  name: string
+  initial: string
+  color: string             // tailwind bg color for badge
+  description: string
+  /** OAuth-based providers redirect to /authorize. Pairing-token providers POST /connect. */
+  authMode: 'oauth' | 'pairing'
+  /** Activity verb shown on the action button when connected */
+  syncLabel: string
+  /** Optional env vars required for configured=true (only for OAuth providers) */
+  envHint?: string
+  /** Optional view label for external link in draft list */
+  externalLinkLabel?: string
+  /** Pairing instructions shown after token issued */
+  pairingInstructions?: string
+}
+
+const PROVIDERS: ProviderConfig[] = [
+  {
+    id: 'strava',
+    name: 'Strava',
+    initial: 'S',
+    color: 'bg-orange-500',
+    description: 'Pull your last 30 days of activities into the Training log.',
+    authMode: 'oauth',
+    syncLabel: 'Sync now',
+    envHint: 'STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET',
+    externalLinkLabel: 'View on Strava ↗',
+  },
+  {
+    id: 'garmin',
+    name: 'Garmin Connect',
+    initial: 'G',
+    color: 'bg-sky-600',
+    description: 'Pull recent workouts from Garmin Connect into the Training log.',
+    authMode: 'oauth',
+    syncLabel: 'Sync now',
+    envHint: 'GARMIN_CLIENT_ID and GARMIN_CLIENT_SECRET',
+    externalLinkLabel: 'View on Garmin ↗',
+  },
+  {
+    id: 'healthkit',
+    name: 'Apple Health',
+    initial: '',
+    color: 'bg-rose-500',
+    description:
+      'Generate a pairing token and use it from the iOS companion app to push HealthKit workouts here for review.',
+    authMode: 'pairing',
+    syncLabel: 'Refresh',
+    pairingInstructions:
+      'Paste this token into the iOS companion app. The app will POST workouts to /api/integrations/healthkit/ingest with this Bearer token.',
+  },
+  {
+    id: 'healthconnect',
+    name: 'Health Connect',
+    initial: 'A',
+    color: 'bg-emerald-600',
+    description:
+      'Generate a pairing token and use it from the Android companion app to push Health Connect sessions here for review.',
+    authMode: 'pairing',
+    syncLabel: 'Refresh',
+    pairingInstructions:
+      'Paste this token into the Android companion app. The app will POST sessions to /api/integrations/healthconnect/ingest with this Bearer token.',
+  },
+]
 
 interface Status {
   configured: boolean
   connected: boolean
-  athleteId: string | null
-  scope: string | null
+  athleteId?: string | null
+  scope?: string | null
+  deviceLabel?: string | null
+  pendingCount?: number
   lastSyncAt: string | null
-  expiresAt: number | null
+  expiresAt?: number | null
 }
 
 interface Draft {
@@ -22,15 +93,19 @@ interface Draft {
   rpe: number | null
   notes: string
   volume: number
-  source: 'strava'
+  source: ProviderId
   externalId: string
   externalUrl: string
   externalRaw: string
   alreadyImported: boolean
 }
 
-function IntegrationsInner() {
-  const sp = useSearchParams()
+interface Banner {
+  kind: 'ok' | 'err'
+  msg: string
+}
+
+function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: Banner | null }) {
   const [status, setStatus] = useState<Status | null>(null)
   const [loadingStatus, setLoadingStatus] = useState(true)
   const [drafts, setDrafts] = useState<Draft[]>([])
@@ -40,31 +115,26 @@ function IntegrationsInner() {
   const [edits, setEdits] = useState<Record<string, { exercise?: string; notes?: string }>>({})
   const [importing, setImporting] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
+  const [pairingToken, setPairingToken] = useState<string | null>(null)
+  const [issuingToken, setIssuingToken] = useState(false)
 
-  const banner =
-    sp.get('strava_connected') === '1'
-      ? { kind: 'ok' as const, msg: 'Strava connected.' }
-      : sp.get('strava_error')
-        ? { kind: 'err' as const, msg: `Strava error: ${sp.get('strava_error')}` }
-        : null
+  const base = `/api/integrations/${provider.id}`
 
-  const loadStatus = () => {
+  const loadStatus = useCallback(() => {
     setLoadingStatus(true)
-    fetch('/api/integrations/strava/status')
+    fetch(`${base}/status`)
       .then(r => r.json())
       .then(setStatus)
       .finally(() => setLoadingStatus(false))
-  }
+  }, [base])
 
-  useEffect(() => { loadStatus() }, [])
-
-  const loadActivities = async () => {
+  const loadActivities = useCallback(async () => {
     setLoadingActivities(true)
     setActivitiesError(null)
     setDrafts([])
     setSelected(new Set())
     try {
-      const res = await fetch('/api/integrations/strava/activities?days=30')
+      const res = await fetch(`${base}/activities`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load')
       const items: Draft[] = data.items ?? []
@@ -75,11 +145,12 @@ function IntegrationsInner() {
     } finally {
       setLoadingActivities(false)
     }
-  }
+  }, [base])
 
+  useEffect(() => { loadStatus() }, [loadStatus])
   useEffect(() => {
     if (status?.connected) loadActivities()
-  }, [status?.connected])
+  }, [status?.connected, loadActivities])
 
   const toggle = (id: string) => {
     setSelected(prev => {
@@ -108,7 +179,7 @@ function IntegrationsInner() {
     setImporting(true)
     setFlash(null)
     try {
-      const res = await fetch('/api/integrations/strava/import', {
+      const res = await fetch(`${base}/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items }),
@@ -126,11 +197,259 @@ function IntegrationsInner() {
   }
 
   const disconnect = async () => {
-    if (!confirm('Disconnect Strava? Imported entries will remain but lose the live link.')) return
-    await fetch('/api/integrations/strava/disconnect', { method: 'POST' })
+    if (!confirm(`Disconnect ${provider.name}? Imported entries will remain but lose the live link.`)) return
+    await fetch(`${base}/disconnect`, { method: 'POST' })
     setDrafts([])
     setSelected(new Set())
+    setPairingToken(null)
     loadStatus()
+  }
+
+  const issuePairing = async () => {
+    setIssuingToken(true)
+    try {
+      const res = await fetch(`${base}/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      setPairingToken(data.pairingToken)
+      loadStatus()
+    } catch (err) {
+      setFlash(err instanceof Error ? err.message : 'Failed to issue token')
+    } finally {
+      setIssuingToken(false)
+    }
+  }
+
+  const accentBtn =
+    provider.id === 'strava' ? 'bg-orange-500 hover:bg-orange-600'
+    : provider.id === 'garmin' ? 'bg-sky-600 hover:bg-sky-700'
+    : provider.id === 'healthkit' ? 'bg-rose-500 hover:bg-rose-600'
+    : 'bg-emerald-600 hover:bg-emerald-700'
+
+  return (
+    <div className="bg-white rounded-2xl shadow p-6 space-y-4">
+      {banner && (
+        <div
+          className={`text-sm rounded-lg px-3 py-2 border ${
+            banner.kind === 'ok'
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          {banner.msg}
+        </div>
+      )}
+
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-md text-white text-xs font-bold ${provider.color}`}>
+              {provider.initial}
+            </span>
+            <h2 className="text-lg font-semibold">{provider.name}</h2>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">{provider.description}</p>
+        </div>
+        <div className="text-right text-xs text-gray-400">
+          {loadingStatus ? (
+            'Loading…'
+          ) : !status?.configured ? (
+            <span className="text-amber-600">Not configured</span>
+          ) : status.connected ? (
+            <>
+              <div className="text-green-600 font-medium">Connected</div>
+              {status.athleteId && <div>Athlete #{status.athleteId}</div>}
+              {status.deviceLabel && <div>{status.deviceLabel}</div>}
+              {typeof status.pendingCount === 'number' && (
+                <div>{status.pendingCount} pending</div>
+              )}
+              {status.lastSyncAt && (
+                <div>Last sync: {new Date(status.lastSyncAt).toLocaleString()}</div>
+              )}
+            </>
+          ) : (
+            'Not connected'
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {status?.connected ? (
+          <>
+            <button
+              onClick={loadActivities}
+              disabled={loadingActivities}
+              className={`text-sm px-4 py-2 rounded-lg disabled:opacity-50 text-white font-medium ${accentBtn}`}
+            >
+              {loadingActivities ? 'Syncing…' : provider.syncLabel}
+            </button>
+            {provider.authMode === 'pairing' && (
+              <button
+                onClick={issuePairing}
+                disabled={issuingToken}
+                className="text-sm px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
+              >
+                {issuingToken ? 'Rotating…' : 'Rotate token'}
+              </button>
+            )}
+            <button
+              onClick={disconnect}
+              className="text-sm px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
+            >
+              Disconnect
+            </button>
+          </>
+        ) : provider.authMode === 'oauth' ? (
+          <a
+            href={`${base}/authorize`}
+            className={`text-sm px-4 py-2 rounded-lg font-medium text-white ${
+              status?.configured ? accentBtn : 'bg-gray-300 pointer-events-none'
+            }`}
+          >
+            Connect {provider.name}
+          </a>
+        ) : (
+          <button
+            onClick={issuePairing}
+            disabled={issuingToken}
+            className={`text-sm px-4 py-2 rounded-lg font-medium text-white disabled:opacity-50 ${accentBtn}`}
+          >
+            {issuingToken ? 'Generating…' : `Pair ${provider.name}`}
+          </button>
+        )}
+      </div>
+
+      {!status?.configured && !loadingStatus && provider.authMode === 'oauth' && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Set <code>{provider.envHint}</code> environment variables to enable {provider.name}.
+        </p>
+      )}
+
+      {pairingToken && (
+        <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
+          <div className="font-medium text-amber-800">Pairing token (save this now — shown once)</div>
+          <code className="block break-all bg-white border border-amber-100 rounded px-2 py-1 text-amber-900">
+            {pairingToken}
+          </code>
+          {provider.pairingInstructions && (
+            <p className="text-amber-700">{provider.pairingInstructions}</p>
+          )}
+        </div>
+      )}
+
+      {status?.connected && (
+        <div className="space-y-3 pt-2 border-t border-gray-100">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">Review pending activities</h3>
+            <span className="text-xs text-gray-400">
+              {drafts.length} found · {drafts.filter(d => !d.alreadyImported).length} new
+            </span>
+          </div>
+
+          {activitiesError && (
+            <div className="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2">
+              {activitiesError}
+            </div>
+          )}
+
+          {flash && (
+            <div className="text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2">
+              {flash}
+            </div>
+          )}
+
+          {loadingActivities ? (
+            <p className="text-sm text-gray-400">Loading activities…</p>
+          ) : drafts.length === 0 ? (
+            <p className="text-sm text-gray-400">
+              {provider.authMode === 'pairing'
+                ? 'No workouts pushed yet from the companion app.'
+                : 'No activities found in the recent window.'}
+            </p>
+          ) : (
+            <>
+              <ul className="divide-y divide-gray-100">
+                {drafts.map(d => {
+                  const editedExercise = edits[d.externalId]?.exercise ?? d.exercise
+                  const editedNotes = edits[d.externalId]?.notes ?? d.notes
+                  const isSelected = selected.has(d.externalId)
+                  return (
+                    <li key={d.externalId} className="py-3 flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        disabled={d.alreadyImported}
+                        onChange={() => toggle(d.externalId)}
+                        className="mt-1.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-gray-400 tabular-nums">{d.date}</span>
+                          {d.alreadyImported && (
+                            <span className="text-[10px] uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
+                              Already imported
+                            </span>
+                          )}
+                          {d.externalUrl && provider.externalLinkLabel && (
+                            <a
+                              href={d.externalUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-gray-500 hover:text-gray-700"
+                            >
+                              {provider.externalLinkLabel}
+                            </a>
+                          )}
+                        </div>
+                        <input
+                          value={editedExercise}
+                          disabled={d.alreadyImported}
+                          onChange={e => setEdit(d.externalId, 'exercise', e.target.value)}
+                          className="mt-1 w-full text-sm font-medium border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 py-0.5 disabled:bg-transparent disabled:text-gray-400"
+                        />
+                        <input
+                          value={editedNotes}
+                          disabled={d.alreadyImported}
+                          onChange={e => setEdit(d.externalId, 'notes', e.target.value)}
+                          placeholder="Notes"
+                          className="mt-0.5 w-full text-xs text-gray-500 border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 py-0.5 disabled:bg-transparent"
+                        />
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+
+              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                <span className="text-xs text-gray-400">{selected.size} selected</span>
+                <button
+                  onClick={importSelected}
+                  disabled={importing || selected.size === 0}
+                  className={`text-sm px-4 py-2 rounded-lg disabled:opacity-50 text-white font-medium ${accentBtn}`}
+                >
+                  {importing ? 'Importing…' : `Import ${selected.size}`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function IntegrationsInner() {
+  const sp = useSearchParams()
+
+  const bannerFor = (id: ProviderId): Banner | null => {
+    if (sp.get(`${id}_connected`) === '1') return { kind: 'ok', msg: `${id} connected.` }
+    const err = sp.get(`${id}_error`)
+    if (err) return { kind: 'err', msg: `${id} error: ${err}` }
+    return null
   }
 
   return (
@@ -142,184 +461,9 @@ function IntegrationsInner() {
           <p className="text-sm text-gray-400">Connect external sources to MY PENS.</p>
         </div>
 
-        {banner && (
-          <div
-            className={`text-sm rounded-lg px-3 py-2 border ${
-              banner.kind === 'ok'
-                ? 'bg-green-50 border-green-200 text-green-700'
-                : 'bg-red-50 border-red-200 text-red-700'
-            }`}
-          >
-            {banner.msg}
-          </div>
-        )}
-
-        {/* Strava card */}
-        <div className="bg-white rounded-2xl shadow p-6 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-orange-500 text-white text-xs font-bold">
-                  S
-                </span>
-                <h2 className="text-lg font-semibold">Strava</h2>
-              </div>
-              <p className="text-sm text-gray-500 mt-1">
-                Pull your last 30 days of activities into the Training log.
-              </p>
-            </div>
-            <div className="text-right text-xs text-gray-400">
-              {loadingStatus ? (
-                'Loading…'
-              ) : !status?.configured ? (
-                <span className="text-amber-600">Not configured</span>
-              ) : status.connected ? (
-                <>
-                  <div className="text-green-600 font-medium">Connected</div>
-                  {status.athleteId && <div>Athlete #{status.athleteId}</div>}
-                  {status.lastSyncAt && (
-                    <div>Last sync: {new Date(status.lastSyncAt).toLocaleString()}</div>
-                  )}
-                </>
-              ) : (
-                'Not connected'
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {status?.connected ? (
-              <>
-                <button
-                  onClick={loadActivities}
-                  disabled={loadingActivities}
-                  className="text-sm px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-medium"
-                >
-                  {loadingActivities ? 'Syncing…' : 'Sync now'}
-                </button>
-                <button
-                  onClick={disconnect}
-                  className="text-sm px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
-                >
-                  Disconnect
-                </button>
-              </>
-            ) : (
-              <a
-                href="/api/integrations/strava/authorize"
-                className={`text-sm px-4 py-2 rounded-lg font-medium text-white ${
-                  status?.configured
-                    ? 'bg-orange-500 hover:bg-orange-600'
-                    : 'bg-gray-300 pointer-events-none'
-                }`}
-              >
-                Connect Strava
-              </a>
-            )}
-          </div>
-
-          {!status?.configured && !loadingStatus && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Set <code>STRAVA_CLIENT_ID</code> and <code>STRAVA_CLIENT_SECRET</code> environment
-              variables to enable Strava.
-            </p>
-          )}
-        </div>
-
-        {/* Review */}
-        {status?.connected && (
-          <div className="bg-white rounded-2xl shadow p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Review pending activities</h3>
-              <span className="text-xs text-gray-400">
-                {drafts.length} found · {drafts.filter(d => !d.alreadyImported).length} new
-              </span>
-            </div>
-
-            {activitiesError && (
-              <div className="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2">
-                {activitiesError}
-              </div>
-            )}
-
-            {flash && (
-              <div className="text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2">
-                {flash}
-              </div>
-            )}
-
-            {loadingActivities ? (
-              <p className="text-sm text-gray-400">Loading activities…</p>
-            ) : drafts.length === 0 ? (
-              <p className="text-sm text-gray-400">No activities found in the last 30 days.</p>
-            ) : (
-              <>
-                <ul className="divide-y divide-gray-100">
-                  {drafts.map(d => {
-                    const editedExercise = edits[d.externalId]?.exercise ?? d.exercise
-                    const editedNotes = edits[d.externalId]?.notes ?? d.notes
-                    const isSelected = selected.has(d.externalId)
-                    return (
-                      <li key={d.externalId} className="py-3 flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          disabled={d.alreadyImported}
-                          onChange={() => toggle(d.externalId)}
-                          className="mt-1.5"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs text-gray-400 tabular-nums">{d.date}</span>
-                            {d.alreadyImported && (
-                              <span className="text-[10px] uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
-                                Already imported
-                              </span>
-                            )}
-                            <a
-                              href={d.externalUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[10px] text-orange-500 hover:text-orange-600"
-                            >
-                              View on Strava ↗
-                            </a>
-                          </div>
-                          <input
-                            value={editedExercise}
-                            disabled={d.alreadyImported}
-                            onChange={e => setEdit(d.externalId, 'exercise', e.target.value)}
-                            className="mt-1 w-full text-sm font-medium border border-transparent hover:border-gray-200 focus:border-orange-300 rounded px-1 py-0.5 disabled:bg-transparent disabled:text-gray-400"
-                          />
-                          <input
-                            value={editedNotes}
-                            disabled={d.alreadyImported}
-                            onChange={e => setEdit(d.externalId, 'notes', e.target.value)}
-                            placeholder="Notes"
-                            className="mt-0.5 w-full text-xs text-gray-500 border border-transparent hover:border-gray-200 focus:border-orange-300 rounded px-1 py-0.5 disabled:bg-transparent"
-                          />
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <span className="text-xs text-gray-400">
-                    {selected.size} selected
-                  </span>
-                  <button
-                    onClick={importSelected}
-                    disabled={importing || selected.size === 0}
-                    className="text-sm px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-medium"
-                  >
-                    {importing ? 'Importing…' : `Import ${selected.size}`}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+        {PROVIDERS.map(p => (
+          <ProviderCard key={p.id} provider={p} banner={bannerFor(p.id)} />
+        ))}
       </div>
     </main>
   )

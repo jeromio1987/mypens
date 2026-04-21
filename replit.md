@@ -23,7 +23,11 @@ Editorial "Mode Selection" screen with immersive mode cards (Locked In / Balance
 - **Events** (`/events`): Trip/event tagging (travel, illness, holiday, diet-break, competition, other). Active events shown as banners on weight page and dashboard.
 - **Dashboard** (`/dashboard`): Weekly overview with structured insight cards (positive/info/warning), real confidence data, logging streaks widget, Goals panel (set weight/waist/session targets with progress bars and ETAs), CSV export, CSV import, and database backup.
 - **Data Health** (`/data-health`): 30-day logging calendar heatmap per module, current streaks, longest streaks, and coverage percentages.
-- **Integrations** (`/integrations`): Connect external sources. Strava OAuth (read,activity:read scope), pull last 30 days of activities into a review screen, confirm/skip/edit before importing into the Training log. Imported entries are tagged with `source='strava'` + `externalId` (deduped) + `externalUrl` and remain editable. Disconnect removes tokens but keeps imported entries.
+- **Integrations** (`/integrations`): Connect external workout sources. Each provider has its own card with status / connect / disconnect / sync / review pipeline. Imported activities become `TrainingEntry` rows tagged with `source` + `externalId` (unique) + `externalUrl`, deduped on re-sync, and remain editable. Disconnecting removes tokens but keeps imported entries.
+  - **Strava** — OAuth 2.0 (`read,activity:read`), pulls last 30 days of activities.
+  - **Garmin Connect** — OAuth 2.0 + PKCE (`ACTIVITY_READ`), walks day-by-day windows of `apis.garmin.com/wellness-api/rest/activities`.
+  - **Apple Health (HealthKit)** — pairing-token model (HealthKit is iOS-only). Web mints a long-lived bearer token; iOS companion app POSTs `HKWorkout` summaries to `/api/integrations/healthkit/ingest`. Pushed workouts queue in `PushedWorkout` for review.
+  - **Health Connect (Android)** — same pairing-token model; Android companion POSTs `ExerciseSessionRecord`s to `/api/integrations/healthconnect/ingest`.
 
 ## Key Files
 
@@ -33,8 +37,10 @@ Editorial "Mode Selection" screen with immersive mode cards (Locked In / Balance
 - `app/api/dashboard/route.ts` — Dashboard aggregation with structured insights and real confidence data
 - `app/api/goals/route.ts` — Goals CRUD (GET/POST/DELETE), one goal per metricKey
 - `app/api/training/history/route.ts` — Per-exercise history (all sets, personal best) for drawer
-- `lib/integrations/strava/` — Strava OAuth, API client, activity → TrainingEntry mapping
-- `app/api/integrations/strava/{authorize,callback,status,disconnect,activities,import}/route.ts` — Strava integration endpoints
+- `lib/integrations/_shared/` — Shared helpers (base URL, draft type, dedup import) used by every provider
+- `lib/integrations/{strava,garmin,healthkit,healthconnect}/` — Provider-specific OAuth/auth, API/ingest, mapping
+- `app/api/integrations/{strava,garmin}/{authorize,callback,status,disconnect,activities,import}/route.ts` — OAuth provider endpoints
+- `app/api/integrations/{healthkit,healthconnect}/{connect,status,disconnect,ingest,activities,import}/route.ts` — Pairing-token provider endpoints (companion app pushes via `/ingest` with Bearer token)
 - `components/goals/GoalsPanel.tsx` — Modal panel for viewing/adding/deleting goals with progress bars and ETAs
 - `components/training/ExerciseHistoryDrawer.tsx` — Exercise history modal with personal best, weight/volume progression charts, all-time log
 - `app/api/events/route.ts` — Event tag CRUD
