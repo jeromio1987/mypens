@@ -199,6 +199,58 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
     }
   }
 
+  const skipDraft = async (externalId: string) => {
+    setFlash(null)
+    try {
+      const res = await fetch(`${base}/activities?id=${encodeURIComponent(externalId)}`, {
+        method: 'DELETE',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Skip failed')
+      setDrafts(prev => prev.filter(d => d.externalId !== externalId))
+      setSelected(prev => {
+        const next = new Set(prev)
+        next.delete(externalId)
+        return next
+      })
+      setEdits(prev => {
+        const next = { ...prev }
+        delete next[externalId]
+        return next
+      })
+      loadStatus()
+    } catch (err) {
+      setFlash(err instanceof Error ? err.message : 'Skip failed')
+    }
+  }
+
+  const clearUnselected = async () => {
+    const targets = drafts.filter(d => !selected.has(d.externalId) && !d.alreadyImported)
+    if (targets.length === 0) return
+    if (!confirm(`Discard ${targets.length} unselected workout${targets.length === 1 ? '' : 's'}? This cannot be undone.`)) return
+    setFlash(null)
+    try {
+      const res = await fetch(`${base}/activities`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: targets.map(t => t.externalId) }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Clear failed')
+      const removed = new Set(targets.map(t => t.externalId))
+      setDrafts(prev => prev.filter(d => !removed.has(d.externalId)))
+      setEdits(prev => {
+        const next = { ...prev }
+        for (const id of removed) delete next[id]
+        return next
+      })
+      setFlash(`Cleared ${data.deleted ?? targets.length}`)
+      loadStatus()
+    } catch (err) {
+      setFlash(err instanceof Error ? err.message : 'Clear failed')
+    }
+  }
+
   const disconnect = async () => {
     if (!confirm(`Disconnect ${provider.name}? Imported entries will remain but lose the live link.`)) return
     await fetch(`${base}/disconnect`, { method: 'POST' })
@@ -436,6 +488,15 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                           className="mt-0.5 w-full text-xs text-gray-500 border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 py-0.5 disabled:bg-transparent"
                         />
                       </div>
+                      {!d.alreadyImported && (
+                        <button
+                          onClick={() => skipDraft(d.externalId)}
+                          className="text-xs text-gray-400 hover:text-red-600 px-1.5 py-0.5"
+                          title="Discard this pushed workout"
+                        >
+                          Skip
+                        </button>
+                      )}
                     </li>
                   )
                 })}
@@ -443,13 +504,23 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
 
               <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                 <span className="text-xs text-gray-400">{selected.size} selected</span>
-                <button
-                  onClick={importSelected}
-                  disabled={importing || selected.size === 0}
-                  className={`text-sm px-4 py-2 rounded-lg disabled:opacity-50 text-white font-medium ${accentBtn}`}
-                >
-                  {importing ? 'Importing…' : `Import ${selected.size}`}
-                </button>
+                <div className="flex items-center gap-2">
+                  {drafts.some(d => !d.alreadyImported && !selected.has(d.externalId)) && (
+                    <button
+                      onClick={clearUnselected}
+                      className="text-sm px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
+                    >
+                      Clear unselected
+                    </button>
+                  )}
+                  <button
+                    onClick={importSelected}
+                    disabled={importing || selected.size === 0}
+                    className={`text-sm px-4 py-2 rounded-lg disabled:opacity-50 text-white font-medium ${accentBtn}`}
+                  >
+                    {importing ? 'Importing…' : `Import ${selected.size}`}
+                  </button>
+                </div>
               </div>
             </>
           )}
