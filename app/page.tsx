@@ -2,44 +2,35 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Scale, Moon, Ruler, LayoutDashboard, ArrowUpRight, Plus, ListChecks, FileText, BarChart2 } from 'lucide-react'
+import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText } from 'lucide-react'
 import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 
 const MODES = [
   {
     id: 'locked_in',
     label: 'Locked In',
-    description: 'Maximum performance focus. No deviations. No excuses. The P.E.N.S. protocol is absolute today.',
-    priority: 'PERFORMANCE',
-    priorityColor: 'text-pens-crimson',
-    icon: '↗',
-    activeBorder: 'border-l-4 border-l-pens-crimson',
-    activeBg: 'bg-gradient-to-br from-pens-surface to-pens-navy',
-    idleBg: 'bg-pens-surface/50',
+    intent: 'High Intensity',
+    description: 'Optimise — everything tracked, performance focus. The day is a sprint; distractions are obstacles.',
+    accent: '#2e7d32',
+    icon: Target,
   },
   {
     id: 'balanced',
     label: 'Balanced',
-    description: 'Maintenance mode. Respect the foundations of movement and sleep, but allow room for the unexpected.',
-    priority: 'SUSTAINABILITY',
-    priorityColor: 'text-pens-gold',
-    icon: '⚖',
-    activeBorder: 'border-l-4 border-l-pens-gold',
-    activeBg: 'bg-gradient-to-br from-pens-surface to-pens-navy',
-    idleBg: 'bg-pens-surface/50',
+    intent: 'Sustainable',
+    description: 'Maintain — flexible day, social activity, no pressure. Sustainability over intensity. A respectable compromise.',
+    accent: '#C9A84C',
+    icon: Balance,
   },
   {
     id: 'off',
     label: 'Off',
-    description: 'Total rest or calculated chaos. Recovery is a weapon, use it wisely.',
-    priority: 'RECOVERY',
-    priorityColor: 'text-pens-cream/40',
-    icon: '○',
-    activeBorder: 'border-l-4 border-l-pens-muted',
-    activeBg: 'bg-gradient-to-br from-pens-surface to-pens-navy',
-    idleBg: 'bg-pens-surface/50',
+    intent: 'Recovery',
+    description: 'Rest or chaos — recovery or disruption, no friction. Surrender to the biological need for stillness.',
+    accent: '#8B1E1E',
+    icon: Bed,
   },
-]
+] as const
 
 const CONTEXT_TAGS = [
   { id: 'alcohol',          label: 'Alcohol',       emoji: '🍷' },
@@ -66,10 +57,20 @@ export default function Home() {
   const [entry, setEntry]     = useState<DayEntry>({ mode: null, tags: [], streak: 0 })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
+  const [stamp, setStamp]     = useState<{ today: string; time: string; entryNumber: number | null }>(
+    { today: '', time: '', entryNumber: null },
+  )
 
-  const today = new Date().toLocaleDateString('en-GB', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  })
+  useEffect(() => {
+    // Deferred to client to avoid SSR/CSR locale + timezone hydration mismatches.
+    const now = new Date()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStamp({
+      today: now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+      time:  now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      entryNumber: Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000),
+    })
+  }, [])
 
   useEffect(() => {
     fetch('/api/mode')
@@ -107,44 +108,53 @@ export default function Home() {
     })
   }
 
-  const activeMode = MODES.find(m => m.id === entry.mode)
+  const primaryMode = MODES[0]
+  const secondaryModes = MODES.slice(1)
 
   return (
-    <main className="min-h-screen bg-pens-deep">
-      <div className="max-w-sm mx-auto px-4 pt-10 pb-28 space-y-8">
-
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold mb-1">P.E.N.S.</p>
-            <p className="text-[10px] uppercase tracking-widest text-pens-cream/40 font-medium mb-0.5">
-              Today&apos;s Intent
-            </p>
-            <h1 className="text-4xl font-bold text-pens-cream leading-tight">
-              Mode<br />Selection.
-            </h1>
-            <p className="text-xs text-pens-cream/30 mt-2">{today}</p>
-          </div>
-
-          {/* Streak badge */}
-          {entry.streak > 0 && (
-            <div className="text-right mt-1">
-              <p className="text-[9px] uppercase tracking-widest text-pens-cream/30 mb-1">Current Streak</p>
-              <div className="bg-pens-crimson/20 border border-pens-crimson/40 rounded-xl px-4 py-2 text-center">
-                <p className="text-2xl font-bold text-pens-cream leading-none">{entry.streak}</p>
-                <p className="text-[10px] text-pens-cream/50 mt-0.5">Days</p>
-              </div>
+    <main className="min-h-screen bg-pens-deep text-pens-cream">
+      {/* Top App Bar */}
+      <header className="sticky top-0 z-40 bg-pens-deep/95 backdrop-blur border-b border-pens-muted/20">
+        <div className="max-w-screen-xl mx-auto flex justify-between items-center px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-pens-crimson/20 border border-pens-crimson/40 flex items-center justify-center">
+              <span className="font-[family-name:var(--font-headline)] font-black italic text-pens-cream">A</span>
             </div>
-          )}
+            <h1 className="text-xl font-[family-name:var(--font-headline)] font-black italic text-pens-cream">Auditor</h1>
+          </div>
+          <nav className="hidden md:flex gap-8">
+            <Link href="/dashboard" className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Dashboard</Link>
+            <Link href="/context"   className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Journal</Link>
+            <span             className="uppercase tracking-widest text-xs font-bold text-pens-crimson">Modes</span>
+            <Link href="/data"      className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Vault</Link>
+          </nav>
         </div>
+      </header>
 
-        {/* Integration sync failure badge */}
+      <div className="max-w-screen-xl mx-auto px-6 pt-12 pb-32">
+        {/* Editorial header */}
+        <header className="mb-12 max-w-2xl">
+          <div className="flex items-baseline gap-4 mb-2 flex-wrap min-h-[1rem]">
+            {stamp.entryNumber !== null && (
+              <>
+                <span className="text-xs font-bold tracking-[0.2em] text-pens-crimson uppercase">Entry {stamp.entryNumber}</span>
+                <span className="text-xs font-medium text-pens-cream/40">{stamp.today} — {stamp.time}</span>
+              </>
+            )}
+          </div>
+          <h2 className="text-5xl md:text-7xl font-[family-name:var(--font-headline)] font-bold italic tracking-tight text-pens-cream leading-tight">
+            Today&apos;s Intent
+          </h2>
+          <p className="mt-6 text-lg text-pens-cream/60 font-light leading-relaxed">
+            Before the chaos of the world intervenes, define the scope of your output. Choose a frequency and commit to the ledger.
+          </p>
+        </header>
+
         <SyncStatusBadge />
 
-        {/* Today's Flow — quick-nav between the 3 main pages */}
-        <div className="flex items-center gap-2">
+        {/* Quick nav: Mode / Context / Verdict */}
+        <div className="flex items-center gap-2 mb-12 mt-6 max-w-xl">
           <div className="flex items-center gap-1.5 flex-1 bg-pens-crimson/15 border border-pens-crimson/40 rounded-xl px-3 py-2.5">
-            <BarChart2 size={13} className="text-pens-crimson shrink-0" />
             <div className="min-w-0">
               <p className="text-[8px] uppercase tracking-widest text-pens-crimson/70 font-semibold leading-none mb-0.5">Today</p>
               <p className="text-xs font-bold text-pens-cream truncate">Mode</p>
@@ -172,82 +182,111 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Mode cards */}
-        <div className="space-y-3">
-          {loading ? (
-            <div className="h-40 rounded-2xl bg-pens-surface/30 animate-pulse" />
-          ) : (
-            MODES.map(m => {
-              const active = entry.mode === m.id
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => selectMode(m.id)}
-                  disabled={saving}
-                  className={`w-full text-left rounded-2xl border border-pens-muted/20 overflow-hidden transition-all duration-200 ${
-                    active
-                      ? `${m.activeBg} ${m.activeBorder} shadow-lg shadow-black/30`
-                      : `${m.idleBg} opacity-70 hover:opacity-90`
-                  }`}
-                >
-                  {/* Card inner */}
-                  <div className="relative px-5 py-5 min-h-[140px] flex flex-col justify-between">
-                    {/* Watermark for "Off" */}
-                    {m.id === 'off' && (
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-6xl font-black text-pens-muted/10 tracking-widest select-none pointer-events-none">
-                        REST
-                      </span>
-                    )}
-
-                    <div>
-                      {/* Icon + title row */}
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <span className={`text-lg font-light ${active ? m.priorityColor : 'text-pens-cream/30'}`}>
-                            {m.icon}
-                          </span>
-                          <h2 className="text-xl font-bold text-pens-cream">{m.label}</h2>
-                        </div>
-                        {active
-                          ? <ArrowUpRight size={16} className="text-pens-cream/40 shrink-0 mt-0.5" />
-                          : <Plus size={16} className="text-pens-cream/20 shrink-0 mt-0.5" />
-                        }
-                      </div>
-
-                      {/* Description */}
-                      <p className="text-sm text-pens-cream/60 leading-relaxed pr-6">
-                        {m.description}
-                      </p>
-                    </div>
-
-                    {/* Priority label */}
-                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-pens-muted/20">
-                      <p className={`text-[10px] uppercase tracking-widest font-semibold ${active ? m.priorityColor : 'text-pens-cream/20'}`}>
-                        Priority: {m.priority}
-                      </p>
-                      {active && (
-                        <span className="text-[10px] text-pens-cream/30 uppercase tracking-wider">
-                          Active ✓
-                        </span>
-                      )}
+        {/* Asymmetric mode selection */}
+        {loading ? (
+          <div className="h-96 rounded-2xl bg-pens-surface/30 animate-pulse" />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start mb-16">
+            {/* Primary mode */}
+            <div className="md:col-span-6 lg:col-span-5 h-full">
+              <button
+                onClick={() => selectMode(primaryMode.id)}
+                disabled={saving}
+                className={`w-full text-left group relative p-8 md:p-12 rounded-xl transition-all hover:scale-[1.01] active:scale-95 flex flex-col justify-between min-h-[420px] border-b-4 ${
+                  entry.mode === primaryMode.id
+                    ? 'bg-pens-surface shadow-[0_30px_60px_rgba(0,0,0,0.4)]'
+                    : 'bg-pens-surface/40 hover:bg-pens-surface/60'
+                }`}
+                style={{ borderBottomColor: primaryMode.accent }}
+              >
+                <div className="absolute top-8 right-8 flex items-center gap-2">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: primaryMode.accent, boxShadow: entry.mode === primaryMode.id ? `0 0 12px ${primaryMode.accent}` : 'none' }}
+                  />
+                  <span className="text-[10px] font-bold tracking-widest text-pens-cream/50 uppercase">{primaryMode.intent}</span>
+                </div>
+                <div>
+                  <primaryMode.icon size={36} className="text-pens-cream mb-6" />
+                  <h3 className="text-4xl font-[family-name:var(--font-headline)] font-bold italic text-pens-cream mb-4">
+                    {primaryMode.label}
+                  </h3>
+                  <p className="text-pens-cream/60 leading-relaxed max-w-xs">{primaryMode.description}</p>
+                </div>
+                <div className="mt-auto pt-12 flex justify-between items-end">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-pens-cream/40">P.E.N.S. Priority</p>
+                    <div className="flex gap-1">
+                      {[0, 1, 2, 3].map(i => (
+                        <div key={i} className="w-6 h-1" style={{ backgroundColor: primaryMode.accent }} />
+                      ))}
                     </div>
                   </div>
-                </button>
-              )
-            })
-          )}
-        </div>
+                  <span className="text-xs font-bold text-pens-crimson uppercase border-b-2 border-pens-crimson/30 group-hover:border-pens-crimson transition-colors">
+                    {entry.mode === primaryMode.id ? 'Active ✓' : 'Select State'}
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            {/* Secondary modes */}
+            <div className="md:col-span-6 lg:col-span-7 grid grid-cols-1 gap-6">
+              {secondaryModes.map(m => {
+                const active = entry.mode === m.id
+                const Icon = m.icon
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => selectMode(m.id)}
+                    disabled={saving}
+                    className={`w-full text-left group p-8 rounded-xl transition-all hover:scale-[1.01] active:scale-95 flex items-center gap-8 border-b-4 ${
+                      active ? 'bg-pens-surface shadow-[0_20px_40px_rgba(0,0,0,0.3)]' : 'bg-pens-surface/40 hover:bg-pens-surface/60'
+                    }`}
+                    style={{ borderBottomColor: m.accent }}
+                  >
+                    <div className="flex-shrink-0 w-16 h-16 rounded-full bg-pens-deep/60 flex items-center justify-center border border-pens-muted/20">
+                      <Icon size={28} className="text-pens-cream" />
+                    </div>
+                    <div className="flex-grow">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className="text-2xl font-[family-name:var(--font-headline)] font-bold italic text-pens-cream">{m.label}</h3>
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: m.accent }} />
+                        {active && <span className="text-[9px] uppercase tracking-widest text-pens-cream/50 ml-2">Active</span>}
+                      </div>
+                      <p className="text-sm text-pens-cream/60 max-w-md">{m.description}</p>
+                    </div>
+                    <ChevronRight size={20} className="text-pens-cream/30 group-hover:translate-x-1 transition-transform shrink-0" />
+                  </button>
+                )
+              })}
+
+              {/* Auditor's Note */}
+              <div className="mt-4 p-8 bg-pens-navy text-pens-cream rounded-xl border border-pens-muted/30 relative overflow-hidden">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(139,30,30,0.1),transparent_60%)]" />
+                <div className="relative flex items-start gap-4">
+                  <Info size={20} className="text-pens-crimson shrink-0 mt-1" />
+                  <div>
+                    <h4 className="font-[family-name:var(--font-headline)] italic font-bold text-xl mb-2">The Auditor&apos;s Note</h4>
+                    <p className="text-sm opacity-70 leading-relaxed">
+                      Indecision is the silent killer of performance. If you cannot decide, you have already chosen &lsquo;Off&rsquo;. We track for clarity, not for punishment. Proceed with intent.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Context tags — shown once a mode is set */}
         {entry.mode && (
-          <div className="space-y-3">
+          <div className="space-y-3 mb-16 max-w-2xl">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-widest text-pens-cream/30 font-semibold">
-                Context <span className="normal-case tracking-normal font-normal text-pens-cream/20">— optional</span>
+              <p className="text-xs uppercase tracking-widest text-pens-cream/50 font-bold">
+                Context <span className="normal-case tracking-normal font-normal text-pens-cream/30">— optional</span>
               </p>
               <Link
                 href="/context"
-                className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-pens-cream/30 hover:text-pens-cream/60 transition-colors font-medium"
+                className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-pens-cream/40 hover:text-pens-cream transition-colors font-medium"
               >
                 <ListChecks size={12} />
                 Full report
@@ -260,7 +299,7 @@ export default function Home() {
                   <button
                     key={tag.id}
                     onClick={() => toggleTag(tag.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium transition-all border ${
                       active
                         ? 'bg-pens-crimson/20 border-pens-crimson/50 text-pens-cream'
                         : 'bg-pens-surface/40 border-pens-muted/20 text-pens-cream/40 hover:text-pens-cream/70 hover:border-pens-muted/40'
@@ -275,47 +314,38 @@ export default function Home() {
           </div>
         )}
 
-        {/* Auditor's Note */}
-        <div className="space-y-4">
-          <div className="border-t border-pens-muted/20 pt-6">
-            <p className="text-[10px] uppercase tracking-widest text-pens-cream/30 font-semibold mb-5">
-              Auditor&apos;s Note
-            </p>
-            <blockquote className="italic text-pens-cream/80 text-lg leading-relaxed font-serif">
-              &ldquo;A man without a plan is just a tourist in his own life. Pick your lane. Whether you&apos;re hunting records or catching sleep, do it with intent.&rdquo;
-            </blockquote>
-            <p className="text-[10px] uppercase tracking-widest text-pens-cream/20 mt-4 font-medium">
-              — Today Morning Review
+        {/* Footer ledger row */}
+        <div className="mt-24 border-t-2 border-pens-muted/20 pt-8 flex flex-col md:flex-row justify-between gap-8">
+          <div className="flex items-center gap-12">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-pens-cream/40 mb-1">Current Streak</p>
+              <p className="text-3xl font-[family-name:var(--font-headline)] italic font-bold text-pens-cream">
+                {entry.streak} {entry.streak === 1 ? 'Day' : 'Days'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-pens-cream/40 mb-1">Mental Load</p>
+              <p className="text-3xl font-[family-name:var(--font-headline)] italic font-bold text-pens-cream">
+                {entry.mode === 'locked_in' ? 'High' : entry.mode === 'balanced' ? 'Moderate' : entry.mode === 'off' ? 'Low' : '—'}
+              </p>
+            </div>
+          </div>
+          <div className="max-w-xs md:text-right">
+            <p className="text-[10px] leading-relaxed font-medium text-pens-cream/40 italic">
+              &ldquo;The difference between a gentleman and a vagabond is a schedule.&rdquo;
             </p>
           </div>
         </div>
-
-        {/* Why Mode Matters */}
-        <div className="bg-pens-surface/50 border border-pens-muted/20 rounded-2xl p-5 space-y-3">
-          <h3 className="text-sm font-semibold text-pens-cream">Why Mode Matters?</h3>
-          <p className="text-sm text-pens-cream/60 leading-relaxed">
-            Willpower is a finite resource. By selecting your mode now, you remove the decision fatigue of the day. Performance mode activates high-precision tracking, while Balanced keeps the streak alive without the mental overhead.
-          </p>
-          <div className="flex gap-2 pt-1">
-            <span className="text-[10px] uppercase tracking-widest font-semibold px-2 py-1 rounded-full bg-pens-crimson/15 text-pens-crimson border border-pens-crimson/20">
-              Promise
-            </span>
-            <span className="text-[10px] uppercase tracking-widest font-semibold px-2 py-1 rounded-full bg-pens-muted/20 text-pens-cream/40 border border-pens-muted/20">
-              Premise
-            </span>
-          </div>
-        </div>
-
       </div>
 
-      {/* Bottom nav — fixed */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-pens-deep/95 backdrop-blur border-t border-pens-muted/20">
+      {/* Bottom mobile nav (preserved) */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-pens-deep/95 backdrop-blur border-t border-pens-muted/20 md:hidden z-40">
         <div className="max-w-sm mx-auto grid grid-cols-4">
           {MODULES.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
-              className="flex flex-col items-center gap-1 py-4 text-pens-cream/30 hover:text-pens-cream/70 transition-colors"
+              className="flex flex-col items-center gap-1 py-4 text-pens-cream/40 hover:text-pens-cream transition-colors"
             >
               <Icon size={18} />
               <span className="text-[10px] uppercase tracking-widest font-medium">{label}</span>

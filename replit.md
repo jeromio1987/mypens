@@ -11,7 +11,19 @@ A personal health tracking Next.js application — an interpretation layer betwe
 
 ## Home Page (`/`)
 
-Editorial "Mode Selection" screen with immersive mode cards (Locked In / Balanced / Off), streak badge, context tags, Auditor's Note quote, "Why Mode Matters?" section, and fixed bottom nav. Mode streak count added to `/api/mode` GET + POST responses.
+Editorial "Today's Intent" mode-selection screen (Stitch design system port — Newsreader serif headlines, asymmetric 1+2 mode-card grid, Auditor's Note pull-quote). Immersive mode cards (Locked In / Balanced / Off), streak badge, context tags, top app bar (Auditor brand), bottom mobile nav. Date/time computed client-side after mount to avoid hydration mismatch. Mode streak count from `/api/mode` GET + POST.
+
+## Welcome / Onboarding (`/welcome`, `/onboarding`)
+
+Continental brand entry surface (server components, no data fetch). `/welcome` is the split-layout intro with MY PENS branding, P.E.N.S. pillars bento, and CTA → `/onboarding`. `/onboarding` is the "Initial Audit" hero + 4-card P.E.N.S. field bento with CTA → `/`. Both are static and not yet linked from the daily flow.
+
+## Damage Audit (`/verdict/dossier`)
+
+Server component reading today's `WeightEntry`, `SleepEntry`, `DayEntry` via Prisma directly. Computes honest proxies: ethanol offset kcal (`alcoholUnits × 70`), dehydration liters (`× 0.25`), inflammation % (`× 4`, capped 40), metabolic deficit (sleep deficit + alcohol impact composite). Bento layout (Ethanol Offset / Inflammation Tax / Dehydration Penalty), editorial breakdown sections (Sleep Debt / Endocrine Shift) with real sleep hours + HRV. No-alcohol guard surfaces when `alcoholUnits=0` and `hoursSinceAlcohol≥24`. Linked from top of `/verdict`.
+
+## Typography
+
+Newsreader serif (`--font-newsreader` → `--font-headline`) loaded in root layout for editorial headlines on the new Continental screens; Geist remains the default body font.
 
 ## Modules
 

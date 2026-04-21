@@ -113,11 +113,23 @@ export default function VerdictPage() {
       <div className="max-w-sm mx-auto px-4 pt-8 pb-28 space-y-8">
 
         {/* Back nav */}
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard" className="text-pens-cream/30 hover:text-pens-cream/60 transition-colors">
-            <ArrowLeft size={18} />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard"
+              aria-label="Back to dashboard"
+              className="text-pens-cream/30 hover:text-pens-cream/60 transition-colors"
+            >
+              <ArrowLeft size={18} />
+            </Link>
+            <p className="text-[10px] uppercase tracking-widest text-pens-cream/30 font-medium">The Verdict</p>
+          </div>
+          <Link
+            href="/verdict/dossier"
+            className="text-[10px] uppercase tracking-widest text-pens-crimson/80 hover:text-pens-crimson font-bold border-b border-pens-crimson/40 hover:border-pens-crimson transition-colors"
+          >
+            Damage Audit →
           </Link>
-          <p className="text-[10px] uppercase tracking-widest text-pens-cream/30 font-medium">The Verdict</p>
         </div>
 
         {/* Header */}
