@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Scale, Moon, Ruler, LayoutDashboard, ArrowUpRight, Plus, ListChecks, FileText, BarChart2 } from 'lucide-react'
+import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 
 const MODES = [
   {
@@ -136,6 +137,9 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {/* Integration sync failure badge */}
+        <SyncStatusBadge />
 
         {/* Today's Flow — quick-nav between the 3 main pages */}
         <div className="flex items-center gap-2">

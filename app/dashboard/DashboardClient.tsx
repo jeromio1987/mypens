@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import type { StructuredInsight } from '@/app/api/dashboard/route'
 import GoalsPanel from '@/components/goals/GoalsPanel'
+import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 import WeightExplanationCard from '@/components/weight/WeightExplanationCard'
 
 interface StreakModule { current: number; longest: number; lastLogged: string | null; coverage: number }
@@ -157,6 +158,7 @@ export default function DashboardClient() {
     <main className="min-h-screen bg-pens-deep px-4 py-8">
       <div className="max-w-lg mx-auto space-y-5">
         {showGoals && <GoalsPanel onClose={() => setShowGoals(false)} />}
+        <SyncStatusBadge />
         {/* Header */}
         <div className="flex items-center gap-2 flex-wrap">
           <Link href="/" className="text-pens-cream/40 hover:text-pens-cream/70 transition-colors">
