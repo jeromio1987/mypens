@@ -11,6 +11,8 @@ interface Props {
 
 const BLANK = { exercise: '', sets: '', reps: '', weightKg: '', rpe: '', notes: '' }
 
+const inputCls = 'w-full bg-pens-deep border border-pens-muted/40 text-pens-cream rounded-lg px-3 py-2 text-sm placeholder:text-pens-cream/30 focus:outline-none focus:ring-1 focus:ring-pens-gold focus:border-pens-gold [color-scheme:dark]'
+
 export default function TrainingEntry({ date, onSaved }: Props) {
   const [quick, setQuick] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -72,9 +74,9 @@ export default function TrainingEntry({ date, onSaved }: Props) {
     : undefined
 
   return (
-    <div className="bg-white rounded-2xl shadow p-6">
+    <div className="bg-pens-surface border border-pens-muted/30 rounded-2xl shadow p-6">
       <div className="flex items-start justify-between mb-4">
-        <h2 className="text-xl font-semibold">Log Exercise</h2>
+        <h2 className="text-xl font-semibold text-pens-cream">Log Exercise</h2>
         <QuickToggle quick={quick} onChange={setQuick} />
       </div>
 
@@ -83,20 +85,20 @@ export default function TrainingEntry({ date, onSaved }: Props) {
           module="training"
           onApply={applyPreset}
           currentValues={presetValues}
-          accentColor="bg-orange-500"
+          accentColor="bg-pens-gold"
         />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Exercise <span className="text-red-400">*</span>
+          <label className="block text-sm font-medium text-pens-cream/80 mb-1">
+            Exercise <span className="text-pens-crimson">*</span>
           </label>
           <input
             type="text"
             value={form.exercise}
             onChange={e => set('exercise', e.target.value)}
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className={inputCls}
             placeholder="e.g. Back squat, Bench press, Pull-up…"
             required
           />
@@ -104,45 +106,45 @@ export default function TrainingEntry({ date, onSaved }: Props) {
 
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Sets <span className="text-red-400">*</span>
+            <label className="block text-xs font-medium text-pens-cream/60 mb-1">
+              Sets <span className="text-pens-crimson">*</span>
             </label>
             <input
               type="number" min="1"
               value={form.sets}
               onChange={e => set('sets', e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputCls}
               placeholder="3"
               required
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Reps <span className="text-red-400">*</span>
+            <label className="block text-xs font-medium text-pens-cream/60 mb-1">
+              Reps <span className="text-pens-crimson">*</span>
             </label>
             <input
               type="number" min="1"
               value={form.reps}
               onChange={e => set('reps', e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputCls}
               placeholder="8"
               required
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Weight (kg)</label>
+            <label className="block text-xs font-medium text-pens-cream/60 mb-1">Weight (kg)</label>
             <input
               type="number" step="0.5" min="0"
               value={form.weightKg}
               onChange={e => set('weightKg', e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputCls}
               placeholder="80"
             />
           </div>
         </div>
 
         {previewVolume && (
-          <p className="text-xs text-orange-500">
+          <p className="text-xs text-pens-gold">
             Volume: <strong>{previewVolume} kg</strong> ({form.sets}×{form.reps}×{form.weightKg})
           </p>
         )}
@@ -151,22 +153,22 @@ export default function TrainingEntry({ date, onSaved }: Props) {
         {!quick && (
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">RPE (1–10)</label>
+              <label className="block text-xs font-medium text-pens-cream/60 mb-1">RPE (1–10)</label>
               <input
                 type="number" min="1" max="10"
                 value={form.rpe}
                 onChange={e => set('rpe', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className={inputCls}
                 placeholder="7"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+              <label className="block text-xs font-medium text-pens-cream/60 mb-1">Notes</label>
               <input
                 type="text"
                 value={form.notes}
                 onChange={e => set('notes', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className={inputCls}
                 placeholder="Paused reps…"
               />
             </div>
@@ -176,16 +178,16 @@ export default function TrainingEntry({ date, onSaved }: Props) {
         <button
           type="submit"
           disabled={saving}
-          className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+          className="w-full bg-pens-crimson hover:bg-pens-red disabled:opacity-50 text-pens-cream font-medium py-2.5 rounded-lg text-sm transition-colors"
         >
           {saving ? 'Saving…' : quick ? 'Quick add' : 'Add set'}
         </button>
       </form>
 
       {saved && (
-        <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-xl text-sm">
-          <p className="font-semibold text-orange-800">Saved ✓</p>
-          <p className="text-orange-600 mt-1">
+        <div className="mt-4 p-4 bg-pens-gold/10 border border-pens-gold/30 rounded-xl text-sm">
+          <p className="font-semibold text-pens-gold">Saved ✓</p>
+          <p className="text-pens-cream/80 mt-1">
             <strong>{saved.exercise}</strong> — volume{' '}
             <strong>{saved.volume > 0 ? `${saved.volume} kg` : 'bodyweight'}</strong>
           </p>
@@ -193,7 +195,7 @@ export default function TrainingEntry({ date, onSaved }: Props) {
       )}
 
       {error && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="mt-4 p-3 bg-pens-crimson/20 border border-pens-crimson/40 rounded-lg text-pens-cream text-sm">
           {error}
         </div>
       )}

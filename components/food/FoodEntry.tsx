@@ -92,6 +92,7 @@ export default function FoodEntry({ date, onSaved }: Props) {
           onApply={applyPreset}
           currentValues={presetValues}
           accentColor="bg-emerald-600"
+          variant="light"
         />
       </div>
 
