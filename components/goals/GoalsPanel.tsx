@@ -128,30 +128,32 @@ export default function GoalsPanel({ onClose }: Props) {
 
   const cfg = METRIC_CONFIG[formMetric]
 
+  const inputCls = 'w-full text-sm bg-pens-deep border border-pens-muted/40 text-pens-cream rounded-lg px-2 py-1.5 placeholder:text-pens-cream/30 focus:outline-none focus:ring-1 focus:ring-pens-gold focus:border-pens-gold'
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 py-6"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 px-4 py-6"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto"
+        className="bg-pens-surface border border-pens-muted/30 rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-pens-muted/20">
           <div className="flex items-center gap-2">
-            <Target size={18} className="text-indigo-600" />
-            <h2 className="font-semibold text-gray-900">Goals</h2>
+            <Target size={18} className="text-pens-gold" />
+            <h2 className="font-semibold text-pens-cream">Goals</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-pens-cream/40 hover:text-pens-cream transition-colors">
             <X size={18} />
           </button>
         </div>
 
         <div className="p-5 space-y-4">
-          {loading && <p className="text-sm text-gray-400 text-center py-4">Loading…</p>}
+          {loading && <p className="text-sm text-pens-cream/40 text-center py-4">Loading…</p>}
 
           {!loading && goals.length === 0 && !showForm && (
-            <p className="text-sm text-gray-400 text-center py-4">No goals set yet. Add one below.</p>
+            <p className="text-sm text-pens-cream/40 text-center py-4">No goals set yet. Add one below.</p>
           )}
 
           {goals.map(goal => {
@@ -159,71 +161,71 @@ export default function GoalsPanel({ onClose }: Props) {
             const label   = metaCfg?.label ?? goal.metricKey
             const unit    = metaCfg?.unit  ?? ''
             return (
-              <div key={goal.id} className="bg-gray-50 rounded-xl p-4">
+              <div key={goal.id} className="bg-pens-deep/60 border border-pens-muted/20 rounded-xl p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">{label}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="text-sm font-semibold text-pens-cream">{label}</p>
+                    <p className="text-xs text-pens-cream/50 mt-0.5">
                       Current:{' '}
-                      <span className="font-medium text-gray-700">
+                      <span className="font-medium text-pens-cream/80">
                         {goal.currentValue != null ? `${goal.currentValue}${unit}` : '—'}
                       </span>
                       {'  '}→{'  '}
-                      <span className="font-medium text-indigo-600">{goal.targetValue}{unit}</span>
-                      {'  '}(from {goal.startValue}{unit})
+                      <span className="font-medium text-pens-gold">{goal.targetValue}{unit}</span>
+                      {'  '}<span className="text-pens-cream/40">(from {goal.startValue}{unit})</span>
                     </p>
                   </div>
                   <button
                     onClick={() => handleDelete(goal.id)}
-                    className="text-gray-300 hover:text-red-400 ml-2 shrink-0"
+                    className="text-pens-cream/30 hover:text-pens-crimson ml-2 shrink-0 transition-colors"
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
                 {goal.progressPct != null ? (
                   <>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mb-1.5">
+                    <div className="w-full bg-pens-muted/30 rounded-full h-2 mb-1.5">
                       <div
-                        className="bg-indigo-500 h-2 rounded-full transition-all"
+                        className="bg-pens-gold h-2 rounded-full transition-all"
                         style={{ width: `${goal.progressPct}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-xs text-gray-500">
+                    <div className="flex items-center justify-between text-xs text-pens-cream/60">
                       <span>{goal.progressPct}% complete</span>
                       {goal.progressPct >= 100 ? (
-                        <span className="text-green-500 font-medium">Goal reached!</span>
+                        <span className="text-pens-gold font-medium">Goal reached!</span>
                       ) : goal.etaWeeks != null ? (
-                        <span className="text-indigo-500">~{goal.etaWeeks}w at current pace</span>
+                        <span className="text-pens-gold/80">~{goal.etaWeeks}w at current pace</span>
                       ) : (
-                        <span className="text-gray-400">Pace not established yet</span>
+                        <span className="text-pens-cream/40">Pace not established yet</span>
                       )}
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs text-gray-400">No current data available.</p>
+                  <p className="text-xs text-pens-cream/40">No current data available.</p>
                 )}
               </div>
             )
           })}
 
           {showForm && (
-            <div className="bg-indigo-50 rounded-xl p-4 space-y-3 border border-indigo-100">
-              <p className="text-sm font-semibold text-gray-700">New goal</p>
+            <div className="bg-pens-deep/60 border border-pens-gold/30 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-pens-cream">New goal</p>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Metric</label>
+                <label className="text-xs text-pens-cream/60 block mb-1">Metric</label>
                 <select
                   value={formMetric}
                   onChange={e => setFormMetric(e.target.value)}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  className={inputCls}
                 >
                   {Object.entries(METRIC_CONFIG).map(([key, c]) => (
-                    <option key={key} value={key}>{c.label}</option>
+                    <option key={key} value={key} className="bg-pens-deep text-pens-cream">{c.label}</option>
                   ))}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">
+                  <label className="text-xs text-pens-cream/60 block mb-1">
                     Starting value{cfg.unit ? ` (${cfg.unit})` : ''}
                   </label>
                   <input
@@ -232,11 +234,11 @@ export default function GoalsPanel({ onClose }: Props) {
                     value={formStart}
                     onChange={e => setFormStart(e.target.value)}
                     placeholder="e.g. 85"
-                    className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    className={inputCls}
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">
+                  <label className="text-xs text-pens-cream/60 block mb-1">
                     Target{cfg.unit ? ` (${cfg.unit})` : ''}
                   </label>
                   <input
@@ -245,30 +247,30 @@ export default function GoalsPanel({ onClose }: Props) {
                     value={formTarget}
                     onChange={e => setFormTarget(e.target.value)}
                     placeholder="e.g. 78"
-                    className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    className={inputCls}
                   />
                 </div>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Start date</label>
+                <label className="text-xs text-pens-cream/60 block mb-1">Start date</label>
                 <input
                   type="date"
                   value={formDate}
                   onChange={e => setFormDate(e.target.value)}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  className={inputCls}
                 />
               </div>
               <div className="flex gap-2 justify-end pt-1">
                 <button
                   onClick={() => setShowForm(false)}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100"
+                  className="text-xs px-3 py-1.5 rounded-lg border border-pens-muted/40 text-pens-cream/70 hover:bg-pens-muted/20"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={saving || !formTarget || !formStart}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                  className="text-xs px-3 py-1.5 rounded-lg bg-pens-crimson text-pens-cream hover:bg-pens-red disabled:opacity-50"
                 >
                   {saving ? 'Saving…' : 'Save goal'}
                 </button>
@@ -279,7 +281,7 @@ export default function GoalsPanel({ onClose }: Props) {
           {!showForm && (
             <button
               onClick={() => setShowForm(true)}
-              className="w-full flex items-center justify-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 py-2 border border-dashed border-indigo-200 rounded-xl hover:bg-indigo-50 transition-colors"
+              className="w-full flex items-center justify-center gap-2 text-sm text-pens-gold hover:text-pens-cream py-2 border border-dashed border-pens-gold/40 rounded-xl hover:bg-pens-gold/10 transition-colors"
             >
               <Plus size={14} />
               Add goal
