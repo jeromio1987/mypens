@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/cleanup-skipped-tombstones",
+      "schedule": "30 3 * * *"
+    }
+  ]
+}
