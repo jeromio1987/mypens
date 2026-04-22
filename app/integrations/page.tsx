@@ -156,6 +156,7 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
   const [loadingSkipped, setLoadingSkipped] = useState(false)
   const [skippedError, setSkippedError] = useState<string | null>(null)
   const [unskipping, setUnskipping] = useState<Set<string>>(new Set())
+  const [skippedSelected, setSkippedSelected] = useState<Set<string>>(new Set())
 
   const base = `/api/integrations/${provider.id}`
 
@@ -194,6 +195,7 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load')
       setSkipped(data.skipped ?? [])
+      setSkippedSelected(new Set())
     } catch (err) {
       setSkippedError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
@@ -201,31 +203,58 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
     }
   }, [base])
 
-  const unskipOne = async (externalId: string) => {
+  const unskipMany = async (ids: string[]) => {
+    if (ids.length === 0) return
     setUnskipping(prev => {
       const next = new Set(prev)
-      next.add(externalId)
+      for (const id of ids) next.add(id)
       return next
     })
     try {
       const res = await fetch(`${base}/activities`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [externalId] }),
+        body: JSON.stringify({ ids }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Un-skip failed')
-      setSkipped(prev => prev.filter(s => s.externalId !== externalId))
-      setFlash(`Un-skipped — the next companion sync will re-ingest it`)
+      const removed = new Set(ids)
+      setSkipped(prev => prev.filter(s => !removed.has(s.externalId)))
+      setSkippedSelected(prev => {
+        const next = new Set(prev)
+        for (const id of ids) next.delete(id)
+        return next
+      })
+      setFlash(
+        ids.length === 1
+          ? `Un-skipped — the next companion sync will re-ingest it`
+          : `Un-skipped ${ids.length} — the next companion sync will re-ingest them`,
+      )
     } catch (err) {
       setFlash(err instanceof Error ? err.message : 'Un-skip failed')
     } finally {
       setUnskipping(prev => {
         const next = new Set(prev)
-        next.delete(externalId)
+        for (const id of ids) next.delete(id)
         return next
       })
     }
+  }
+
+  const unskipOne = (externalId: string) => unskipMany([externalId])
+
+  const toggleSkipped = (id: string) => {
+    setSkippedSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSkippedAll = () => {
+    setSkippedSelected(prev =>
+      prev.size === skipped.length ? new Set() : new Set(skipped.map(s => s.externalId)),
+    )
   }
 
   useEffect(() => { loadStatus() }, [loadStatus])
@@ -667,45 +696,127 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                   Nothing skipped yet. Discarded workouts will appear here so you can put them back.
                 </p>
               ) : (
-                <ul className="divide-y divide-gray-100">
-                  {skipped.map(s => {
-                    const busy = unskipping.has(s.externalId)
+                <>
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="flex items-center gap-1.5 text-gray-500">
+                      <input
+                        type="checkbox"
+                        checked={skippedSelected.size === skipped.length && skipped.length > 0}
+                        ref={el => {
+                          if (el) {
+                            el.indeterminate =
+                              skippedSelected.size > 0 && skippedSelected.size < skipped.length
+                          }
+                        }}
+                        onChange={toggleSkippedAll}
+                      />
+                      Select all
+                    </label>
+                    <span className="text-gray-400">{skippedSelected.size} selected</span>
+                  </div>
+
+                  {(() => {
+                    const groups = new Map<string, SkippedItem[]>()
+                    for (const s of skipped) {
+                      const key = s.date ?? '—'
+                      const arr = groups.get(key)
+                      if (arr) arr.push(s); else groups.set(key, [s])
+                    }
+                    const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+                      if (a === '—') return 1
+                      if (b === '—') return -1
+                      return b.localeCompare(a)
+                    })
                     return (
-                      <li key={s.externalId} className="py-3 flex items-start gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs text-gray-400 tabular-nums">
-                              {s.date ?? '—'}
-                            </span>
-                            <span className="text-[10px] uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
-                              {provider.name}
-                            </span>
-                            <span className="text-[10px] text-gray-400">
-                              skipped {new Date(s.skippedAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                          <div className="mt-1 text-sm font-medium text-gray-700 truncate">
-                            {s.exercise ?? <span className="text-gray-400 italic">unknown workout</span>}
-                          </div>
-                          {s.notes && (
-                            <div className="mt-0.5 text-xs text-gray-500 truncate">{s.notes}</div>
-                          )}
-                          <div className="mt-0.5 text-[10px] text-gray-300 truncate" title={s.externalId}>
-                            {s.externalId}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => unskipOne(s.externalId)}
-                          disabled={busy}
-                          className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
-                          title="Remove the tombstone so the next companion sync re-ingests this workout"
-                        >
-                          {busy ? 'Un-skipping…' : 'Un-skip'}
-                        </button>
-                      </li>
+                      <div className="space-y-4">
+                        {sortedKeys.map(dateKey => {
+                          const items = groups.get(dateKey)!
+                          const ids = items.map(i => i.externalId)
+                          const anyBusy = ids.some(id => unskipping.has(id))
+                          return (
+                            <div key={dateKey}>
+                              <div className="flex items-center justify-between pb-1 border-b border-gray-100">
+                                <span className="text-xs font-semibold text-gray-500 tabular-nums">
+                                  {dateKey === '—' ? 'Undated' : dateKey}
+                                  <span className="ml-2 text-gray-400 font-normal">
+                                    ({items.length})
+                                  </span>
+                                </span>
+                                <button
+                                  onClick={() => unskipMany(ids)}
+                                  disabled={anyBusy}
+                                  className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
+                                  title="Un-skip every workout from this day"
+                                >
+                                  Un-skip all from this day
+                                </button>
+                              </div>
+                              <ul className="divide-y divide-gray-100">
+                                {items.map(s => {
+                                  const busy = unskipping.has(s.externalId)
+                                  const isSelected = skippedSelected.has(s.externalId)
+                                  return (
+                                    <li key={s.externalId} className="py-3 flex items-start gap-3">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => toggleSkipped(s.externalId)}
+                                        className="mt-1.5"
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-[10px] uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
+                                            {provider.name}
+                                          </span>
+                                          <span className="text-[10px] text-gray-400">
+                                            skipped {new Date(s.skippedAt).toLocaleDateString()}
+                                          </span>
+                                        </div>
+                                        <div className="mt-1 text-sm font-medium text-gray-700 truncate">
+                                          {s.exercise ?? <span className="text-gray-400 italic">unknown workout</span>}
+                                        </div>
+                                        {s.notes && (
+                                          <div className="mt-0.5 text-xs text-gray-500 truncate">{s.notes}</div>
+                                        )}
+                                        <div className="mt-0.5 text-[10px] text-gray-300 truncate" title={s.externalId}>
+                                          {s.externalId}
+                                        </div>
+                                      </div>
+                                      <button
+                                        onClick={() => unskipOne(s.externalId)}
+                                        disabled={busy}
+                                        className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
+                                        title="Remove the tombstone so the next companion sync re-ingests this workout"
+                                      >
+                                        {busy ? 'Un-skipping…' : 'Un-skip'}
+                                      </button>
+                                    </li>
+                                  )
+                                })}
+                              </ul>
+                            </div>
+                          )
+                        })}
+                      </div>
                     )
-                  })}
-                </ul>
+                  })()}
+
+                  <div className="flex items-center justify-end pt-2 border-t border-gray-100">
+                    <button
+                      onClick={() => {
+                        setFlash(null)
+                        unskipMany(Array.from(skippedSelected))
+                      }}
+                      disabled={
+                        skippedSelected.size === 0 ||
+                        Array.from(skippedSelected).some(id => unskipping.has(id))
+                      }
+                      className={`text-sm px-4 py-2 rounded-lg disabled:opacity-50 text-white font-medium ${accentBtn}`}
+                    >
+                      Un-skip selected ({skippedSelected.size})
+                    </button>
+                  </div>
+                </>
               )}
             </>
           )}
