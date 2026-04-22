@@ -18,11 +18,16 @@ export async function POST(request: Request) {
     }
     await prisma.healthConnectConnection.updateMany({
       where: { userId: 'default' },
-      data: { lastSyncAt: new Date() },
+      data: { lastSyncAt: new Date(), lastError: null, lastErrorAt: null },
     })
     return NextResponse.json({ ok: true, created, skipped })
   } catch (err) {
     console.error(err)
+    const message = err instanceof Error ? err.message : String(err)
+    await prisma.healthConnectConnection.updateMany({
+      where: { userId: 'default' },
+      data: { lastError: message.slice(0, 500), lastErrorAt: new Date() },
+    })
     return NextResponse.json({ error: 'Failed to import' }, { status: 500 })
   }
 }

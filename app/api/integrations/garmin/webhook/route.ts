@@ -112,11 +112,21 @@ export async function POST(request: Request) {
             if (fetched.length > 0) await importPushedActivities(fetched)
           } catch (err) {
             console.error('[garmin webhook] ping fetch failed', ref, err)
+            const message = err instanceof Error ? err.message : String(err)
+            await prisma.garminConnection.updateMany({
+              where: { userId: 'default' },
+              data: { lastError: message.slice(0, 500), lastErrorAt: new Date() },
+            }).catch(e => console.error('[garmin webhook] failed to persist error', e))
           }
         }
       }
     } catch (err) {
       console.error('[garmin webhook] processing failed', err)
+      const message = err instanceof Error ? err.message : String(err)
+      await prisma.garminConnection.updateMany({
+        where: { userId: 'default' },
+        data: { lastError: message.slice(0, 500), lastErrorAt: new Date() },
+      }).catch(e => console.error('[garmin webhook] failed to persist error', e))
     }
   })()
 
