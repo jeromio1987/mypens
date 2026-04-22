@@ -149,6 +149,10 @@ model HealthkitConnection {
   // surface "your phone tried to sync and failed" without server access.
   lastClientError   String?
   lastClientErrorAt DateTime?
+  // Cron-job idempotency: when we last notified the user that this pairing
+  // had gone silent past MOBILE_STALE_THRESHOLD_HOURS. We only re-notify
+  // after a successful sync advances `lastSyncAt` past this timestamp.
+  lastStaleNotifiedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
@@ -164,6 +168,7 @@ model HealthConnectConnection {
   lastErrorAt       DateTime?
   lastClientError   String?
   lastClientErrorAt DateTime?
+  lastStaleNotifiedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
@@ -275,4 +280,24 @@ model Preset {
   name      String
   data      String   // JSON blob of form fields
   usedCount Int      @default(0)
+}
+
+// In-app notification inbox. Currently the only producer is the
+// stale-pairing cron, but the model is intentionally generic so future
+// alerts (goal milestones, weekly recaps, etc.) can reuse it.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String    @default("default")
+  // Stable category, e.g. "stale_pairing". Used by clients that want to
+  // group or filter; not enforced as a foreign key on purpose.
+  kind      String
+  title     String
+  body      String
+  // Optional in-app link (e.g. "/integrations").
+  href      String?
+  createdAt DateTime  @default(now())
+  // Null until the user dismisses / marks read.
+  readAt    DateTime?
+
+  @@index([userId, readAt, createdAt])
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText } from 'lucide-react'
 import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
+import NotificationsBadge from '@/components/shared/NotificationsBadge'
 
 const MODES = [
   {
@@ -150,7 +151,10 @@ export default function Home() {
           </p>
         </header>
 
-        <SyncStatusBadge />
+        <div className="space-y-2">
+          <SyncStatusBadge />
+          <NotificationsBadge />
+        </div>
 
         {/* Quick nav: Mode / Context / Verdict */}
         <div className="flex items-center gap-2 mb-12 mt-6 max-w-xl">
