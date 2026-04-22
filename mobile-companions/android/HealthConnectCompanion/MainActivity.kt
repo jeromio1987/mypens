@@ -17,6 +17,9 @@
  *
  * --- Add to AndroidManifest.xml inside <manifest> ---
  *   <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+ *   <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+ *   <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+ *   <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
  *   <queries>
  *     <package android:name="com.google.android.apps.healthdata" />
  *   </queries>
@@ -36,7 +39,11 @@ import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.lifecycle.lifecycleScope
@@ -79,6 +86,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var prefs: android.content.SharedPreferences
     private val permissions = setOf(
         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+        HealthPermission.getReadPermission(HeartRateRecord::class),
+        HealthPermission.getReadPermission(DistanceRecord::class),
+        HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
         // Required on Android 14+ for the WorkManager periodic worker to
         // actually return new sessions while the app isn't foregrounded.
         // Older Android versions ignore this permission silently.
@@ -143,6 +153,22 @@ class MainActivity : ComponentActivity() {
 
             val payloads = response.records.map { r ->
                 val durationSec = (r.endTime.epochSecond - r.startTime.epochSecond)
+                val window = TimeRangeFilter.between(r.startTime, r.endTime)
+                val agg = runCatching {
+                    client.aggregate(
+                        AggregateRequest(
+                            metrics = setOf(
+                                HeartRateRecord.BPM_AVG,
+                                DistanceRecord.DISTANCE_TOTAL,
+                                TotalCaloriesBurnedRecord.ENERGY_TOTAL,
+                            ),
+                            timeRangeFilter = window,
+                        )
+                    )
+                }.getOrNull()
+                val avgHr = agg?.get(HeartRateRecord.BPM_AVG)?.toDouble()
+                val distanceM = agg?.get(DistanceRecord.DISTANCE_TOTAL)?.inMeters
+                val energyKcal = agg?.get(TotalCaloriesBurnedRecord.ENERGY_TOTAL)?.inKilocalories
                 HealthConnectExerciseSessionPayload(
                     id = r.metadata.id,
                     exerciseType = exerciseTypeName(r.exerciseType),
@@ -150,6 +176,9 @@ class MainActivity : ComponentActivity() {
                     startTime = r.startTime.toString(),
                     endTime = r.endTime.toString(),
                     durationSec = durationSec,
+                    totalDistanceM = distanceM,
+                    totalEnergyKcal = energyKcal,
+                    averageHeartRate = avgHr,
                     packageName = r.metadata.dataOrigin.packageName,
                 )
             }

@@ -30,7 +30,11 @@ package com.example.healthconnectcompanion
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.work.Constraints
@@ -125,6 +129,19 @@ class SyncWorker(
             )
 
             val payloads = response.records.map { r ->
+                val window = TimeRangeFilter.between(r.startTime, r.endTime)
+                val agg = runCatching {
+                    client.aggregate(
+                        AggregateRequest(
+                            metrics = setOf(
+                                HeartRateRecord.BPM_AVG,
+                                DistanceRecord.DISTANCE_TOTAL,
+                                TotalCaloriesBurnedRecord.ENERGY_TOTAL,
+                            ),
+                            timeRangeFilter = window,
+                        )
+                    )
+                }.getOrNull()
                 HealthConnectExerciseSessionPayload(
                     id = r.metadata.id,
                     exerciseType = exerciseTypeNameForWorker(r.exerciseType),
@@ -132,6 +149,9 @@ class SyncWorker(
                     startTime = r.startTime.toString(),
                     endTime = r.endTime.toString(),
                     durationSec = r.endTime.epochSecond - r.startTime.epochSecond,
+                    totalDistanceM = agg?.get(DistanceRecord.DISTANCE_TOTAL)?.inMeters,
+                    totalEnergyKcal = agg?.get(TotalCaloriesBurnedRecord.ENERGY_TOTAL)?.inKilocalories,
+                    averageHeartRate = agg?.get(HeartRateRecord.BPM_AVG)?.toDouble(),
                     packageName = r.metadata.dataOrigin.packageName,
                 )
             }

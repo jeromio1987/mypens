@@ -41,8 +41,11 @@ final class HealthKitClient {
         guard HKHealthStore.isHealthDataAvailable() else {
             throw HealthKitClientError.unavailable
         }
-        let workoutType = HKObjectType.workoutType()
-        try await store.requestAuthorization(toShare: [], read: [workoutType])
+        var readTypes: Set<HKObjectType> = [HKObjectType.workoutType()]
+        if let hr = HKObjectType.quantityType(forIdentifier: .heartRate) {
+            readTypes.insert(hr)
+        }
+        try await store.requestAuthorization(toShare: [], read: readTypes)
     }
 
     func fetchWorkouts(since: Date) async throws -> [HealthkitWorkoutPayload] {
@@ -64,10 +67,13 @@ final class HealthKitClient {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
 
-        return workouts.map { w in
+        var payloads: [HealthkitWorkoutPayload] = []
+        payloads.reserveCapacity(workouts.count)
+        for w in workouts {
             let distance = w.totalDistance?.doubleValue(for: .meter())
             let energy = w.totalEnergyBurned?.doubleValue(for: .kilocalorie())
-            return HealthkitWorkoutPayload(
+            let avgHr = try? await averageHeartRate(start: w.startDate, end: w.endDate)
+            payloads.append(HealthkitWorkoutPayload(
                 uuid: w.uuid.uuidString,
                 workoutActivityType: activityTypeName(w.workoutActivityType),
                 startDate: formatter.string(from: w.startDate),
@@ -75,10 +81,41 @@ final class HealthKitClient {
                 durationSec: w.duration,
                 totalDistanceM: distance,
                 totalEnergyKcal: energy,
-                averageHeartRate: nil,
+                averageHeartRate: avgHr,
                 sourceName: w.sourceRevision.source.name,
                 notes: nil
-            )
+            ))
+        }
+        return payloads
+    }
+
+    /// Average heart rate (bpm) across the workout window, or nil when there
+    /// are no samples (or HR isn't authorised).
+    private func averageHeartRate(start: Date, end: Date) async throws -> Double? {
+        guard let hrType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+            return nil
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+        return try await withCheckedThrowingContinuation { cont in
+            let q = HKStatisticsQuery(
+                quantityType: hrType,
+                quantitySamplePredicate: predicate,
+                options: .discreteAverage
+            ) { _, stats, error in
+                if let error = error {
+                    // Treat missing authorisation / no data as nil rather than fatal.
+                    let nsErr = error as NSError
+                    if nsErr.domain == HKErrorDomain {
+                        cont.resume(returning: nil); return
+                    }
+                    cont.resume(throwing: error); return
+                }
+                let bpm = stats?.averageQuantity()?.doubleValue(
+                    for: HKUnit.count().unitDivided(by: .minute())
+                )
+                cont.resume(returning: bpm)
+            }
+            store.execute(q)
         }
     }
 
