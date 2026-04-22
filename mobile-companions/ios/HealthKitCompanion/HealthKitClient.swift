@@ -119,12 +119,43 @@ final class HealthKitClient {
         }
     }
 
+    /// Body shape — `clientError` carries the most recent background-sync
+    /// failure (or `nil` to clear) so the server can surface it on the
+    /// dashboard. Foreground syncs typically pass `nil`.
+    private struct IngestBody: Encodable {
+        let workouts: [HealthkitWorkoutPayload]
+        // `nil` here would be omitted by JSONEncoder, which the server reads
+        // as "no change". To explicitly clear we use `clearClientError = true`
+        // and manually emit `null` in `encode(to:)`.
+        let clientError: String?
+        let clearClientError: Bool
+
+        enum CodingKeys: String, CodingKey { case workouts, clientError }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(workouts, forKey: .workouts)
+            if let e = clientError {
+                try c.encode(e, forKey: .clientError)
+            } else if clearClientError {
+                try c.encodeNil(forKey: .clientError)
+            }
+        }
+    }
+
     func push(
         workouts: [HealthkitWorkoutPayload],
         baseUrl: String,
-        token: String
+        token: String,
+        clientError: String? = nil,
+        clearClientError: Bool = false
     ) async throws -> IngestResult {
-        guard !workouts.isEmpty else { return IngestResult(ok: true, stored: 0, skipped: 0) }
+        // Skip the network call only when there's truly nothing to send —
+        // a clear/report-only call (empty workouts + a clientError signal)
+        // must still hit the server so the dashboard updates.
+        if workouts.isEmpty && clientError == nil && !clearClientError {
+            return IngestResult(ok: true, stored: 0, skipped: 0)
+        }
         guard let url = URL(string: "\(baseUrl)/api/integrations/healthkit/ingest") else {
             throw HealthKitClientError.http(0, "Invalid base URL")
         }
@@ -132,7 +163,11 @@ final class HealthKitClient {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONEncoder().encode(["workouts": workouts])
+        req.httpBody = try JSONEncoder().encode(IngestBody(
+            workouts: workouts,
+            clientError: clientError,
+            clearClientError: clearClientError
+        ))
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else {

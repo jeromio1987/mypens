@@ -56,7 +56,15 @@ import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 
 @Serializable
-private data class WorkerIngestBody(val sessions: List<HealthConnectExerciseSessionPayload>)
+private data class WorkerIngestBody(
+    val sessions: List<HealthConnectExerciseSessionPayload>,
+    // `null` here is intentional: server reads explicit null as "clear the
+    // previous client-error report". When we have nothing to say either way
+    // we serialize without this key (encodeDefaults = false handles that
+    // because the Json instance below is configured that way and the wrapper
+    // wraps a nullable that we only set when needed).
+    val clientError: String? = null,
+)
 
 object SyncScheduler {
     private const val UNIQUE_NAME = "hc-companion-periodic-sync"
@@ -105,6 +113,9 @@ class SyncWorker(
             // Not paired yet — nothing to do, but don't fail the chain.
             return Result.success()
         }
+
+        // Was a previous run waiting to clear its error report?
+        val priorError = prefs.getString("pendingClientError", null)
 
         return try {
             val client = HealthConnectClient.getOrCreate(applicationContext)
@@ -156,24 +167,69 @@ class SyncWorker(
                 )
             }
 
-            push(payloads, baseUrl, token)
-            prefs.edit().putString("lastSyncIso", Instant.now().toString()).apply()
+            push(
+                sessions = payloads,
+                baseUrl = baseUrl,
+                token = token,
+                // Clear any prior client-error report now that we've
+                // successfully synced. `null` is sent explicitly so the
+                // server treats it as "clear" (vs "no change" when the field
+                // is omitted).
+                clearClientError = priorError != null,
+            )
+            prefs.edit()
+                .putString("lastSyncIso", Instant.now().toString())
+                .remove("pendingClientError")
+                .apply()
             Result.success()
         } catch (e: Exception) {
-            // Transient errors (network, server 5xx) — let WorkManager retry
-            // with exponential backoff.
+            // Stash the error so the foreground UI can read it, then attempt
+            // a report-only push so the dashboard sees the failure even
+            // between successful runs. WorkManager retries with backoff.
+            val message = e.message ?: e::class.java.simpleName
+            prefs.edit().putString("pendingClientError", message).apply()
+            runCatching { reportError(baseUrl, token, message) }
             Result.retry()
         }
+    }
+
+    /**
+     * Send an empty-sessions push whose only payload is the `clientError`
+     * field. The server returns 200 for empty-with-clientError calls (it's
+     * the documented report channel), so this is best-effort and we ignore
+     * the response either way.
+     */
+    private fun reportError(baseUrl: String, token: String, message: String) {
+        val body = json.encodeToString(
+            WorkerIngestBody(sessions = emptyList(), clientError = message)
+        ).toRequestBody("application/json".toMediaType())
+        val req = Request.Builder()
+            .url("$baseUrl/api/integrations/healthconnect/ingest")
+            .header("Authorization", "Bearer $token")
+            .post(body)
+            .build()
+        http.newCall(req).execute().close()
     }
 
     private fun push(
         sessions: List<HealthConnectExerciseSessionPayload>,
         baseUrl: String,
         token: String,
+        clearClientError: Boolean,
     ) {
-        if (sessions.isEmpty()) return
-        val body = json.encodeToString(WorkerIngestBody(sessions))
-            .toRequestBody("application/json".toMediaType())
+        // Nothing to push and nothing to clear → skip the network call.
+        if (sessions.isEmpty() && !clearClientError) return
+        // Build JSON manually so we can emit an explicit `"clientError": null`
+        // when clearing — kotlinx.serialization with encodeDefaults=false
+        // would otherwise omit the key, which the server reads as "no change".
+        val raw = buildString {
+            append('{')
+            append("\"sessions\":")
+            append(json.encodeToString(sessions))
+            if (clearClientError) append(",\"clientError\":null")
+            append('}')
+        }
+        val body = raw.toRequestBody("application/json".toMediaType())
         val req = Request.Builder()
             .url("$baseUrl/api/integrations/healthconnect/ingest")
             .header("Authorization", "Bearer $token")

@@ -142,6 +142,12 @@ final class BackgroundSync {
     /// Shared sync routine. Reads `baseUrl` / `pairingToken` / `lastSyncIso`
     /// from `UserDefaults` (matching the `@AppStorage` keys in `ContentView`)
     /// and bails out quietly if the user hasn't paired yet.
+    ///
+    /// On error we stash the message in `pendingClientError` and try to flush
+    /// it (with an empty workouts payload) so the dashboard can surface
+    /// "your phone tried to sync and failed" even if HealthKit itself is
+    /// what's broken. On the next successful run we send `clearClientError`
+    /// to wipe the stale warning.
     private func runSync() async {
         let defaults = UserDefaults.standard
         let baseUrl = defaults.string(forKey: "baseUrl") ?? ""
@@ -159,13 +165,42 @@ final class BackgroundSync {
             return Date().addingTimeInterval(-30 * 24 * 3600)
         }()
 
+        let priorError = defaults.string(forKey: "pendingClientError")
+
         do {
             let workouts = try await client.fetchWorkouts(since: since)
-            _ = try await client.push(workouts: workouts, baseUrl: baseUrl, token: token)
+            _ = try await client.push(
+                workouts: workouts,
+                baseUrl: baseUrl,
+                token: token,
+                clientError: nil,
+                // Tell the server to clear any prior client-error report now
+                // that we've successfully synced.
+                clearClientError: priorError != nil
+            )
             defaults.set(formatter.string(from: Date()), forKey: "lastSyncIso")
+            defaults.removeObject(forKey: "pendingClientError")
         } catch {
-            // Background runs swallow errors — the next observer event or
-            // refresh task will retry. The foreground UI surfaces failures.
+            // Stash the error so foreground UI can surface it, then attempt
+            // a "report-only" push (empty workouts) so the dashboard sees it
+            // even between successful syncs. Both legs are best-effort.
+            let message = (error as NSError).localizedDescription
+            defaults.set(message, forKey: "pendingClientError")
+            try? await reportError(message: message, baseUrl: baseUrl, token: token)
         }
+    }
+
+    /// Best-effort report of a background failure. Uses a direct URLSession
+    /// call (not `client.push`, which short-circuits on empty workouts) so
+    /// the server still receives the `clientError` field.
+    private func reportError(message: String, baseUrl: String, token: String) async throws {
+        guard let url = URL(string: "\(baseUrl)/api/integrations/healthkit/ingest") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let body: [String: Any] = ["workouts": [], "clientError": message]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try? await URLSession.shared.data(for: req)
     }
 }

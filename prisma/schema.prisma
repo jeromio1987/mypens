@@ -140,6 +140,15 @@ model HealthkitConnection {
   pairingToken String   @unique
   deviceLabel String?
   lastSyncAt  DateTime?
+  // Server-side: most recent failure while ingesting a push from the companion.
+  lastError         String?
+  lastErrorAt       DateTime?
+  // Client-side: most recent background-sync failure reported by the companion
+  // (e.g. HealthKit query failed, network unreachable from the phone). The
+  // companion attaches it to its next successful push so the dashboard can
+  // surface "your phone tried to sync and failed" without server access.
+  lastClientError   String?
+  lastClientErrorAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
@@ -151,6 +160,10 @@ model HealthConnectConnection {
   pairingToken String   @unique
   deviceLabel String?
   lastSyncAt  DateTime?
+  lastError         String?
+  lastErrorAt       DateTime?
+  lastClientError   String?
+  lastClientErrorAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
