@@ -130,6 +130,15 @@ interface Banner {
   msg: string
 }
 
+interface SkippedItem {
+  externalId: string
+  skippedAt: string
+  date: string | null
+  exercise: string | null
+  notes: string | null
+  source: ProviderId
+}
+
 function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: Banner | null }) {
   const [status, setStatus] = useState<Status | null>(null)
   const [loadingStatus, setLoadingStatus] = useState(true)
@@ -142,6 +151,11 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
   const [flash, setFlash] = useState<string | null>(null)
   const [pairingToken, setPairingToken] = useState<string | null>(null)
   const [issuingToken, setIssuingToken] = useState(false)
+  const [showSkipped, setShowSkipped] = useState(false)
+  const [skipped, setSkipped] = useState<SkippedItem[]>([])
+  const [loadingSkipped, setLoadingSkipped] = useState(false)
+  const [skippedError, setSkippedError] = useState<string | null>(null)
+  const [unskipping, setUnskipping] = useState<Set<string>>(new Set())
 
   const base = `/api/integrations/${provider.id}`
 
@@ -172,10 +186,55 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
     }
   }, [base])
 
+  const loadSkipped = useCallback(async () => {
+    setLoadingSkipped(true)
+    setSkippedError(null)
+    try {
+      const res = await fetch(`${base}/activities?showSkipped=1`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load')
+      setSkipped(data.skipped ?? [])
+    } catch (err) {
+      setSkippedError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setLoadingSkipped(false)
+    }
+  }, [base])
+
+  const unskipOne = async (externalId: string) => {
+    setUnskipping(prev => {
+      const next = new Set(prev)
+      next.add(externalId)
+      return next
+    })
+    try {
+      const res = await fetch(`${base}/activities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [externalId] }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Un-skip failed')
+      setSkipped(prev => prev.filter(s => s.externalId !== externalId))
+      setFlash(`Un-skipped — the next companion sync will re-ingest it`)
+    } catch (err) {
+      setFlash(err instanceof Error ? err.message : 'Un-skip failed')
+    } finally {
+      setUnskipping(prev => {
+        const next = new Set(prev)
+        next.delete(externalId)
+        return next
+      })
+    }
+  }
+
   useEffect(() => { loadStatus() }, [loadStatus])
   useEffect(() => {
     if (status?.connected) loadActivities()
   }, [status?.connected, loadActivities])
+  useEffect(() => {
+    if (status?.connected && showSkipped) loadSkipped()
+  }, [status?.connected, showSkipped, loadSkipped])
 
   const toggle = (id: string) => {
     setSelected(prev => {
@@ -241,6 +300,7 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
         return next
       })
       loadStatus()
+      if (showSkipped) loadSkipped()
     } catch (err) {
       setFlash(err instanceof Error ? err.message : 'Skip failed')
     }
@@ -268,6 +328,7 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
       })
       setFlash(`Cleared ${data.deleted ?? targets.length}`)
       loadStatus()
+      if (showSkipped) loadSkipped()
     } catch (err) {
       setFlash(err instanceof Error ? err.message : 'Clear failed')
     }
@@ -570,6 +631,82 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                   </button>
                 </div>
               </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {status?.connected && provider.authMode === 'pairing' && (
+        <div className="space-y-3 pt-2 border-t border-gray-100">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">Skipped workouts</h3>
+            <label className="text-xs text-gray-500 flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={showSkipped}
+                onChange={e => setShowSkipped(e.target.checked)}
+              />
+              Show skipped
+              {showSkipped && (
+                <span className="text-gray-400">· {skipped.length}</span>
+              )}
+            </label>
+          </div>
+
+          {showSkipped && (
+            <>
+              {skippedError && (
+                <div className="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2">
+                  {skippedError}
+                </div>
+              )}
+              {loadingSkipped ? (
+                <p className="text-sm text-gray-400">Loading skipped…</p>
+              ) : skipped.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  Nothing skipped yet. Discarded workouts will appear here so you can put them back.
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {skipped.map(s => {
+                    const busy = unskipping.has(s.externalId)
+                    return (
+                      <li key={s.externalId} className="py-3 flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-gray-400 tabular-nums">
+                              {s.date ?? '—'}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
+                              {provider.name}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              skipped {new Date(s.skippedAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-gray-700 truncate">
+                            {s.exercise ?? <span className="text-gray-400 italic">unknown workout</span>}
+                          </div>
+                          {s.notes && (
+                            <div className="mt-0.5 text-xs text-gray-500 truncate">{s.notes}</div>
+                          )}
+                          <div className="mt-0.5 text-[10px] text-gray-300 truncate" title={s.externalId}>
+                            {s.externalId}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => unskipOne(s.externalId)}
+                          disabled={busy}
+                          className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
+                          title="Remove the tombstone so the next companion sync re-ingests this workout"
+                        >
+                          {busy ? 'Un-skipping…' : 'Un-skip'}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </>
           )}
         </div>

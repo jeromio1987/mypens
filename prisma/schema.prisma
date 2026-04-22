@@ -199,6 +199,12 @@ model SkippedPushedWorkout {
   source     String   // healthkit | healthconnect
   externalId String
   skippedAt  DateTime @default(now())
+  // Snapshot of the discarded PushedWorkout so the "Show skipped" UI can
+  // display something meaningful after the live row is gone. Nullable because
+  // older tombstones predate this column.
+  date       String?
+  exercise   String?
+  notes      String?
 
   @@unique([source, externalId])
 }
