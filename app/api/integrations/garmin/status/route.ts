@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { isIntegrationErrorStale } from '@/lib/integrations/errorTtl'
 
 export async function GET() {
   try {
     const configured = Boolean(process.env.GARMIN_CLIENT_ID && process.env.GARMIN_CLIENT_SECRET)
     const conn = await prisma.garminConnection.findUnique({ where: { userId: 'default' } })
+    const errorStale = isIntegrationErrorStale(conn?.lastErrorAt ?? null)
     return NextResponse.json({
       configured,
       connected: Boolean(conn),
@@ -13,8 +15,8 @@ export async function GET() {
       lastSyncAt: conn?.lastSyncAt ?? null,
       expiresAt: conn?.expiresAt ?? null,
       webhookActive: Boolean(conn?.pingSubscribed),
-      lastError: conn?.lastError ?? null,
-      lastErrorAt: conn?.lastErrorAt ?? null,
+      lastError: errorStale ? null : (conn?.lastError ?? null),
+      lastErrorAt: errorStale ? null : (conn?.lastErrorAt ?? null),
     })
   } catch (err) {
     console.error(err)

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getConnection } from '@/lib/integrations/healthconnect/auth'
 import { getMobileStaleThresholdHours } from '@/lib/integrations/staleThreshold'
+import { isIntegrationErrorStale } from '@/lib/integrations/errorTtl'
 
 export async function GET() {
   try {
@@ -24,6 +25,12 @@ export async function GET() {
           derivedErrorAt = conn.lastClientErrorAt
         }
       }
+    }
+    // Suppress stale errors from the badge view — the raw fields below stay
+    // intact so the integrations detail page can still show history.
+    if (isIntegrationErrorStale(derivedErrorAt)) {
+      derivedError = null
+      derivedErrorAt = null
     }
 
     const staleThresholdHours = getMobileStaleThresholdHours()
