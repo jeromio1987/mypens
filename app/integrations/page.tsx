@@ -81,10 +81,32 @@ interface Status {
   deviceLabel?: string | null
   pendingCount?: number
   lastSyncAt: string | null
+  /** Pairing providers only: last successful background ingest time. */
+  lastIngestAt?: string | null
+  /** Pairing providers only: hours since `lastIngestAt`, or null if never. */
+  hoursSinceLastIngest?: number | null
+  /** Pairing providers only: configurable threshold for the stale warning. */
+  staleThresholdHours?: number
+  /** Pairing providers only: true when `hoursSinceLastIngest` exceeds threshold. */
+  stale?: boolean
   expiresAt?: number | null
   webhookActive?: boolean
   lastError?: string | null
   lastErrorAt?: string | null
+}
+
+/** Format an "X hours ago" / "X days ago" gap for the companion badge. */
+function formatGap(hours: number): string {
+  if (hours < 1) {
+    const mins = Math.max(1, Math.round(hours * 60))
+    return `${mins} minute${mins === 1 ? '' : 's'} ago`
+  }
+  if (hours < 24) {
+    const h = Math.round(hours)
+    return `${h} hour${h === 1 ? '' : 's'} ago`
+  }
+  const d = Math.round(hours / 24)
+  return `${d} day${d === 1 ? '' : 's'} ago`
 }
 
 interface Draft {
@@ -330,6 +352,14 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
               {status.lastSyncAt && (
                 <div>Last sync: {new Date(status.lastSyncAt).toLocaleString()}</div>
               )}
+              {provider.authMode === 'pairing' && (
+                <div className={status.stale ? 'text-amber-600 font-medium' : ''}>
+                  Phone:{' '}
+                  {status.hoursSinceLastIngest == null
+                    ? 'never checked in'
+                    : `last heard ${formatGap(status.hoursSinceLastIngest)}`}
+                </div>
+              )}
             </>
           ) : (
             'Not connected'
@@ -382,6 +412,24 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
           </button>
         )}
       </div>
+
+      {status?.connected && provider.authMode === 'pairing' && status.stale && (
+        <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">
+          <span className="font-medium">
+            Your {provider.name === 'Apple Health' ? 'iPhone' : 'phone'} hasn&apos;t checked in
+            {status.hoursSinceLastIngest != null
+              ? ` for ${formatGap(status.hoursSinceLastIngest).replace(' ago', '')}`
+              : ' yet'}
+            .
+          </span>{' '}
+          Open the companion app to re-grant background access.
+          {typeof status.staleThresholdHours === 'number' && (
+            <span className="text-amber-600">
+              {' '}· threshold {status.staleThresholdHours}h
+            </span>
+          )}
+        </div>
+      )}
 
       {status?.connected && status.lastError && (
         <div className="text-xs bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2">

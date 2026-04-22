@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getConnection } from '@/lib/integrations/healthkit/auth'
+import { getMobileStaleThresholdHours } from '@/lib/integrations/staleThreshold'
 
 export async function GET() {
   try {
@@ -29,11 +30,31 @@ export async function GET() {
       }
     }
 
+    const staleThresholdHours = getMobileStaleThresholdHours()
+    const lastIngestAt = conn?.lastSyncAt ?? null
+    const hoursSinceLastIngest = lastIngestAt
+      ? (Date.now() - lastIngestAt.getTime()) / 3_600_000
+      : null
+    // For a never-ingested pairing, fall back to the connection's age so a
+    // freshly issued/rotated token doesn't immediately flash the warning.
+    const hoursSincePaired = conn
+      ? (Date.now() - conn.createdAt.getTime()) / 3_600_000
+      : null
+    const stale =
+      conn != null &&
+      (hoursSinceLastIngest != null
+        ? hoursSinceLastIngest > staleThresholdHours
+        : (hoursSincePaired ?? 0) > staleThresholdHours)
+
     return NextResponse.json({
       configured: true, // pairing-token model has no env requirement
       connected: Boolean(conn),
       deviceLabel: conn?.deviceLabel ?? null,
-      lastSyncAt: conn?.lastSyncAt ?? null,
+      lastSyncAt: lastIngestAt,
+      lastIngestAt,
+      hoursSinceLastIngest,
+      staleThresholdHours,
+      stale,
       pendingCount: pending,
       lastError: derivedError,
       lastErrorAt: derivedErrorAt,
