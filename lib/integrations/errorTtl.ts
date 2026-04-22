@@ -23,14 +23,18 @@ export function getIntegrationErrorTtlHours(): number {
 
 /**
  * Returns true when the given error timestamp is older than the configured
- * TTL (or null / missing). Callers should null out the user-facing
- * `lastError` / `lastErrorAt` pair when this returns true.
+ * TTL. Callers should null out the user-facing `lastError` / `lastErrorAt`
+ * pair when this returns true.
+ *
+ * A missing timestamp returns false (not stale) so that legacy rows with a
+ * `lastError` but no `lastErrorAt` still surface — we'd rather risk a small
+ * amount of stale noise than silently swallow a real failure.
  */
 export function isIntegrationErrorStale(
   at: Date | null | undefined,
   ttlHours: number = getIntegrationErrorTtlHours(),
 ): boolean {
-  if (!at) return true
+  if (!at) return false
   const ageHours = (Date.now() - at.getTime()) / 3_600_000
   return ageHours > ttlHours
 }
