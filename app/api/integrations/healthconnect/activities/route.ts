@@ -46,8 +46,18 @@ export async function DELETE(req: Request) {
       )
     }
 
-    const result = await prisma.pushedWorkout.deleteMany({
-      where: { source: 'healthconnect', externalId: { in: ids } },
+    const result = await prisma.$transaction(async (tx) => {
+      const deleted = await tx.pushedWorkout.deleteMany({
+        where: { source: 'healthconnect', externalId: { in: ids } },
+      })
+      for (const externalId of ids) {
+        await tx.skippedPushedWorkout.upsert({
+          where: { source_externalId: { source: 'healthconnect', externalId } },
+          create: { source: 'healthconnect', externalId },
+          update: { skippedAt: new Date() },
+        })
+      }
+      return deleted
     })
     return NextResponse.json({ deleted: result.count })
   } catch (err) {

@@ -186,6 +186,18 @@ model PushedWorkout {
   @@unique([source, externalId])
 }
 
+// Persistent "tombstone" of a pushed workout the user explicitly skipped.
+// Outlives the PushedWorkout row so re-pushes from the companion app (which
+// keep the same externalId / UUID) can be silently dropped at /ingest time.
+model SkippedPushedWorkout {
+  id         String   @id @default(cuid())
+  source     String   // healthkit | healthconnect
+  externalId String
+  skippedAt  DateTime @default(now())
+
+  @@unique([source, externalId])
+}
+
 // Garmin — bulk historical activity archive imported from .fit files
 // (separate from GarminConnection which handles live OAuth sync).
 model GarminActivity {

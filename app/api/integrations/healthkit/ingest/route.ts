@@ -44,11 +44,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, stored: 0, skipped: 0, clientErrorApplied: true })
     }
 
+    const candidateIds = workouts
+      .map(w => w?.uuid)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    const skippedRows = candidateIds.length
+      ? await prisma.skippedPushedWorkout.findMany({
+          where: { source: 'healthkit', externalId: { in: candidateIds } },
+          select: { externalId: true },
+        })
+      : []
+    const skippedSet = new Set(skippedRows.map(r => r.externalId))
+
     let stored = 0
     let skipped = 0
     try {
       for (const w of workouts) {
         if (!w?.uuid || !w.startDate || !w.workoutActivityType) {
+          skipped++
+          continue
+        }
+        if (skippedSet.has(w.uuid)) {
           skipped++
           continue
         }
