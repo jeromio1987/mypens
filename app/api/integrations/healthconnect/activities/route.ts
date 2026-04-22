@@ -3,6 +3,7 @@ import { listPendingWorkouts } from '@/lib/integrations/healthconnect/api'
 import { pushedToDraft } from '@/lib/integrations/healthconnect/mapping'
 import { markAlreadyImported } from '@/lib/integrations/_shared/import'
 import { getConnection } from '@/lib/integrations/healthconnect/auth'
+import { cleanupExpiredSkippedTombstones } from '@/lib/integrations/_shared/skippedTombstoneRetention'
 import { prisma } from '@/lib/db'
 
 const SOURCE = 'healthconnect'
@@ -22,6 +23,14 @@ export async function GET(req: Request) {
     if (!includeSkipped) {
       return NextResponse.json({ items })
     }
+
+    // On-read cleanup: drop tombstones the phone can no longer re-push so the
+    // "Show skipped" list stays bounded even without the cron running. We
+    // await it so the subsequent findMany returns a clean list in one round
+    // trip; with 90-day pruning the delete set is small in steady state.
+    await cleanupExpiredSkippedTombstones({ source: SOURCE }).catch(err => {
+      console.error('skipped-tombstone cleanup failed', err)
+    })
 
     const skippedRows = await prisma.skippedPushedWorkout.findMany({
       where: { source: SOURCE },

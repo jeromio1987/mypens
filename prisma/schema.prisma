@@ -194,6 +194,15 @@ model PushedWorkout {
 // Persistent "tombstone" of a pushed workout the user explicitly skipped.
 // Outlives the PushedWorkout row so re-pushes from the companion app (which
 // keep the same externalId / UUID) can be silently dropped at /ingest time.
+//
+// Retention: rows are auto-cleaned once `skippedAt` is older than
+// SKIPPED_TOMBSTONE_RETENTION_DAYS (default 90 — see
+// `lib/integrations/_shared/skippedTombstoneRetention.ts`). The companion
+// app's lookback is much shorter than this window, so an expired tombstone
+// could never be re-triggered by a re-push anyway, and keeping it forever
+// would just bloat the "Show skipped" list. Cleanup happens via the
+// `/api/cron/cleanup-skipped-tombstones` cron and as a fire-and-forget on
+// the activities GET when `?showSkipped=1` is requested.
 model SkippedPushedWorkout {
   id         String   @id @default(cuid())
   source     String   // healthkit | healthconnect
