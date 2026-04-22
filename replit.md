@@ -41,6 +41,7 @@ Newsreader serif (`--font-newsreader` → `--font-headline`) loaded in root layo
   - **Garmin Connect** — OAuth 2.0 + PKCE (`ACTIVITY_READ`), walks day-by-day windows of `apis.garmin.com/wellness-api/rest/activities`.
   - **Apple Health (HealthKit)** — pairing-token model (HealthKit is iOS-only). Web mints a long-lived bearer token; iOS companion app POSTs `HKWorkout` summaries to `/api/integrations/healthkit/ingest`. Pushed workouts queue in `PushedWorkout` for review.
   - **Health Connect (Android)** — same pairing-token model; Android companion POSTs `ExerciseSessionRecord`s to `/api/integrations/healthconnect/ingest`.
+  - **Stale-pairing nudges** — `/api/cron/check-stale-pairings` (auth: `Authorization: Bearer $CRON_SECRET`) scans HealthKit / Health Connect connections daily; when a row's `lastSyncAt` (or `createdAt` for never-synced rows) is older than `MOBILE_STALE_THRESHOLD_HOURS` (default 48), it drops a single in-app `Notification` (kind `stale_pairing`, href `/integrations`). Idempotency is enforced by stamping `lastStaleNotifiedAt` via a conditional `updateMany`; once a recovery sync advances `lastSyncAt` past that stamp, the next stale gap renotifies. Pass `?dryRun=1` to preview eligible rows without writing.
 
 ## Key Files
 
