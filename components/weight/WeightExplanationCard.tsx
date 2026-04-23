@@ -35,27 +35,27 @@ const CONFIDENCE_CONFIG: Record<ConfidenceLevel, {
   high: {
     label: 'High confidence',
     bar: 'bg-emerald-500',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    text: 'text-emerald-700',
+    bg: 'bg-emerald-900/20',
+    border: 'border-emerald-500/30',
+    text: 'text-emerald-400',
     description: 'No active confounders — this reading is reliable.',
     filled: 3,
   },
   medium: {
     label: 'Medium confidence',
-    bar: 'bg-amber-400',
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    text: 'text-amber-700',
+    bar: 'bg-pens-gold',
+    bg: 'bg-amber-900/20',
+    border: 'border-amber-500/30',
+    text: 'text-pens-gold',
     description: '1–2 factors affecting this reading — result is a plausible estimate.',
     filled: 2,
   },
   low: {
     label: 'Low confidence',
-    bar: 'bg-red-400',
-    bg: 'bg-red-50',
-    border: 'border-red-200',
-    text: 'text-red-600',
+    bar: 'bg-pens-crimson',
+    bg: 'bg-pens-crimson/10',
+    border: 'border-pens-crimson/30',
+    text: 'text-red-400',
     description: 'Multiple confounders active — treat this as a rough guide only.',
     filled: 1,
   },
@@ -77,7 +77,7 @@ function ConfidenceMeter({ level }: { level: ConfidenceLevel }) {
         {[1, 2, 3].map(i => (
           <div
             key={i}
-            className={`h-2 w-6 rounded-full transition-colors ${i <= cfg.filled ? cfg.bar : 'bg-gray-200'}`}
+            className={`h-2 w-6 rounded-full transition-colors ${i <= cfg.filled ? cfg.bar : 'bg-pens-muted/40'}`}
           />
         ))}
       </div>
@@ -104,7 +104,7 @@ export default function WeightExplanationCard({ scaleKg, trueWeightKg, confidenc
           <div>
             <p className={`text-xs font-semibold ${cfg.text}`}>Why is my true weight different?</p>
             {!open && (
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-pens-cream/50 mt-0.5">
                 {hasAdjustment
                   ? `${diff > 0 ? `−${diff}` : `+${Math.abs(diff)}`} kg explained by ${activeConfounders} factor${activeConfounders > 1 ? 's' : ''}`
                   : 'No active confounders — reading is clean'}
@@ -113,59 +113,59 @@ export default function WeightExplanationCard({ scaleKg, trueWeightKg, confidenc
           </div>
         </div>
         <div className="shrink-0 ml-2">
-          {open ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+          {open ? <ChevronUp size={14} className="text-pens-cream/40" /> : <ChevronDown size={14} className="text-pens-cream/40" />}
         </div>
       </button>
 
       {open && (
-        <div className="px-4 pb-4 space-y-4 border-t border-white/60">
+        <div className="px-4 pb-4 space-y-4 border-t border-pens-muted/20">
           {/* Confidence meter */}
           <div className="pt-3">
             <ConfidenceMeter level={confidence} />
-            <p className="text-xs text-gray-500 mt-1.5">{cfg.description}</p>
+            <p className="text-xs text-pens-cream/50 mt-1.5">{cfg.description}</p>
           </div>
 
           {/* Breakdown table */}
-          <div className="bg-white/70 rounded-xl overflow-hidden">
-            <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100">
-              <span className="text-xs text-gray-500">Scale reading</span>
-              <span className="text-xs font-bold text-gray-800">{scaleKg} kg</span>
+          <div className="bg-pens-deep/60 border border-pens-muted/20 rounded-xl overflow-hidden">
+            <div className="flex justify-between items-center px-3 py-2 border-b border-pens-muted/20">
+              <span className="text-xs text-pens-cream/50">Scale reading</span>
+              <span className="text-xs font-bold text-pens-cream">{scaleKg} kg</span>
             </div>
 
             {FACTOR_LABELS.map(({ key, label, emoji }) => {
               const val = breakdown[key] as number
               if (val === 0) return null
               return (
-                <div key={key} className="flex justify-between items-center px-3 py-2 border-b border-gray-100">
-                  <span className="text-xs text-gray-500">{emoji} {label}</span>
-                  <span className="text-xs font-medium text-orange-600">−{val} kg</span>
+                <div key={key} className="flex justify-between items-center px-3 py-2 border-b border-pens-muted/20">
+                  <span className="text-xs text-pens-cream/60">{emoji} {label}</span>
+                  <span className="text-xs font-medium text-pens-gold">−{val} kg</span>
                 </div>
               )
             })}
 
             {!hasAdjustment && (
-              <div className="px-3 py-2 border-b border-gray-100">
-                <span className="text-xs text-gray-400 italic">No active retention factors</span>
+              <div className="px-3 py-2 border-b border-pens-muted/20">
+                <span className="text-xs text-pens-cream/40 italic">No active retention factors</span>
               </div>
             )}
 
-            <div className="flex justify-between items-center px-3 py-2.5 bg-gray-50">
-              <span className="text-xs font-semibold text-gray-700">True weight estimate</span>
-              <span className="text-sm font-bold text-gray-900">{trueWeightKg} kg</span>
+            <div className="flex justify-between items-center px-3 py-2.5 bg-pens-deep">
+              <span className="text-xs font-semibold text-pens-cream/80">True weight estimate</span>
+              <span className="text-sm font-bold text-pens-cream">{trueWeightKg} kg</span>
             </div>
           </div>
 
           {/* Tanita flags */}
           {breakdown.tanitaFlags.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
-                <AlertTriangle size={12} className="text-amber-500" />
+              <p className="text-xs font-medium text-pens-cream/70 flex items-center gap-1.5">
+                <AlertTriangle size={12} className="text-pens-gold" />
                 Scale accuracy notes
               </p>
               <ul className="space-y-1">
                 {breakdown.tanitaFlags.map((flag, i) => (
-                  <li key={i} className="text-xs text-gray-500 flex items-start gap-1.5">
-                    <span className="mt-0.5 shrink-0 text-amber-400">·</span>
+                  <li key={i} className="text-xs text-pens-cream/50 flex items-start gap-1.5">
+                    <span className="mt-0.5 shrink-0 text-pens-gold/70">·</span>
                     {flag}
                   </li>
                 ))}
@@ -173,7 +173,7 @@ export default function WeightExplanationCard({ scaleKg, trueWeightKg, confidenc
             </div>
           )}
 
-          <p className="text-[10px] text-gray-400">
+          <p className="text-[10px] text-pens-cream/30">
             Rule-based model · Estimates based on logged inputs · Not medical advice
           </p>
         </div>

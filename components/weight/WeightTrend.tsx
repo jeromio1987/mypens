@@ -78,7 +78,7 @@ function buildExplanation(e: Entry): { factors: Factor[]; flags: Flag[] } {
       label:  'Creatine retention',
       kg:     e.creatineRetentionKg,
       detail: `${e.creatineDoseG}g/day, ${phase} — intramuscular water binding`,
-      color:  'text-blue-600',
+      color:  'text-pens-cream',
     })
   }
 
@@ -87,7 +87,7 @@ function buildExplanation(e: Entry): { factors: Factor[]; flags: Flag[] } {
       label:  'Alcohol retention',
       kg:     e.alcoholRetentionKg,
       detail: `${e.alcoholUnits} units, ${e.hoursSinceAlcohol}h ago — peaks then reverses via diuresis`,
-      color:  'text-purple-600',
+      color:  'text-pens-gold',
     })
   }
 
@@ -97,7 +97,7 @@ function buildExplanation(e: Entry): { factors: Factor[]; flags: Flag[] } {
       label:  'Glycogen / high-carb',
       kg:     e.glycogenRetentionKg,
       detail: `${e.carbsG}g carbs (excess ${excess}g) — each gram glycogen binds ~3.5g water`,
-      color:  'text-orange-600',
+      color:  'text-pens-gold',
     })
   }
 
@@ -109,7 +109,7 @@ function buildExplanation(e: Entry): { factors: Factor[]; flags: Flag[] } {
       detail: e.highSodium
         ? 'High sodium day — osmotic water binding (~0.3 kg estimated)'
         : 'Restaurant meal — hidden sodium proxy (~0.15 kg estimated)',
-      color:  'text-cyan-600',
+      color:  'text-pens-cream/70',
     })
   }
 
@@ -119,7 +119,7 @@ function buildExplanation(e: Entry): { factors: Factor[]; flags: Flag[] } {
       label:  'Training inflammation',
       kg:     e.hardTrainingKg,
       detail: 'DOMS / micro-damage → transient inflammatory water retention (~0.3 kg)',
-      color:  'text-rose-600',
+      color:  'text-pens-crimson',
     })
   }
 
@@ -281,7 +281,7 @@ function ScaleDot(props: any) {
       </g>
     )
   }
-  return <circle cx={cx} cy={cy} r={3} fill="#6366f1" />
+  return <circle cx={cx} cy={cy} r={3} fill="#F5E6D3" />
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -422,13 +422,13 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
 
           {/* Confidence band — stacked area trick */}
           <Area type="monotone" dataKey="__bandLow"   stackId="band" stroke="none" fill="none"    legendType="none" dot={false} activeDot={false} />
-          <Area type="monotone" dataKey="__bandWidth" stackId="band" stroke="none" fill="#10b981" fillOpacity={0.18} legendType="none" dot={false} activeDot={false} />
+          <Area type="monotone" dataKey="__bandWidth" stackId="band" stroke="none" fill="#C9A84C" fillOpacity={0.18} legendType="none" dot={false} activeDot={false} />
 
           {/* 7-day rolling baseline — gaps where null (< 3 prior entries) */}
           <Line
             type="monotone"
             dataKey="baselineTrendKg"
-            stroke="#94a3b8"
+            stroke="#7B6730"
             strokeWidth={1.5}
             strokeDasharray="5 3"
             dot={false}
@@ -436,32 +436,32 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
           />
 
           {/* Adjusted weight */}
-          <Line type="monotone" dataKey="trueWeightKg" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="trueWeightKg" stroke="#C9A84C" strokeWidth={2} dot={{ r: 3, fill: '#C9A84C' }} />
 
           {/* Scale weight — custom dot highlights outliers in red */}
-          <Line type="monotone" dataKey="scaleKg" stroke="#6366f1" strokeWidth={2} dot={<ScaleDot />} />
+          <Line type="monotone" dataKey="scaleKg" stroke="#F5E6D3" strokeWidth={2} dot={<ScaleDot />} />
 
           {/* Retention delta */}
-          <Line type="monotone" dataKey="retention" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+          <Line type="monotone" dataKey="retention" stroke="#8B1E1E" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
 
       {/* Manual legend */}
       <div className="flex flex-wrap gap-4 mt-2 mb-5 text-xs text-pens-cream/50 justify-center">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-0.5 bg-indigo-500 rounded" />Scale
+          <span className="inline-block w-4 h-0.5 rounded" style={{ background: '#F5E6D3' }} />Scale
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-0.5 bg-emerald-500 rounded" />Adjusted
+          <span className="inline-block w-4 h-0.5 rounded" style={{ background: '#C9A84C' }} />Adjusted
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-0.5 bg-slate-400 rounded" style={{ borderTop: '2px dashed #94a3b8' }} />Baseline
+          <span className="inline-block w-4 h-0.5 rounded" style={{ borderTop: '2px dashed #7B6730' }} />Baseline
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-0.5 bg-amber-400 rounded" style={{ borderTop: '2px dashed #f59e0b' }} />Retention
+          <span className="inline-block w-4 h-0.5 rounded" style={{ borderTop: '2px dashed #8B1E1E' }} />Retention
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-2.5 rounded bg-emerald-200 opacity-70" />Uncertainty band
+          <span className="inline-block w-4 h-2.5 rounded" style={{ background: '#C9A84C', opacity: 0.3 }} />Uncertainty band
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded-full bg-red-400 opacity-80" />Outlier
@@ -524,7 +524,7 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
                     </div>
                     <div className="flex gap-2 justify-end">
                       <button onClick={cancelEdit} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-pens-muted/40 text-pens-cream/50 hover:text-pens-cream"><X size={12} /> Cancel</button>
-                      <button onClick={() => saveEdit(e.id)} disabled={saving} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"><Check size={12} /> Save &amp; recalculate</button>
+                      <button onClick={() => saveEdit(e.id)} disabled={saving} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-pens-crimson text-pens-cream hover:bg-pens-crimson/80 disabled:opacity-50"><Check size={12} /> Save &amp; recalculate</button>
                     </div>
                   </div>
                 ) : (
