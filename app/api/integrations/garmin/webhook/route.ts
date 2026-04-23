@@ -20,8 +20,9 @@ import type { GarminActivity } from '@/lib/integrations/garmin/api'
  *
  * Auth: Garmin does not sign payloads, but every notification includes the
  * `userId` for the originating Garmin user. We reject anything that doesn't
- * match the `garminUserId` stored on our connection row to prevent a random
- * caller from triggering imports.
+ * carry a `userId` matching the `garminUserId` stored on our connection row.
+ * Missing `userId` is treated as foreign — we never trust unauthenticated
+ * activity items, even if the connection has a stored `garminUserId`.
  */
 
 interface PingActivityRef {
@@ -80,10 +81,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ignored: 'no activities' })
   }
 
-  // Drop anything for a different Garmin user.
-  const ours = conn.garminUserId
-    ? activities.filter(a => !a.userId || a.userId === conn.garminUserId)
-    : activities
+  // Drop anything for a different Garmin user. Without a stored garminUserId
+  // we cannot authenticate any item, so we ignore the entire payload. With
+  // one, we require an exact match — items missing `userId` are treated as
+  // foreign to prevent unauthenticated injection.
+  if (!conn.garminUserId) {
+    return NextResponse.json({ ok: true, ignored: 'no garmin userId on connection' })
+  }
+  const ours = activities.filter(a => a.userId === conn.garminUserId)
 
   if (ours.length === 0) {
     return NextResponse.json({ ok: true, ignored: 'foreign user' })
