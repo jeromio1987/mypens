@@ -1,0 +1,326 @@
+{
+  "Welcome & Onboarding": [
+    {
+      "slug": "mode-selection-entry",
+      "title": "Mode selection entry"
+    },
+    {
+      "slug": "mode-selection-refined",
+      "title": "Mode selection refined"
+    },
+    {
+      "slug": "the-continental-p-e-n-s-welcome",
+      "title": "The continental P.E.N.S. welcome"
+    },
+    {
+      "slug": "the-initial-audit-onboarding",
+      "title": "The initial audit onboarding"
+    },
+    {
+      "slug": "the-mortality-mirror-onboarding",
+      "title": "The mortality mirror onboarding"
+    },
+    {
+      "slug": "the-raw-truth-welcome-1",
+      "title": "The raw truth welcome 1"
+    },
+    {
+      "slug": "the-raw-truth-welcome-2",
+      "title": "The raw truth welcome 2"
+    },
+    {
+      "slug": "the-reckoning-welcome-1",
+      "title": "The reckoning welcome 1"
+    },
+    {
+      "slug": "the-reckoning-welcome-2",
+      "title": "The reckoning welcome 2"
+    },
+    {
+      "slug": "welcome-to-my-pens",
+      "title": "Welcome to my pens"
+    },
+    {
+      "slug": "welcome-to-my-pens-v2",
+      "title": "Welcome to my pens v2"
+    },
+    {
+      "slug": "welcome-to-p-e-n-s",
+      "title": "Welcome to P.E.N.S."
+    },
+    {
+      "slug": "welcome-to-p-e-n-s-continental",
+      "title": "Welcome to P.E.N.S. continental"
+    },
+    {
+      "slug": "welcome-to-p-e-n-s-raw",
+      "title": "Welcome to P.E.N.S. raw"
+    }
+  ],
+  "Dashboard": [
+    {
+      "slug": "member-dashboard",
+      "title": "Member dashboard"
+    },
+    {
+      "slug": "member-dashboard-raw",
+      "title": "Member dashboard raw"
+    },
+    {
+      "slug": "member-dashboard-refined",
+      "title": "Member dashboard refined"
+    },
+    {
+      "slug": "my-dashboard",
+      "title": "My dashboard"
+    },
+    {
+      "slug": "my-dashboard-v2",
+      "title": "My dashboard v2"
+    },
+    {
+      "slug": "p-e-n-s-dashboard",
+      "title": "P.E.N.S. dashboard"
+    },
+    {
+      "slug": "the-auditor-s-ledger-dashboard",
+      "title": "The auditor s ledger dashboard"
+    }
+  ],
+  "Weight & Body": [
+    {
+      "slug": "body-measurements",
+      "title": "Body measurements"
+    },
+    {
+      "slug": "the-anatomical-baseline",
+      "title": "The anatomical baseline"
+    },
+    {
+      "slug": "the-gravity-reckoning-weight",
+      "title": "The gravity reckoning weight"
+    },
+    {
+      "slug": "the-raw-waistline-audit",
+      "title": "The raw waistline audit"
+    },
+    {
+      "slug": "the-waistline-audit",
+      "title": "The waistline audit"
+    },
+    {
+      "slug": "weight-tracker",
+      "title": "Weight tracker"
+    }
+  ],
+  "Sleep": [
+    {
+      "slug": "cognitive-synapse-audit-sleep",
+      "title": "Cognitive synapse audit sleep"
+    },
+    {
+      "slug": "sleep-audit",
+      "title": "Sleep audit"
+    },
+    {
+      "slug": "the-nightly-ledger-sleep",
+      "title": "The nightly ledger sleep"
+    },
+    {
+      "slug": "the-nightly-reckoning-sleep-1",
+      "title": "The nightly reckoning sleep 1"
+    },
+    {
+      "slug": "the-nightly-reckoning-sleep-2",
+      "title": "The nightly reckoning sleep 2"
+    },
+    {
+      "slug": "the-synaptic-misfire-sleep",
+      "title": "The synaptic misfire sleep"
+    }
+  ],
+  "Performance & Training": [
+    {
+      "slug": "performance-ledger-drill-down-1",
+      "title": "Performance ledger drill down 1"
+    },
+    {
+      "slug": "performance-ledger-drill-down-2",
+      "title": "Performance ledger drill down 2"
+    },
+    {
+      "slug": "structural-integrity-performance",
+      "title": "Structural integrity performance"
+    },
+    {
+      "slug": "the-exertion-audit-performance",
+      "title": "The exertion audit performance"
+    },
+    {
+      "slug": "the-mechanical-debt-performance",
+      "title": "The mechanical debt performance"
+    },
+    {
+      "slug": "training-log",
+      "title": "Training log"
+    },
+    {
+      "slug": "workout-logger",
+      "title": "Workout logger"
+    }
+  ],
+  "Nutrition & Food": [
+    {
+      "slug": "discipline-ledger-nutrition",
+      "title": "Discipline ledger nutrition"
+    },
+    {
+      "slug": "food-log",
+      "title": "Food log"
+    },
+    {
+      "slug": "inventory-of-intake-nutrition",
+      "title": "Inventory of intake nutrition"
+    },
+    {
+      "slug": "metabolic-audit-drill-down",
+      "title": "Metabolic audit drill down"
+    },
+    {
+      "slug": "the-discipline-breakdown-nutrition",
+      "title": "The discipline breakdown nutrition"
+    },
+    {
+      "slug": "the-insulin-ledger-nutrition",
+      "title": "The insulin ledger nutrition"
+    },
+    {
+      "slug": "the-metabolic-deficit-audit",
+      "title": "The metabolic deficit audit"
+    },
+    {
+      "slug": "the-metabolic-truth-insight",
+      "title": "The metabolic truth insight"
+    },
+    {
+      "slug": "the-sediment-audit-nutrition",
+      "title": "The sediment audit nutrition"
+    }
+  ],
+  "Alcohol": [
+    {
+      "slug": "damage-audit-the-verdict",
+      "title": "Damage audit the verdict"
+    },
+    {
+      "slug": "discipline-ledger-alcohol",
+      "title": "Discipline ledger alcohol"
+    },
+    {
+      "slug": "discipline-ledger-alcohol-raw",
+      "title": "Discipline ledger alcohol raw"
+    },
+    {
+      "slug": "the-ethanol-tax-audit",
+      "title": "The ethanol tax audit"
+    },
+    {
+      "slug": "the-hangover-invoice-audit-1",
+      "title": "The hangover invoice audit 1"
+    },
+    {
+      "slug": "the-liquid-liability-alcohol",
+      "title": "The liquid liability alcohol"
+    }
+  ],
+  "Clubroom & Weekly": [
+    {
+      "slug": "community-feed",
+      "title": "Community feed"
+    },
+    {
+      "slug": "the-auditor-s-verdict-weekly",
+      "title": "The auditor s verdict weekly"
+    },
+    {
+      "slug": "the-biological-overdraft-weekly",
+      "title": "The biological overdraft weekly"
+    },
+    {
+      "slug": "the-clubroom-feed-v2",
+      "title": "The clubroom feed v2"
+    },
+    {
+      "slug": "the-weekly-card-clubroom-1",
+      "title": "The weekly card clubroom 1"
+    },
+    {
+      "slug": "the-weekly-card-clubroom-2",
+      "title": "The weekly card clubroom 2"
+    },
+    {
+      "slug": "the-weekly-reckoning-clubroom",
+      "title": "The weekly reckoning clubroom"
+    }
+  ],
+  "Verdict & Reckoning": [
+    {
+      "slug": "emergency-reconciliation",
+      "title": "Emergency reconciliation"
+    },
+    {
+      "slug": "systemic-reconciliation-protocol",
+      "title": "Systemic reconciliation protocol"
+    },
+    {
+      "slug": "the-systemic-surrender-protocol",
+      "title": "The systemic surrender protocol"
+    }
+  ],
+  "Logger": [
+    {
+      "slug": "p-e-n-s-logger-editorial",
+      "title": "P.E.N.S. logger editorial"
+    },
+    {
+      "slug": "p-e-n-s-logger-v2",
+      "title": "P.E.N.S. logger v2"
+    }
+  ],
+  "Profile & Vault": [
+    {
+      "slug": "context-tags-refined",
+      "title": "Context tags refined"
+    },
+    {
+      "slug": "member-profile-settings",
+      "title": "Member profile settings"
+    },
+    {
+      "slug": "p-e-n-s-archive-vault",
+      "title": "P.E.N.S. archive vault"
+    },
+    {
+      "slug": "the-cortisol-ledger-stress",
+      "title": "The cortisol ledger stress"
+    }
+  ],
+  "Other": [
+    {
+      "slug": "recovery-protocols",
+      "title": "Recovery protocols"
+    },
+    {
+      "slug": "stitch-mcp-setup-guide",
+      "title": "Stitch mcp setup guide"
+    },
+    {
+      "slug": "the-raw-truth-v2-1",
+      "title": "The raw truth v2 1"
+    },
+    {
+      "slug": "the-raw-truth-v2-2",
+      "title": "The raw truth v2 2"
+    }
+  ]
+}

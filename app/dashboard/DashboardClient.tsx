@@ -6,7 +6,7 @@ import {
   ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Scale,
   Moon, Dumbbell, Ruler, DatabaseBackup,
   Plane, Thermometer, Palmtree, Salad, Trophy, Tag,
-  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Map, Target, Sparkles,
+  CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Map, Target, Sparkles, Image as ImageIcon,
 } from 'lucide-react'
 import type { StructuredInsight } from '@/app/api/dashboard/route'
 import GoalsPanel from '@/components/goals/GoalsPanel'
@@ -190,6 +190,13 @@ export default function DashboardClient() {
           >
             <Map size={13} />
             Roadmap
+          </Link>
+          <Link
+            href="/mockups"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-pens-cream/60 transition-colors border border-pens-muted/30"
+          >
+            <ImageIcon size={13} />
+            Mockups
           </Link>
           <button
             onClick={() => setShowGoals(true)}
