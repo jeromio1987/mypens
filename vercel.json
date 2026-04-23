@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/cleanup-skipped-tombstones",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/check-stale-pairings",
+      "schedule": "0 14 * * *"
     }
   ]
 }
