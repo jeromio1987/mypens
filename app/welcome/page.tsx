@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { Edit3, ArrowRight } from 'lucide-react'
 
 const PILLARS = [
@@ -18,23 +19,31 @@ export default function WelcomePage() {
       <div className="flex flex-col md:flex-row min-h-screen relative">
         {/* Left: imagery / pillars */}
         <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 md:p-16 space-y-12 bg-pens-navy/30">
-          {/* Mascot frame — gradient placeholder */}
-          <div className="relative w-full max-w-md aspect-square rounded-xl overflow-hidden flex items-center justify-center
+          {/* Mascot frame — editorial portrait */}
+          <div className="relative w-full max-w-md aspect-square rounded-xl overflow-hidden flex items-end justify-center
                           bg-gradient-to-br from-pens-surface to-pens-navy
                           shadow-[0_32px_64px_rgba(0,0,0,0.4)] border border-pens-muted/20">
-            <div className="text-center px-8">
-              <p className="font-[family-name:var(--font-headline)] italic text-pens-cream/30 text-sm uppercase tracking-[0.3em] mb-4">
+            <Image
+              src="/illustrations/editorial-portrait.png"
+              alt="The Member — editorial portrait"
+              fill
+              priority
+              sizes="(max-width: 768px) 100vw, 40vw"
+              className="object-cover object-[center_25%] grayscale-[25%] contrast-110"
+            />
+            {/* Top vignette to keep it readable on light highlights */}
+            <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-pens-deep/60 to-transparent pointer-events-none" />
+            {/* Bottom plate w/ caption */}
+            <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-pens-deep via-pens-deep/90 to-transparent pointer-events-none" />
+            <div className="relative z-10 text-center px-8 pb-6">
+              <p className="font-[family-name:var(--font-headline)] italic text-pens-cream/40 text-[10px] uppercase tracking-[0.3em] mb-2">
                 The Continental
               </p>
-              <p className="font-[family-name:var(--font-headline)] text-pens-cream/90 text-7xl font-extrabold italic leading-none">
-                MY<br />PENS
+              <p className="font-[family-name:var(--font-headline)] text-pens-cream text-5xl font-extrabold italic leading-none">
+                MY PENS
               </p>
-              <div className="h-px w-24 bg-pens-crimson mx-auto mt-6" />
-              <p className="text-pens-cream/40 text-xs mt-4 italic">
-                Performance · Endurance · Nutrition · Sleep
-              </p>
+              <div className="h-px w-16 bg-pens-crimson mx-auto mt-3" />
             </div>
-            <div className="absolute bottom-0 left-0 w-full h-1/3 bg-gradient-to-t from-pens-deep/60 to-transparent pointer-events-none" />
           </div>
 
           {/* PENS pillars bento */}

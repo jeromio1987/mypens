@@ -398,13 +398,13 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
     : 'bg-emerald-600 hover:bg-emerald-700'
 
   return (
-    <div className="bg-white rounded-2xl shadow p-6 space-y-4">
+    <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 space-y-4">
       {banner && (
         <div
           className={`text-sm rounded-lg px-3 py-2 border ${
             banner.kind === 'ok'
-              ? 'bg-green-50 border-green-200 text-green-700'
-              : 'bg-red-50 border-red-200 text-red-700'
+              ? 'bg-emerald-900/20 border-emerald-500/30 text-emerald-300'
+              : 'bg-pens-crimson/15 border-pens-crimson/40 text-red-300'
           }`}
         >
           {banner.msg}
@@ -417,25 +417,25 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
             <span className={`inline-flex items-center justify-center w-7 h-7 rounded-md text-white text-xs font-bold ${provider.color}`}>
               {provider.initial}
             </span>
-            <h2 className="text-lg font-semibold">{provider.name}</h2>
+            <h2 className="text-lg font-semibold text-pens-cream">{provider.name}</h2>
           </div>
-          <p className="text-sm text-gray-500 mt-1">{provider.description}</p>
+          <p className="text-sm text-pens-cream/50 mt-1">{provider.description}</p>
         </div>
-        <div className="text-right text-xs text-gray-400">
+        <div className="text-right text-xs text-pens-cream/50">
           {loadingStatus ? (
             'Loading…'
           ) : !status?.configured ? (
-            <span className="text-amber-600">Not configured</span>
+            <span className="text-amber-400">Not configured</span>
           ) : status.connected ? (
             <>
-              <div className="text-green-600 font-medium">Connected</div>
+              <div className="text-emerald-400 font-medium">Connected</div>
               {status.athleteId && <div>Athlete #{status.athleteId}</div>}
               {status.deviceLabel && <div>{status.deviceLabel}</div>}
               {typeof status.pendingCount === 'number' && (
                 <div>{status.pendingCount} pending</div>
               )}
               {provider.id === 'strava' && (
-                <div className={status.webhookActive ? 'text-green-600' : 'text-gray-400'}>
+                <div className={status.webhookActive ? 'text-emerald-400' : 'text-pens-cream/40'}>
                   Webhook: {status.webhookActive ? 'active' : 'inactive'}
                 </div>
               )}
@@ -443,7 +443,7 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                 <div>Last sync: {new Date(status.lastSyncAt).toLocaleString()}</div>
               )}
               {provider.authMode === 'pairing' && (
-                <div className={status.stale ? 'text-amber-600 font-medium' : ''}>
+                <div className={status.stale ? 'text-amber-400 font-medium' : ''}>
                   Phone:{' '}
                   {status.hoursSinceLastIngest == null
                     ? 'never checked in'
@@ -471,14 +471,14 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
               <button
                 onClick={issuePairing}
                 disabled={issuingToken}
-                className="text-sm px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
+                className="text-sm px-4 py-2 rounded-lg border border-pens-muted/30 hover:bg-pens-navy/40 text-pens-cream/70"
               >
                 {issuingToken ? 'Rotating…' : 'Rotate token'}
               </button>
             )}
             <button
               onClick={disconnect}
-              className="text-sm px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
+              className="text-sm px-4 py-2 rounded-lg border border-pens-muted/30 hover:bg-pens-navy/40 text-pens-cream/70"
             >
               Disconnect
             </button>
@@ -487,7 +487,7 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
           <a
             href={`${base}/authorize`}
             className={`text-sm px-4 py-2 rounded-lg font-medium text-white ${
-              status?.configured ? accentBtn : 'bg-gray-300 pointer-events-none'
+              status?.configured ? accentBtn : 'bg-pens-muted/40 pointer-events-none'
             }`}
           >
             Connect {provider.name}
@@ -504,7 +504,7 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
       </div>
 
       {status?.connected && provider.authMode === 'pairing' && status.stale && (
-        <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">
+        <div className="text-xs bg-amber-900/20 border border-amber-500/30 text-amber-200 rounded-lg px-3 py-2">
           <span className="font-medium">
             Your {provider.name === 'Apple Health' ? 'iPhone' : 'phone'} hasn&apos;t checked in
             {status.hoursSinceLastIngest != null
@@ -514,7 +514,7 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
           </span>{' '}
           Open the companion app to re-grant background access.
           {typeof status.staleThresholdHours === 'number' && (
-            <span className="text-amber-600">
+            <span className="text-amber-400">
               {' '}· threshold {status.staleThresholdHours}h
             </span>
           )}
@@ -522,64 +522,64 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
       )}
 
       {status?.connected && status.lastError && (
-        <div className="text-xs bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2">
+        <div className="text-xs bg-pens-crimson/15 border border-pens-crimson/40 text-red-300 rounded-lg px-3 py-2">
           <span className="font-medium">Last sync error:</span> {status.lastError}
           {status.lastErrorAt && (
-            <span className="text-red-500"> · {new Date(status.lastErrorAt).toLocaleString()}</span>
+            <span className="text-red-400"> · {new Date(status.lastErrorAt).toLocaleString()}</span>
           )}
         </div>
       )}
 
       {!status?.configured && !loadingStatus && provider.authMode === 'oauth' && (
-        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          Set <code>{provider.envHint}</code> environment variables to enable {provider.name}.
+        <p className="text-xs text-amber-200 bg-amber-900/20 border border-amber-500/30 rounded-lg px-3 py-2">
+          Set <code className="bg-pens-navy/60 px-1 rounded">{provider.envHint}</code> environment variables to enable {provider.name}.
         </p>
       )}
 
       {pairingToken && (
-        <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
-          <div className="font-medium text-amber-800">Pairing token (save this now — shown once)</div>
-          <code className="block break-all bg-white border border-amber-100 rounded px-2 py-1 text-amber-900">
+        <div className="text-xs bg-amber-900/20 border border-amber-500/30 rounded-lg px-3 py-2 space-y-1">
+          <div className="font-medium text-amber-200">Pairing token (save this now — shown once)</div>
+          <code className="block break-all bg-pens-deep/80 border border-amber-500/20 rounded px-2 py-1 text-amber-100">
             {pairingToken}
           </code>
           {provider.pairingInstructions && (
-            <p className="text-amber-700">{provider.pairingInstructions}</p>
+            <p className="text-amber-300/80">{provider.pairingInstructions}</p>
           )}
         </div>
       )}
 
       {status?.connected && (
-        <div className="space-y-3 pt-2 border-t border-gray-100">
+        <div className="space-y-3 pt-2 border-t border-pens-muted/20">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-sm">Review pending activities</h3>
-            <span className="text-xs text-gray-400">
+            <h3 className="font-semibold text-sm text-pens-cream">Review pending activities</h3>
+            <span className="text-xs text-pens-cream/40">
               {drafts.length} found · {drafts.filter(d => !d.alreadyImported).length} new
             </span>
           </div>
 
           {activitiesError && (
-            <div className="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2">
+            <div className="text-sm bg-pens-crimson/15 border border-pens-crimson/40 text-red-300 rounded-lg px-3 py-2">
               {activitiesError}
             </div>
           )}
 
           {flash && (
-            <div className="text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2">
+            <div className="text-sm bg-emerald-900/20 border border-emerald-500/30 text-emerald-300 rounded-lg px-3 py-2">
               {flash}
             </div>
           )}
 
           {loadingActivities ? (
-            <p className="text-sm text-gray-400">Loading activities…</p>
+            <p className="text-sm text-pens-cream/40">Loading activities…</p>
           ) : drafts.length === 0 ? (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-pens-cream/40">
               {provider.authMode === 'pairing'
                 ? 'No workouts pushed yet from the companion app.'
                 : 'No activities found in the recent window.'}
             </p>
           ) : (
             <>
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-pens-muted/10">
                 {drafts.map(d => {
                   const editedExercise = edits[d.externalId]?.exercise ?? d.exercise
                   const editedNotes = edits[d.externalId]?.notes ?? d.notes
@@ -591,13 +591,13 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                         checked={isSelected}
                         disabled={d.alreadyImported}
                         onChange={() => toggle(d.externalId)}
-                        className="mt-1.5"
+                        className="mt-1.5 accent-pens-crimson"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs text-gray-400 tabular-nums">{d.date}</span>
+                          <span className="text-xs text-pens-cream/50 tabular-nums">{d.date}</span>
                           {d.alreadyImported && (
-                            <span className="text-[10px] uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
+                            <span className="text-[10px] uppercase tracking-wide text-pens-cream/50 bg-pens-navy/60 rounded px-1.5 py-0.5">
                               Already imported
                             </span>
                           )}
@@ -606,7 +606,7 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                               href={d.externalUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-[10px] text-gray-500 hover:text-gray-700"
+                              className="text-[10px] text-pens-cream/50 hover:text-pens-cream"
                             >
                               {provider.externalLinkLabel}
                             </a>
@@ -616,20 +616,20 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                           value={editedExercise}
                           disabled={d.alreadyImported}
                           onChange={e => setEdit(d.externalId, 'exercise', e.target.value)}
-                          className="mt-1 w-full text-sm font-medium border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 py-0.5 disabled:bg-transparent disabled:text-gray-400"
+                          className="mt-1 w-full text-sm font-medium bg-transparent text-pens-cream border border-transparent hover:border-pens-muted/30 focus:border-pens-muted/50 focus:outline-none rounded px-1 py-0.5 disabled:bg-transparent disabled:text-pens-cream/40"
                         />
                         <input
                           value={editedNotes}
                           disabled={d.alreadyImported}
                           onChange={e => setEdit(d.externalId, 'notes', e.target.value)}
                           placeholder="Notes"
-                          className="mt-0.5 w-full text-xs text-gray-500 border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 py-0.5 disabled:bg-transparent"
+                          className="mt-0.5 w-full text-xs bg-transparent text-pens-cream/60 placeholder:text-pens-cream/30 border border-transparent hover:border-pens-muted/30 focus:border-pens-muted/50 focus:outline-none rounded px-1 py-0.5 disabled:bg-transparent"
                         />
                       </div>
                       {!d.alreadyImported && (
                         <button
                           onClick={() => skipDraft(d.externalId)}
-                          className="text-xs text-gray-400 hover:text-red-600 px-1.5 py-0.5"
+                          className="text-xs text-pens-cream/40 hover:text-red-400 px-1.5 py-0.5"
                           title="Discard this pushed workout"
                         >
                           Skip
@@ -640,13 +640,13 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                 })}
               </ul>
 
-              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                <span className="text-xs text-gray-400">{selected.size} selected</span>
+              <div className="flex items-center justify-between pt-2 border-t border-pens-muted/20">
+                <span className="text-xs text-pens-cream/40">{selected.size} selected</span>
                 <div className="flex items-center gap-2">
                   {drafts.some(d => !d.alreadyImported && !selected.has(d.externalId)) && (
                     <button
                       onClick={clearUnselected}
-                      className="text-sm px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
+                      className="text-sm px-3 py-2 rounded-lg border border-pens-muted/30 hover:bg-pens-navy/40 text-pens-cream/70"
                     >
                       Clear unselected
                     </button>
@@ -666,18 +666,19 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
       )}
 
       {status?.connected && provider.authMode === 'pairing' && (
-        <div className="space-y-3 pt-2 border-t border-gray-100">
+        <div className="space-y-3 pt-2 border-t border-pens-muted/20">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-sm">Skipped workouts</h3>
-            <label className="text-xs text-gray-500 flex items-center gap-1.5">
+            <h3 className="font-semibold text-sm text-pens-cream">Skipped workouts</h3>
+            <label className="text-xs text-pens-cream/60 flex items-center gap-1.5">
               <input
                 type="checkbox"
                 checked={showSkipped}
                 onChange={e => setShowSkipped(e.target.checked)}
+                className="accent-pens-crimson"
               />
               Show skipped
               {showSkipped && (
-                <span className="text-gray-400">· {skipped.length}</span>
+                <span className="text-pens-cream/40">· {skipped.length}</span>
               )}
             </label>
           </div>
@@ -685,20 +686,20 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
           {showSkipped && (
             <>
               {skippedError && (
-                <div className="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2">
+                <div className="text-sm bg-pens-crimson/15 border border-pens-crimson/40 text-red-300 rounded-lg px-3 py-2">
                   {skippedError}
                 </div>
               )}
               {loadingSkipped ? (
-                <p className="text-sm text-gray-400">Loading skipped…</p>
+                <p className="text-sm text-pens-cream/40">Loading skipped…</p>
               ) : skipped.length === 0 ? (
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-pens-cream/40">
                   Nothing skipped yet. Discarded workouts will appear here so you can put them back.
                 </p>
               ) : (
                 <>
                   <div className="flex items-center justify-between text-xs">
-                    <label className="flex items-center gap-1.5 text-gray-500">
+                    <label className="flex items-center gap-1.5 text-pens-cream/60">
                       <input
                         type="checkbox"
                         checked={skippedSelected.size === skipped.length && skipped.length > 0}
@@ -709,10 +710,11 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                           }
                         }}
                         onChange={toggleSkippedAll}
+                        className="accent-pens-crimson"
                       />
                       Select all
                     </label>
-                    <span className="text-gray-400">{skippedSelected.size} selected</span>
+                    <span className="text-pens-cream/40">{skippedSelected.size} selected</span>
                   </div>
 
                   {(() => {
@@ -735,23 +737,23 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                           const anyBusy = ids.some(id => unskipping.has(id))
                           return (
                             <div key={dateKey}>
-                              <div className="flex items-center justify-between pb-1 border-b border-gray-100">
-                                <span className="text-xs font-semibold text-gray-500 tabular-nums">
+                              <div className="flex items-center justify-between pb-1 border-b border-pens-muted/10">
+                                <span className="text-xs font-semibold text-pens-cream/60 tabular-nums">
                                   {dateKey === '—' ? 'Undated' : dateKey}
-                                  <span className="ml-2 text-gray-400 font-normal">
+                                  <span className="ml-2 text-pens-cream/40 font-normal">
                                     ({items.length})
                                   </span>
                                 </span>
                                 <button
                                   onClick={() => unskipMany(ids)}
                                   disabled={anyBusy}
-                                  className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
+                                  className="text-xs px-2 py-1 rounded border border-pens-muted/30 hover:bg-pens-navy/40 text-pens-cream/70 disabled:opacity-50"
                                   title="Un-skip every workout from this day"
                                 >
                                   Un-skip all from this day
                                 </button>
                               </div>
-                              <ul className="divide-y divide-gray-100">
+                              <ul className="divide-y divide-pens-muted/10">
                                 {items.map(s => {
                                   const busy = unskipping.has(s.externalId)
                                   const isSelected = skippedSelected.has(s.externalId)
@@ -761,31 +763,31 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                                         type="checkbox"
                                         checked={isSelected}
                                         onChange={() => toggleSkipped(s.externalId)}
-                                        className="mt-1.5"
+                                        className="mt-1.5 accent-pens-crimson"
                                       />
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="text-[10px] uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
+                                          <span className="text-[10px] uppercase tracking-wide text-pens-cream/50 bg-pens-navy/60 rounded px-1.5 py-0.5">
                                             {provider.name}
                                           </span>
-                                          <span className="text-[10px] text-gray-400">
+                                          <span className="text-[10px] text-pens-cream/40">
                                             skipped {new Date(s.skippedAt).toLocaleDateString()}
                                           </span>
                                         </div>
-                                        <div className="mt-1 text-sm font-medium text-gray-700 truncate">
-                                          {s.exercise ?? <span className="text-gray-400 italic">unknown workout</span>}
+                                        <div className="mt-1 text-sm font-medium text-pens-cream/80 truncate">
+                                          {s.exercise ?? <span className="text-pens-cream/40 italic">unknown workout</span>}
                                         </div>
                                         {s.notes && (
-                                          <div className="mt-0.5 text-xs text-gray-500 truncate">{s.notes}</div>
+                                          <div className="mt-0.5 text-xs text-pens-cream/50 truncate">{s.notes}</div>
                                         )}
-                                        <div className="mt-0.5 text-[10px] text-gray-300 truncate" title={s.externalId}>
+                                        <div className="mt-0.5 text-[10px] text-pens-cream/30 truncate" title={s.externalId}>
                                           {s.externalId}
                                         </div>
                                       </div>
                                       <button
                                         onClick={() => unskipOne(s.externalId)}
                                         disabled={busy}
-                                        className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
+                                        className="text-xs px-2 py-1 rounded border border-pens-muted/30 hover:bg-pens-navy/40 text-pens-cream/70 disabled:opacity-50"
                                         title="Remove the tombstone so the next companion sync re-ingests this workout"
                                       >
                                         {busy ? 'Un-skipping…' : 'Un-skip'}
@@ -801,7 +803,7 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
                     )
                   })()}
 
-                  <div className="flex items-center justify-end pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-end pt-2 border-t border-pens-muted/10">
                     <button
                       onClick={() => {
                         setFlash(null)
@@ -837,18 +839,19 @@ function IntegrationsInner() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8">
+    <main className="min-h-screen bg-pens-deep px-4 py-8">
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
-          <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← MY PENS</Link>
-          <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Integrations</h1>
-          <p className="text-sm text-gray-400">Connect external sources to MY PENS.</p>
+          <Link href="/" className="text-xs text-pens-cream/40 hover:text-pens-cream/70">← MY PENS</Link>
+          <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold mt-2">P.E.N.S.</p>
+          <h1 className="text-2xl font-bold text-pens-cream mt-0.5">Integrations</h1>
+          <p className="text-sm text-pens-cream/40">Connect external sources to MY PENS.</p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 flex items-center justify-between gap-3 text-sm">
+        <div className="rounded-2xl border border-pens-muted/20 bg-pens-surface/60 p-4 flex items-center justify-between gap-3 text-sm">
           <div>
-            <p className="font-medium text-gray-800">Garmin historical archive</p>
-            <p className="text-xs text-gray-500">Bulk-import years of <code>.fit</code> files (separate from the live OAuth sync below).</p>
+            <p className="font-medium text-pens-cream">Garmin historical archive</p>
+            <p className="text-xs text-pens-cream/50">Bulk-import years of <code className="bg-pens-navy/60 px-1 rounded text-pens-cream/70">.fit</code> files (separate from the live OAuth sync below).</p>
           </div>
           <Link href="/garmin" className="px-3 py-2 rounded-lg bg-sky-600 text-white text-xs font-medium hover:bg-sky-700">Open archive →</Link>
         </div>
@@ -863,7 +866,7 @@ function IntegrationsInner() {
 
 export default function IntegrationsPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading…</div>}>
+    <Suspense fallback={<div className="p-8 text-sm text-pens-cream/40 bg-pens-deep min-h-screen">Loading…</div>}>
       <IntegrationsInner />
     </Suspense>
   )

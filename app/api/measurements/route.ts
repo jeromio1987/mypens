@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
+/** Only accept photo paths produced by our own upload route. */
+function sanitisePhotoPath(raw: unknown): string | null {
+  if (raw == null || raw === '') return null
+  if (typeof raw !== 'string') return null
+  // Must be the exact public prefix, no traversal, no protocol.
+  if (!/^\/uploads\/measurements\/[A-Za-z0-9._-]+\.(jpg|jpeg|png|webp|heic)$/.test(raw)) return null
+  return raw
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()
@@ -15,11 +24,16 @@ export async function POST(request: Request) {
       rightThighCm,
       neckCm,
       notes,
+      photoPath,
     } = body
 
     if (!date) return NextResponse.json({ error: 'date is required' }, { status: 400 })
 
     const toFloat = (v: unknown) => (v !== undefined && v !== '' && v !== null ? parseFloat(String(v)) : null)
+    const cleanPhoto = sanitisePhotoPath(photoPath)
+    if (photoPath != null && photoPath !== '' && cleanPhoto === null) {
+      return NextResponse.json({ error: 'invalid photoPath' }, { status: 400 })
+    }
 
     const entry = await prisma.bodyMeasurement.upsert({
       where: { date },
@@ -34,6 +48,7 @@ export async function POST(request: Request) {
         rightThighCm: toFloat(rightThighCm),
         neckCm: toFloat(neckCm),
         notes: notes || null,
+        photoPath: cleanPhoto,
       },
       update: {
         waistCm: toFloat(waistCm),
@@ -45,6 +60,7 @@ export async function POST(request: Request) {
         rightThighCm: toFloat(rightThighCm),
         neckCm: toFloat(neckCm),
         notes: notes || null,
+        ...(photoPath !== undefined && { photoPath: cleanPhoto }),
       },
     })
 
@@ -85,6 +101,7 @@ export async function PATCH(request: Request) {
         ...(fields.rightThighCm !== undefined && { rightThighCm: toFloat(fields.rightThighCm) ?? null }),
         ...(fields.neckCm       !== undefined && { neckCm:       toFloat(fields.neckCm)       ?? null }),
         ...(fields.notes        !== undefined && { notes: fields.notes || null }),
+        ...(fields.photoPath    !== undefined && { photoPath: sanitisePhotoPath(fields.photoPath) }),
       },
     })
     return NextResponse.json(entry)

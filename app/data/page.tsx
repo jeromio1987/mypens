@@ -11,11 +11,11 @@ import {
 interface ImportResult { module: string; inserted: number; skipped: number; total: number }
 
 const MODULES = [
-  { value: 'weight',       label: 'Weight',       icon: Scale,           color: 'text-blue-600',    bg: 'bg-blue-50',    border: 'border-blue-200',    desc: 'date, scaleKg, trueWeightKg, creatineDoseG, alcoholUnits, carbsG, hardTraining…' },
-  { value: 'food',         label: 'Food',         icon: UtensilsCrossed, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', desc: 'date, meal, name, kcal, proteinG, carbsG, fatG, fiberG, notes' },
-  { value: 'sleep',        label: 'Sleep',        icon: Moon,            color: 'text-violet-600',  bg: 'bg-violet-50',  border: 'border-violet-200',  desc: 'date, bedtime, wakeTime, hours, quality, hrv, notes' },
-  { value: 'training',     label: 'Training',     icon: Dumbbell,        color: 'text-orange-500',  bg: 'bg-orange-50',  border: 'border-orange-200',  desc: 'date, exercise, sets, reps, weightKg, volume, rpe, notes' },
-  { value: 'measurements', label: 'Measurements', icon: Ruler,           color: 'text-rose-600',    bg: 'bg-rose-50',    border: 'border-rose-200',    desc: 'date, waistCm, chestCm, hipsCm, leftArmCm, rightArmCm, leftThighCm, rightThighCm, neckCm' },
+  { value: 'weight',       label: 'Weight',       icon: Scale,           accent: 'text-blue-300',    desc: 'date, scaleKg, trueWeightKg, creatineDoseG, alcoholUnits, carbsG, hardTraining…' },
+  { value: 'food',         label: 'Food',         icon: UtensilsCrossed, accent: 'text-emerald-300', desc: 'date, meal, name, kcal, proteinG, carbsG, fatG, fiberG, notes' },
+  { value: 'sleep',        label: 'Sleep',        icon: Moon,            accent: 'text-violet-300',  desc: 'date, bedtime, wakeTime, hours, quality, hrv, notes' },
+  { value: 'training',     label: 'Training',     icon: Dumbbell,        accent: 'text-orange-300',  desc: 'date, exercise, sets, reps, weightKg, volume, rpe, notes' },
+  { value: 'measurements', label: 'Measurements', icon: Ruler,           accent: 'text-rose-300',    desc: 'date, waistCm, chestCm, hipsCm, leftArmCm, rightArmCm, leftThighCm, rightThighCm, neckCm' },
 ]
 
 type BackupStatus = 'idle' | 'loading' | 'success' | 'error'
@@ -70,82 +70,83 @@ export default function DataPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8">
+    <main className="min-h-screen bg-pens-deep px-4 py-8">
       <div className="max-w-lg mx-auto space-y-6">
 
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">
+          <Link href="/dashboard" className="text-pens-cream/40 hover:text-pens-cream/70 transition-colors">
             <ArrowLeft size={20} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Data Management</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Export, import and back up your data</p>
+            <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">P.E.N.S.</p>
+            <h1 className="text-2xl font-bold text-pens-cream mt-0.5">Data Management</h1>
+            <p className="text-xs text-pens-cream/40 mt-0.5">Export, import and back up your data</p>
           </div>
         </div>
 
         {/* Info banner */}
-        <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3">
-          <Info size={15} className="text-blue-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-blue-700 leading-relaxed">
-            All data lives locally on this device in SQLite. Use <strong>Export</strong> to get a portable CSV, <strong>Backup</strong> to snapshot the full database, and <strong>Import</strong> to load a previously exported CSV back in.
+        <div className="flex items-start gap-3 bg-pens-surface/60 border border-pens-muted/20 rounded-2xl px-4 py-3">
+          <Info size={15} className="text-pens-gold shrink-0 mt-0.5" />
+          <p className="text-xs text-pens-cream/60 leading-relaxed">
+            All data lives locally on this device in SQLite. Use <strong className="text-pens-cream">Export</strong> to get a portable CSV, <strong className="text-pens-cream">Backup</strong> to snapshot the full database, and <strong className="text-pens-cream">Import</strong> to load a previously exported CSV back in.
           </p>
         </div>
 
         {/* ── Export ─────────────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl shadow p-5 space-y-4">
+        <section className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5 space-y-4">
           <div className="flex items-center gap-2 mb-1">
-            <Download size={16} className="text-gray-500" />
-            <h2 className="font-semibold text-gray-800">Export to CSV</h2>
+            <Download size={16} className="text-pens-cream/60" />
+            <h2 className="font-semibold text-pens-cream">Export to CSV</h2>
           </div>
 
           <div className="grid grid-cols-1 gap-2">
-            {MODULES.map(({ value, label, icon: Icon, color, bg, border, desc }) => (
+            {MODULES.map(({ value, label, icon: Icon, accent, desc }) => (
               <button
                 key={value}
                 type="button"
                 onClick={() => handleExport(value)}
-                className={`flex items-center justify-between px-4 py-3 rounded-xl border ${bg} ${border} hover:opacity-80 transition-opacity text-left`}
+                className="flex items-center justify-between px-4 py-3 rounded-xl border bg-pens-navy/40 border-pens-muted/20 hover:border-pens-muted/40 transition-colors text-left"
               >
-                <div className="flex items-center gap-3">
-                  <Icon size={15} className={color} />
-                  <div>
-                    <p className={`text-sm font-medium ${color}`}>{label}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5 font-mono">{desc}</p>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Icon size={15} className={accent} />
+                  <div className="min-w-0">
+                    <p className={`text-sm font-medium ${accent}`}>{label}</p>
+                    <p className="text-[10px] text-pens-cream/40 mt-0.5 font-mono truncate">{desc}</p>
                   </div>
                 </div>
-                <Download size={13} className="text-gray-400 shrink-0 ml-2" />
+                <Download size={13} className="text-pens-cream/30 shrink-0 ml-2" />
               </button>
             ))}
 
             <button
               type="button"
               onClick={() => handleExport('all')}
-              className="flex items-center justify-between px-4 py-3 rounded-xl border bg-gray-800 border-gray-700 hover:bg-gray-900 transition-colors text-left"
+              className="flex items-center justify-between px-4 py-3 rounded-xl border bg-pens-crimson/15 border-pens-crimson/40 hover:bg-pens-crimson/20 transition-colors text-left"
             >
               <div className="flex items-center gap-3">
-                <Layers size={15} className="text-gray-300" />
+                <Layers size={15} className="text-pens-cream" />
                 <div>
-                  <p className="text-sm font-medium text-white">All modules</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Single file with all sections</p>
+                  <p className="text-sm font-medium text-pens-cream">All modules</p>
+                  <p className="text-[10px] text-pens-cream/50 mt-0.5">Single file with all sections</p>
                 </div>
               </div>
-              <Download size={13} className="text-gray-400 shrink-0 ml-2" />
+              <Download size={13} className="text-pens-cream/60 shrink-0 ml-2" />
             </button>
           </div>
         </section>
 
         {/* ── Import ─────────────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl shadow p-5 space-y-4">
+        <section className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Upload size={16} className="text-gray-500" />
-              <h2 className="font-semibold text-gray-800">Import from CSV</h2>
+              <Upload size={16} className="text-pens-cream/60" />
+              <h2 className="font-semibold text-pens-cream">Import from CSV</h2>
             </div>
             <button
               type="button"
               onClick={() => setShowFormat(f => !f)}
-              className="flex items-center gap-1 text-xs text-blue-500 hover:underline"
+              className="flex items-center gap-1 text-xs text-pens-gold hover:text-pens-cream transition-colors"
             >
               <FileText size={11} />
               {showFormat ? 'Hide' : 'Format guide'}
@@ -153,28 +154,28 @@ export default function DataPage() {
           </div>
 
           {showFormat && (
-            <div className="bg-gray-50 rounded-xl p-3 space-y-2">
-              <p className="text-xs font-medium text-gray-700">Expected column headers per module</p>
+            <div className="bg-pens-navy/40 border border-pens-muted/20 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-medium text-pens-cream/70">Expected column headers per module</p>
               {MODULES.map(({ value, label, desc }) => (
                 <div key={value}>
-                  <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide">{label}</p>
-                  <p className="text-[10px] font-mono text-gray-500 break-all">{desc}</p>
+                  <p className="text-[10px] font-semibold text-pens-cream/60 uppercase tracking-wide">{label}</p>
+                  <p className="text-[10px] font-mono text-pens-cream/40 break-all">{desc}</p>
                 </div>
               ))}
-              <p className="text-[10px] text-gray-400 pt-1">
+              <p className="text-[10px] text-pens-cream/40 pt-1">
                 The module is auto-detected from column headers. Sleep and measurements upsert by date. Weight and food always add new rows — deduplicate before importing if needed.
               </p>
             </div>
           )}
 
           <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-6 px-4 cursor-pointer transition-colors ${
-            importStatus === 'loading' ? 'border-gray-200 bg-gray-50 cursor-not-allowed' : 'border-gray-300 hover:border-blue-300 hover:bg-blue-50'
+            importStatus === 'loading' ? 'border-pens-muted/20 bg-pens-navy/40 cursor-not-allowed' : 'border-pens-muted/30 hover:border-pens-gold/60 hover:bg-pens-navy/30'
           }`}>
-            <Upload size={20} className={importStatus === 'loading' ? 'text-gray-300' : 'text-gray-400'} />
-            <span className="text-sm text-gray-500 font-medium">
+            <Upload size={20} className={importStatus === 'loading' ? 'text-pens-cream/20' : 'text-pens-cream/40'} />
+            <span className="text-sm text-pens-cream/60 font-medium">
               {importStatus === 'loading' ? 'Importing…' : 'Click to choose a CSV file'}
             </span>
-            <span className="text-xs text-gray-400">Only .csv files exported from MY PENS</span>
+            <span className="text-xs text-pens-cream/40">Only .csv files exported from MY PENS</span>
             <input
               ref={fileRef}
               type="file"
@@ -186,9 +187,9 @@ export default function DataPage() {
           </label>
 
           {importStatus === 'success' && importResult && (
-            <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-              <CheckCircle size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-              <div className="text-xs text-emerald-700">
+            <div className="flex items-start gap-2 bg-emerald-900/20 border border-emerald-500/30 rounded-xl px-4 py-3">
+              <CheckCircle size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-emerald-200">
                 <p className="font-semibold">Import successful</p>
                 <p>{importResult.inserted} rows added to <strong>{importResult.module}</strong>{importResult.skipped > 0 ? ` · ${importResult.skipped} skipped (duplicates)` : ''}</p>
               </div>
@@ -196,9 +197,9 @@ export default function DataPage() {
           )}
 
           {importStatus === 'error' && importError && (
-            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
-              <div className="text-xs text-red-700">
+            <div className="flex items-start gap-2 bg-pens-crimson/15 border border-pens-crimson/40 rounded-xl px-4 py-3">
+              <AlertCircle size={14} className="text-pens-crimson shrink-0 mt-0.5" />
+              <div className="text-xs text-red-300">
                 <p className="font-semibold">Import failed</p>
                 <p>{importError}</p>
               </div>
@@ -207,38 +208,38 @@ export default function DataPage() {
         </section>
 
         {/* ── Backup ─────────────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl shadow p-5 space-y-3">
+        <section className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5 space-y-3">
           <div className="flex items-center gap-2 mb-1">
-            <DatabaseBackup size={16} className="text-gray-500" />
-            <h2 className="font-semibold text-gray-800">Database Backup</h2>
+            <DatabaseBackup size={16} className="text-pens-cream/60" />
+            <h2 className="font-semibold text-pens-cream">Database Backup</h2>
           </div>
-          <p className="text-xs text-gray-400">
-            Snapshots the full SQLite database to <code className="bg-gray-100 px-1 rounded">prisma/backups/</code> with a timestamp. The last 10 backups are kept automatically.
+          <p className="text-xs text-pens-cream/50">
+            Snapshots the full SQLite database to <code className="bg-pens-navy/60 px-1 rounded text-pens-cream/70">prisma/backups/</code> with a timestamp. The last 10 backups are kept automatically.
           </p>
           <button
             type="button"
             onClick={handleBackup}
             disabled={backupStatus === 'loading'}
-            className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 bg-pens-navy/60 hover:bg-pens-navy text-pens-cream/80 hover:text-pens-cream text-sm font-medium px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 border border-pens-muted/20"
           >
             <DatabaseBackup size={14} />
             {backupStatus === 'loading' ? 'Creating backup…' : 'Back up now'}
           </button>
 
           {backupStatus === 'success' && backupInfo && (
-            <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-              <CheckCircle size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-              <div className="text-xs text-emerald-700">
+            <div className="flex items-start gap-2 bg-emerald-900/20 border border-emerald-500/30 rounded-xl px-4 py-3">
+              <CheckCircle size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-emerald-200">
                 <p className="font-semibold">Backup created</p>
-                <p><code className="bg-emerald-100 px-1 rounded">{backupInfo.filename}</code> · {backupInfo.sizeKb} KB</p>
+                <p><code className="bg-emerald-900/40 px-1 rounded">{backupInfo.filename}</code> · {backupInfo.sizeKb} KB</p>
               </div>
             </div>
           )}
 
           {backupStatus === 'error' && (
-            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-red-700">Backup failed — check the server logs.</p>
+            <div className="flex items-start gap-2 bg-pens-crimson/15 border border-pens-crimson/40 rounded-xl px-4 py-3">
+              <AlertCircle size={14} className="text-pens-crimson shrink-0 mt-0.5" />
+              <p className="text-xs text-red-300">Backup failed — check the server logs.</p>
             </div>
           )}
         </section>

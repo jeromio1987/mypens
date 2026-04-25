@@ -253,6 +253,7 @@ model BodyMeasurement {
   rightThighCm Float?
   neckCm       Float?
   notes        String?
+  photoPath    String?  // /uploads/measurements/<file>.jpg — progress photo
 }
 
 // Phase 5 — Event / Trip tagging

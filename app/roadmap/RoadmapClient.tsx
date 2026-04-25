@@ -19,10 +19,25 @@ const PHASE_GOALS: Record<number, string> = {
 
 type PhaseStatus = 'done' | 'upcoming' | 'future'
 
-const PHASE_STYLES: Record<PhaseStatus, { badge: string; col: string; header: string }> = {
-  done:     { badge: 'bg-emerald-100 text-emerald-700 border border-emerald-200', col: 'bg-emerald-50/60',  header: 'text-emerald-700' },
-  upcoming: { badge: 'bg-amber-100 text-amber-700 border border-amber-200',       col: 'bg-amber-50/60',    header: 'text-amber-700'   },
-  future:   { badge: 'bg-gray-100 text-gray-500 border border-gray-200',           col: 'bg-gray-50/60',     header: 'text-gray-500'    },
+const PHASE_STYLES: Record<PhaseStatus, { badge: string; col: string; border: string; header: string }> = {
+  done:     {
+    badge:  'bg-emerald-900/40 text-emerald-300 border border-emerald-500/30',
+    col:    'bg-emerald-900/10',
+    border: 'border-emerald-500/20',
+    header: 'text-emerald-300',
+  },
+  upcoming: {
+    badge:  'bg-pens-crimson/20 text-pens-cream border border-pens-crimson/40',
+    col:    'bg-pens-crimson/5',
+    border: 'border-pens-crimson/30',
+    header: 'text-pens-gold',
+  },
+  future:   {
+    badge:  'bg-pens-muted/20 text-pens-cream/40 border border-pens-muted/30',
+    col:    'bg-pens-navy/20',
+    border: 'border-pens-muted/20',
+    header: 'text-pens-cream/40',
+  },
 }
 
 const PHASE_ICONS: Record<PhaseStatus, React.ElementType> = {
@@ -128,17 +143,18 @@ const GAPS = [
 
 export default function RoadmapClient() {
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8">
+    <main className="min-h-screen bg-pens-deep px-4 py-8">
       <div className="max-w-4xl mx-auto space-y-8">
 
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">
+          <Link href="/dashboard" className="text-pens-cream/40 hover:text-pens-cream/70 transition-colors">
             <ArrowLeft size={20} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Product Roadmap</h1>
-            <p className="text-sm text-gray-400 mt-0.5">4 phases · 5 tracks · updated March 2026</p>
+            <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">P.E.N.S.</p>
+            <h1 className="text-2xl font-bold text-pens-cream mt-0.5">Product Roadmap</h1>
+            <p className="text-xs text-pens-cream/40 mt-0.5">4 phases · 5 tracks · updated March 2026</p>
           </div>
         </div>
 
@@ -148,14 +164,14 @@ export default function RoadmapClient() {
             const styles = PHASE_STYLES[phase.status as PhaseStatus]
             const Icon = PHASE_ICONS[phase.status as PhaseStatus]
             return (
-              <div key={phase.num} className={`rounded-2xl border p-4 ${styles.col} ${phase.status === 'done' ? 'border-emerald-200' : phase.status === 'upcoming' ? 'border-amber-200' : 'border-gray-200'}`}>
+              <div key={phase.num} className={`rounded-2xl border p-4 ${styles.col} ${styles.border}`}>
                 <div className="flex items-center gap-1.5 mb-2">
                   <Icon size={13} className={styles.header} />
                   <span className={`text-xs font-semibold ${styles.header}`}>Phase {phase.num}</span>
                 </div>
-                <p className="font-semibold text-gray-800 text-sm leading-tight mb-1">{phase.name}</p>
-                <p className="text-xs text-gray-400 mb-2">{phase.timing}</p>
-                <p className="text-xs text-gray-500 italic leading-snug">{PHASE_GOALS[phase.num]}</p>
+                <p className="font-semibold text-pens-cream text-sm leading-tight mb-1">{phase.name}</p>
+                <p className="text-xs text-pens-cream/40 mb-2">{phase.timing}</p>
+                <p className="text-xs text-pens-cream/50 italic leading-snug">{PHASE_GOALS[phase.num]}</p>
                 <span className={`inline-block mt-2 text-[10px] font-medium px-2 py-0.5 rounded-full ${styles.badge}`}>
                   {phase.status === 'done' ? 'Done' : phase.status === 'upcoming' ? 'In progress' : 'Future'}
                 </span>
@@ -164,23 +180,23 @@ export default function RoadmapClient() {
           })}
         </div>
 
-        <p className="text-xs text-gray-400 -mt-4 px-1">
+        <p className="text-xs text-pens-cream/40 -mt-4 px-1 italic">
           Strategic call: One app, two depths — simple by default, advanced by choice. Do not split into two apps yet.
         </p>
 
         {/* Tracks */}
         <div className="space-y-6">
-          <h2 className="font-semibold text-gray-700 text-sm px-1">Development Tracks</h2>
+          <h2 className="font-semibold text-pens-cream/70 text-sm px-1 uppercase tracking-widest">Development Tracks</h2>
 
           {TRACKS.map(track => (
-            <div key={track.num} className="bg-white rounded-2xl shadow overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Track {track.num}</p>
-                <h3 className="font-bold text-gray-900">{track.name}</h3>
-                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{track.objective}</p>
+            <div key={track.num} className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-pens-muted/20">
+                <p className="text-[10px] font-semibold text-pens-crimson uppercase tracking-widest mb-0.5">Track {track.num}</p>
+                <h3 className="font-bold text-pens-cream">{track.name}</h3>
+                <p className="text-xs text-pens-cream/50 mt-1 leading-relaxed">{track.objective}</p>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-gray-100">
+              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-pens-muted/10">
                 {track.phases.map((tp, idx) => {
                   const phase = PHASES[idx]
                   const styles = PHASE_STYLES[phase.status as PhaseStatus]
@@ -190,18 +206,18 @@ export default function RoadmapClient() {
                         <span className={`text-[10px] font-semibold uppercase tracking-wide ${styles.header}`}>
                           Ph {phase.num}
                         </span>
-                        {phase.status === 'done' && <CheckCircle2 size={10} className="text-emerald-500" />}
+                        {phase.status === 'done' && <CheckCircle2 size={10} className="text-emerald-400" />}
                       </div>
-                      <p className="text-xs font-semibold text-gray-700 mb-1.5">{tp.focus}</p>
-                      <p className="text-[11px] text-gray-500 leading-relaxed">{tp.deliverables}</p>
+                      <p className="text-xs font-semibold text-pens-cream/80 mb-1.5">{tp.focus}</p>
+                      <p className="text-[11px] text-pens-cream/50 leading-relaxed">{tp.deliverables}</p>
                     </div>
                   )
                 })}
               </div>
 
-              <div className="px-5 py-3 bg-gray-50 border-t border-gray-100">
-                <p className="text-[11px] text-gray-400">
-                  <span className="font-semibold text-gray-500">Success: </span>
+              <div className="px-5 py-3 bg-pens-navy/40 border-t border-pens-muted/20">
+                <p className="text-[11px] text-pens-cream/40">
+                  <span className="font-semibold text-pens-cream/60">Success: </span>
                   {track.successLooks}
                 </p>
               </div>
@@ -210,38 +226,38 @@ export default function RoadmapClient() {
         </div>
 
         {/* Next 30 Days */}
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-          <h2 className="font-bold text-amber-800 mb-3 flex items-center gap-2">
-            <Clock size={16} className="text-amber-600" />
+        <div className="bg-pens-crimson/10 border border-pens-crimson/30 rounded-2xl p-5">
+          <h2 className="font-bold text-pens-cream mb-3 flex items-center gap-2">
+            <Clock size={16} className="text-pens-crimson" />
             Next 30 Days — Priority Order
           </h2>
           <ol className="space-y-2">
             {NEXT_30_DAYS.map((item, idx) => (
               <li key={idx} className="flex items-start gap-3">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-200 text-amber-800 text-xs font-bold flex items-center justify-center mt-0.5">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-pens-crimson/30 text-pens-cream text-xs font-bold flex items-center justify-center mt-0.5">
                   {idx + 1}
                 </span>
-                <span className="text-sm text-amber-900">{item}</span>
+                <span className="text-sm text-pens-cream/80">{item}</span>
               </li>
             ))}
           </ol>
         </div>
 
         {/* Gaps to fill */}
-        <div className="bg-white rounded-2xl shadow p-5">
-          <h2 className="font-bold text-gray-800 mb-1">Gaps to Fill</h2>
-          <p className="text-xs text-gray-400 mb-4">Open items this roadmap does not yet cover.</p>
+        <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
+          <h2 className="font-bold text-pens-cream mb-1">Gaps to Fill</h2>
+          <p className="text-xs text-pens-cream/40 mb-4">Open items this roadmap does not yet cover.</p>
           <ul className="space-y-2.5">
             {GAPS.map((gap, idx) => (
               <li key={idx} className="flex items-start gap-3">
-                <Circle size={14} className="text-gray-300 shrink-0 mt-0.5" />
-                <span className="text-sm text-gray-600 leading-relaxed">{gap}</span>
+                <Circle size={14} className="text-pens-cream/30 shrink-0 mt-0.5" />
+                <span className="text-sm text-pens-cream/60 leading-relaxed">{gap}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="text-xs text-gray-400 text-center pb-4">
+        <p className="text-xs text-pens-cream/30 text-center pb-4 italic">
           Roadmap version: revised — exported March 2026
         </p>
       </div>

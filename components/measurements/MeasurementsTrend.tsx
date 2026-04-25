@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Trash2, Pencil, Check, X } from 'lucide-react'
+import { Trash2, Pencil, Check, X, Camera } from 'lucide-react'
 
 interface Entry {
   id: string
@@ -16,6 +17,7 @@ interface Entry {
   rightThighCm: number | null
   neckCm: number | null
   notes: string | null
+  photoPath: string | null
 }
 
 type EditForm = Record<string, string>
@@ -42,6 +44,7 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
+  const [photoModal, setPhotoModal] = useState<{ src: string; date: string } | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -104,7 +107,28 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
   }
 
   if (loading) return <div className="text-sm text-pens-cream/40 py-6 text-center">Loading…</div>
-  if (!entries.length) return <div className="text-sm text-pens-cream/40 py-6 text-center">No measurements logged yet</div>
+
+  if (!entries.length) {
+    return (
+      <div className="bg-pens-surface/60 border border-pens-muted/20 rounded-2xl p-6 text-center">
+        <div className="relative w-32 h-32 mx-auto mb-4 opacity-60">
+          <Image
+            src="/illustrations/dadbod-mascot.png"
+            alt=""
+            fill
+            sizes="128px"
+            className="object-contain grayscale"
+          />
+        </div>
+        <p className="text-sm text-pens-cream font-semibold mb-1">Inventory the wreckage</p>
+        <p className="text-xs text-pens-cream/50 max-w-xs mx-auto leading-relaxed">
+          No measurements logged yet. Drop the tape, snap a starter photo, file the first entry. The trendline starts after two.
+        </p>
+      </div>
+    )
+  }
+
+  const photoEntries = entries.filter(e => e.photoPath).slice(0, 12)
 
   const chartData = [...entries].reverse().map(e => ({
     date: e.date.slice(5),
@@ -139,6 +163,34 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Progress photo strip */}
+      {photoEntries.length > 0 && (
+        <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-pens-cream flex items-center gap-2">
+              <Camera size={14} className="text-pens-gold" />
+              Progress photos
+            </h3>
+            <span className="text-xs text-pens-cream/40">{photoEntries.length} {photoEntries.length === 1 ? 'photo' : 'photos'}</span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-2 -mx-5 px-5 snap-x">
+            {photoEntries.map(e => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => e.photoPath && setPhotoModal({ src: e.photoPath, date: e.date })}
+                className="relative w-24 h-32 shrink-0 rounded-lg overflow-hidden border border-pens-muted/30 bg-pens-navy hover:border-pens-gold/60 transition-colors snap-start"
+              >
+                <Image src={e.photoPath!} alt={`Progress ${e.date}`} fill sizes="96px" className="object-cover" />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-pens-deep/95 to-transparent px-2 py-1.5">
+                  <p className="text-[10px] text-pens-cream font-medium">{e.date.slice(5)}</p>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -214,8 +266,18 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
                   </div>
                 </div>
               ) : (
-                <div className="px-5 py-3 flex items-start justify-between group hover:bg-pens-navy/20 transition-colors">
-                  <div>
+                <div className="px-5 py-3 flex items-start justify-between group hover:bg-pens-navy/20 transition-colors gap-3">
+                  {e.photoPath && (
+                    <button
+                      type="button"
+                      onClick={() => setPhotoModal({ src: e.photoPath!, date: e.date })}
+                      className="relative w-12 h-16 shrink-0 rounded-md overflow-hidden border border-pens-muted/30 bg-pens-navy hover:border-pens-gold/60 transition-colors"
+                      aria-label={`View photo from ${e.date}`}
+                    >
+                      <Image src={e.photoPath} alt="" fill sizes="48px" className="object-cover" />
+                    </button>
+                  )}
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-pens-cream">{e.date}</p>
                     <p className="text-xs text-pens-cream/50 mt-0.5">
                       {LINES.map(({ key, label }) => {
@@ -235,6 +297,36 @@ export default function MeasurementsTrend({ refreshKey }: Props) {
           ))}
         </div>
       </div>
+
+      {/* Photo modal */}
+      {photoModal && (
+        <div
+          className="fixed inset-0 z-50 bg-pens-deep/95 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setPhotoModal(null)}
+        >
+          <div className="relative max-w-2xl w-full max-h-[90vh] flex flex-col" onClick={ev => ev.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs uppercase tracking-widest text-pens-cream/60">Progress · {photoModal.date}</p>
+              <button
+                onClick={() => setPhotoModal(null)}
+                aria-label="Close"
+                className="text-pens-cream/60 hover:text-pens-cream"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="relative w-full flex-1 min-h-[60vh] bg-pens-navy rounded-xl overflow-hidden border border-pens-muted/30">
+              <Image
+                src={photoModal.src}
+                alt={`Progress photo from ${photoModal.date}`}
+                fill
+                sizes="(max-width: 768px) 100vw, 768px"
+                className="object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

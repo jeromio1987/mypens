@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { Dumbbell, Gauge, Utensils, Moon, ArrowRight } from 'lucide-react'
 
 const FIELDS = [
@@ -32,6 +33,18 @@ export default function OnboardingPage() {
       {/* Hero band */}
       <div className="relative w-full h-[442px] md:h-[530px] overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-pens-navy via-pens-deep to-black" />
+        {/* Mascot — gritty portrait, ghosted into the band */}
+        <div className="absolute inset-y-0 right-0 w-1/2 md:w-2/5 opacity-30 md:opacity-40">
+          <Image
+            src="/illustrations/gritty-portrait.png"
+            alt=""
+            fill
+            priority
+            sizes="(max-width: 768px) 50vw, 40vw"
+            className="object-cover object-[center_20%] grayscale"
+          />
+          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-pens-deep/60 to-pens-deep" />
+        </div>
         {/* Crimson accent edge */}
         <div className="absolute top-0 left-0 w-1 h-full bg-pens-crimson" />
         {/* Vignette */}

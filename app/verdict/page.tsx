@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   ArrowLeft, ArrowUpRight, Activity, Utensils, Moon,
   Download, TrendingUp, TrendingDown, BarChart2, ListChecks, FileText,
@@ -263,11 +264,27 @@ export default function VerdictPage() {
 
         {/* Auditor's Note */}
         {data?.auditorNote && (
-          <div className="bg-gradient-to-br from-pens-surface to-pens-navy border border-pens-muted/20 rounded-2xl overflow-hidden">
-            <div className="p-6 space-y-4">
-              <p className="text-[10px] uppercase tracking-widest text-pens-cream/30 font-semibold">
-                The Auditor&apos;s Note
-              </p>
+          <div className="relative bg-gradient-to-br from-pens-surface to-pens-navy border border-pens-muted/20 rounded-2xl overflow-hidden">
+            {/* Portrait accent — the Auditor */}
+            <div className="absolute top-0 right-0 w-28 h-32 opacity-25 pointer-events-none select-none">
+              <Image
+                src="/illustrations/gritty-portrait.png"
+                alt=""
+                fill
+                sizes="112px"
+                className="object-cover object-[center_15%] grayscale"
+              />
+              <div className="absolute inset-0 bg-gradient-to-l from-transparent to-pens-surface" />
+              <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-pens-surface to-transparent" />
+            </div>
+
+            <div className="relative p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="h-px w-6 bg-pens-crimson/60" />
+                <p className="text-[10px] uppercase tracking-widest text-pens-crimson/80 font-semibold">
+                  The Auditor&apos;s Note
+                </p>
+              </div>
               <blockquote className="text-xl font-bold italic text-pens-cream leading-snug">
                 &ldquo;{data.auditorNote.quote}&rdquo;
               </blockquote>

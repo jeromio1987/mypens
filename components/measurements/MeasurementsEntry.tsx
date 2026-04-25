@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import Image from 'next/image'
+import { Camera, X } from 'lucide-react'
 import QuickToggle from '@/components/shared/QuickToggle'
 import PresetPicker from '@/components/shared/PresetPicker'
 
@@ -29,6 +31,9 @@ export default function MeasurementsEntry({ onSaved }: Props) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [photoPath, setPhotoPath] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
 
   const blank = Object.fromEntries(FIELDS.map(f => [f.key, '']))
   const [form, setForm] = useState<Record<string, string>>({ date: today, notes: '', ...blank })
@@ -45,13 +50,40 @@ export default function MeasurementsEntry({ onSaved }: Props) {
 
   const visibleFields = quick ? FIELDS.filter(f => f.priority) : FIELDS
 
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingPhoto(true)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('date', form.date)
+      const res = await fetch('/api/measurements/photo', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Photo upload failed')
+      setPhotoPath(data.photoPath)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Photo upload failed')
+    } finally {
+      setUploadingPhoto(false)
+      if (photoInputRef.current) photoInputRef.current.value = ''
+    }
+  }
+
+  const clearPhoto = () => setPhotoPath(null)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError(null)
     setSaved(false)
     try {
-      const payload: Record<string, unknown> = { date: form.date, notes: form.notes || undefined }
+      const payload: Record<string, unknown> = {
+        date: form.date,
+        notes: form.notes || undefined,
+        photoPath: photoPath || undefined,
+      }
       for (const f of FIELDS) {
         payload[f.key] = form[f.key] !== '' ? parseFloat(form[f.key]) : undefined
       }
@@ -64,6 +96,8 @@ export default function MeasurementsEntry({ onSaved }: Props) {
       if (!res.ok) throw new Error(data.error || 'Save failed')
       setSaved(true)
       onSaved?.()
+      // Reset photo so the next entry doesn't reuse it; keep date/values for fast re-entry.
+      setPhotoPath(null)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
@@ -118,6 +152,41 @@ export default function MeasurementsEntry({ onSaved }: Props) {
             <input type="text" value={form.notes} onChange={e => set('notes', e.target.value)} className={inputCls} placeholder="optional" />
           </div>
         )}
+
+        {/* Progress photo */}
+        <div>
+          <label className={labelSmCls}>Progress photo (optional)</label>
+          {photoPath ? (
+            <div className="relative w-32 h-40 rounded-lg overflow-hidden border border-pens-muted/40 bg-pens-navy">
+              <Image src={photoPath} alt="Progress photo" fill sizes="128px" className="object-cover" />
+              <button
+                type="button"
+                onClick={clearPhoto}
+                aria-label="Remove photo"
+                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-pens-deep/80 text-pens-cream/80 hover:text-pens-cream flex items-center justify-center"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ) : (
+            <label
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed text-xs cursor-pointer transition-colors w-fit ${
+                uploadingPhoto ? 'border-pens-muted/30 text-pens-cream/30 cursor-wait' : 'border-pens-muted/40 text-pens-cream/60 hover:border-pens-gold/60 hover:text-pens-cream'
+              }`}
+            >
+              <Camera size={14} />
+              {uploadingPhoto ? 'Uploading…' : 'Add photo (jpg / png / webp / heic)'}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic"
+                className="sr-only"
+                disabled={uploadingPhoto}
+                onChange={handlePhoto}
+              />
+            </label>
+          )}
+        </div>
 
         <button
           type="submit"

@@ -15,7 +15,19 @@ Editorial "Today's Intent" mode-selection screen (Stitch design system port — 
 
 ## Welcome / Onboarding (`/welcome`, `/onboarding`)
 
-Continental brand entry surface (server components, no data fetch). `/welcome` is the split-layout intro with MY PENS branding, P.E.N.S. pillars bento, and CTA → `/onboarding`. `/onboarding` is the "Initial Audit" hero + 4-card P.E.N.S. field bento with CTA → `/`. Both are static and not yet linked from the daily flow.
+Continental brand entry surface (server components, no data fetch). `/welcome` is the split-layout intro with MY PENS branding, P.E.N.S. pillars bento, an `editorial-portrait` mascot frame, and CTA → `/onboarding`. `/onboarding` is the "Initial Audit" hero (with `gritty-portrait` ghost in the band) + 4-card P.E.N.S. field bento with CTA → `/`. Both are static and not yet linked from the daily flow.
+
+## Continental Dark Theme
+
+Single shared palette across all the Continental surfaces: `pens-deep` (#0D1B2A) backgrounds, `pens-surface` (#2B2D42) cards, `pens-cream` (#F5E6D3) text, `pens-crimson` (#8B1E1E) primary accent, `pens-gold` (#C9A84C) highlight. As of this pass, `/welcome`, `/onboarding`, `/data`, `/roadmap`, `/integrations`, `/mockups`, `/measurements`, and `/verdict` (incl. dossier) are all on the dark palette. Status colors map: ok → `emerald-900/20` + `emerald-300/400`, warn → `amber-900/20` + `amber-200/300/400`, error → `pens-crimson/15` + `red-300/400`.
+
+## Mockups Reference (`/mockups`)
+
+Server page (`page.tsx`) holds metadata + reads the manifest under `public/mockups/`. Client (`MockupsClient.tsx`) renders dark cards grouped by category with: (a) text search filter (title / slug / category), (b) lazy-loaded `next/image` with `priority` on the first row only (kills the LCP warning), (c) full-screen lightbox with prev/next arrows, ESC to close, and click-outside-to-dismiss. 75 Stitch design exports indexed.
+
+## Illustrations
+
+Character illustrations live in `public/illustrations/` (`editorial-portrait`, `gritty-portrait`, `dadbod-mascot`, `illus-1..4`). Currently placed: `editorial-portrait` on `/welcome`, `gritty-portrait` on `/onboarding` and as a desaturated accent inside the verdict's "Auditor's Note" card, `dadbod-mascot` as the empty-state on `/measurements` trend.
 
 ## Damage Audit (`/verdict/dossier`)
 
@@ -31,7 +43,7 @@ Newsreader serif (`--font-newsreader` → `--font-headline`) loaded in root layo
 - **Food** (`/food`): Meal logging with macros (protein, carbs, fat, fiber). Preset-based quick entry.
 - **Sleep** (`/sleep`): Bedtime/wake tracking with HRV and quality scores. 30-day trend.
 - **Training** (`/training`): Exercise sets/reps/weight logging, auto-calculated volume. Exercise names are clickable to open an all-time history drawer with personal best and progression charts.
-- **Measurements** (`/measurements`): Body tape measurements with delta tracking.
+- **Measurements** (`/measurements`): Body tape measurements with delta tracking. Optional progress photo per entry — multipart upload via `/api/measurements/photo` (8MB cap, jpg/png/webp/heic) saves to `public/uploads/measurements/` and stores the relative path on `BodyMeasurement.photoPath`. The trend view shows a horizontal photo strip across the top and per-row 12×16 thumbs that open a full-screen lightbox; entries with no photos fall back to the dadbod-mascot illustration empty state.
 - **Events** (`/events`): Trip/event tagging (travel, illness, holiday, diet-break, competition, other). Active events shown as banners on weight page and dashboard.
 - **Dashboard** (`/dashboard`): Weekly overview with structured insight cards (positive/info/warning), real confidence data, logging streaks widget, Goals panel (set weight/waist/session targets with progress bars and ETAs), CSV export, CSV import, and database backup.
 - **Data Health** (`/data-health`): 30-day logging calendar heatmap per module, current streaks, longest streaks, and coverage percentages.
@@ -56,6 +68,9 @@ Newsreader serif (`--font-newsreader` → `--font-headline`) loaded in root layo
 - `lib/integrations/{strava,garmin,healthkit,healthconnect}/` — Provider-specific OAuth/auth, API/ingest, mapping
 - `app/api/integrations/{strava,garmin}/{authorize,callback,status,disconnect,activities,import}/route.ts` — OAuth provider endpoints
 - `app/api/integrations/{healthkit,healthconnect}/{connect,status,disconnect,ingest,activities,import}/route.ts` — Pairing-token provider endpoints (companion app pushes via `/ingest` with Bearer token)
+- `app/api/measurements/photo/route.ts` — Multipart photo upload for Body Measurements; writes to `public/uploads/measurements/<timestamp>-<rand>.<ext>` and returns the public path
+- `components/measurements/MeasurementsEntry.tsx` / `MeasurementsTrend.tsx` — Photo upload UI in the entry form + thumbnail strip / per-row thumbs / lightbox in the trend view
+- `app/mockups/MockupsClient.tsx` — Client-side search filter + lazy-load + lightbox (kbd nav) for the design reference page
 - `components/goals/GoalsPanel.tsx` — Modal panel for viewing/adding/deleting goals with progress bars and ETAs
 - `components/training/ExerciseHistoryDrawer.tsx` — Exercise history modal with personal best, weight/volume progression charts, all-time log
 - `app/api/events/route.ts` — Event tag CRUD
