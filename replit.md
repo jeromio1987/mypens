@@ -68,7 +68,11 @@ Newsreader serif (`--font-newsreader` → `--font-headline`) loaded in root layo
 - `lib/integrations/{strava,garmin,healthkit,healthconnect}/` — Provider-specific OAuth/auth, API/ingest, mapping
 - `app/api/integrations/{strava,garmin}/{authorize,callback,status,disconnect,activities,import}/route.ts` — OAuth provider endpoints
 - `app/api/integrations/{healthkit,healthconnect}/{connect,status,disconnect,ingest,activities,import}/route.ts` — Pairing-token provider endpoints (companion app pushes via `/ingest` with Bearer token)
-- `app/api/measurements/photo/route.ts` — Multipart photo upload for Body Measurements; writes to `public/uploads/measurements/<timestamp>-<rand>.<ext>` and returns the public path
+- `app/api/measurements/photo/route.ts` — Multipart photo upload for Body Measurements; writes to `public/uploads/measurements/<timestamp>-<rand>.<ext>`, transcodes HEIC→JPEG via `heic-convert` so browsers can render iPhone uploads, requires same-origin Origin header, and runs behind a global token-bucket rate limit (`lib/rateLimit.ts`)
+- `app/api/measurements/route.ts` — On POST/PATCH photo replacement and on DELETE, calls `unlinkIfOrphaned()` which only removes the old file if NO row still references it (race-safe)
+- `app/page.tsx` + `app/HomeClient.tsx` — Home is an async server component that redirects first-time visitors to `/welcome` when all entry tables are empty AND the `mp_seen_welcome` cookie is absent; the original client UI lives in `HomeClient.tsx`
+- `proxy.ts` — Next.js 16 proxy (formerly middleware) that sets the `mp_seen_welcome` cookie when the user lands on `/welcome`, breaking the first-visit redirect loop
+- `app/verdict/dossier/page.tsx` — Damage Audit dossier wired to real biomarkers: 14-day median HRV baseline (≥4 nights required) drives an inflammation/stress signal; weekly training hours from the last 7 days; sodium / illness / hard-training flags from today's `WeightEntry`. Each metric exposes its source (`biomarker` / `proxy` / `mixed` / `none`) and the page lists "Sources used" at the bottom
 - `components/measurements/MeasurementsEntry.tsx` / `MeasurementsTrend.tsx` — Photo upload UI in the entry form + thumbnail strip / per-row thumbs / lightbox in the trend view
 - `app/mockups/MockupsClient.tsx` — Client-side search filter + lazy-load + lightbox (kbd nav) for the design reference page
 - `components/goals/GoalsPanel.tsx` — Modal panel for viewing/adding/deleting goals with progress bars and ETAs

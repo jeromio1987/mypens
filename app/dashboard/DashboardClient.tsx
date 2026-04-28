@@ -103,9 +103,9 @@ const INSIGHT_SEVERITY_STYLES: Record<string, { icon: React.ElementType; border:
 
 function TrendArrow({ v }: { v: number | null }) {
   if (v == null) return null
-  if (v < -0.05) return <TrendingDown size={14} className="text-green-500" />
-  if (v > 0.05)  return <TrendingUp   size={14} className="text-red-500" />
-  return <Minus size={14} className="text-gray-400" />
+  if (v < -0.05) return <TrendingDown size={14} className="text-emerald-400" />
+  if (v > 0.05)  return <TrendingUp   size={14} className="text-red-400" />
+  return <Minus size={14} className="text-pens-cream/40" />
 }
 
 function QualityDots({ q }: { q: number }) {

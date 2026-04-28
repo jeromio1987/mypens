@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { writeFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { consume, isSameOrigin } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 
@@ -12,6 +13,7 @@ const ALLOWED_EXT: Record<string, string> = {
   'image/png':  '.png',
   'image/webp': '.webp',
   'image/heic': '.heic',
+  'image/heif': '.heic',
 }
 
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'measurements')
@@ -42,6 +44,20 @@ function sniffImageExt(buf: Buffer): string | null {
 
 export async function POST(req: Request) {
   try {
+    // — Origin check: REQUIRE a same-origin Origin header. Cross-site or
+    //   no-Origin requests (e.g. crafted curl) are rejected outright.
+    if (!isSameOrigin(req)) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
+    // — Rate limit: GLOBAL bucket. We deliberately don't key off IP because
+    //   x-forwarded-for / x-real-ip are caller-controlled and trivially
+    //   spoofable behind no trusted proxy. A single-user app with a global
+    //   cap of ~60/hour with a 10-burst is plenty in practice.
+    const rl = consume('photo:global', { capacity: 10, refillPerSec: 60 / 3600 })
+    if (!rl.ok) {
+      return NextResponse.json({ error: 'rate limited' }, { status: 429 })
+    }
+
     const form = await req.formData()
     const file = form.get('file')
     const date = String(form.get('date') ?? '').trim() || new Date().toISOString().slice(0, 10)
@@ -69,16 +85,31 @@ export async function POST(req: Request) {
     if (!sniffedExt) {
       return NextResponse.json({ error: 'file is not a recognised image (jpg/png/webp/heic)' }, { status: 415 })
     }
-    // jpg + heic both have multiple valid claimed types so we just require any allowed match.
-    const ext = sniffedExt
+
+    let finalBuf: Buffer = buf
+    let finalExt: string  = sniffedExt
+
+    // HEIC → JPEG conversion. Browsers cannot render HEIC natively,
+    // so we transcode at upload time to keep the photo strip + viewer working.
+    if (sniffedExt === '.heic') {
+      try {
+        const heicConvert = (await import('heic-convert')).default
+        const out = await heicConvert({ buffer: buf, format: 'JPEG', quality: 0.85 })
+        finalBuf = Buffer.from(out)
+        finalExt = '.jpg'
+      } catch (err) {
+        console.error('HEIC conversion failed', err)
+        return NextResponse.json({ error: 'could not decode HEIC image' }, { status: 422 })
+      }
+    }
 
     await mkdir(UPLOAD_DIR, { recursive: true })
     const rand = crypto.randomBytes(6).toString('hex')
-    const filename = `${date}-${rand}${ext}`
-    await writeFile(path.join(UPLOAD_DIR, filename), buf)
+    const filename = `${date}-${rand}${finalExt}`
+    await writeFile(path.join(UPLOAD_DIR, filename), finalBuf)
 
     const photoPath = `/uploads/measurements/${filename}`
-    return NextResponse.json({ photoPath, sizeKb: Math.round(buf.length / 1024) })
+    return NextResponse.json({ photoPath, sizeKb: Math.round(finalBuf.length / 1024) })
   } catch (err) {
     console.error('photo upload failed', err)
     return NextResponse.json({ error: 'upload failed' }, { status: 500 })

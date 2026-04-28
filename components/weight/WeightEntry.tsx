@@ -243,7 +243,7 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
                     />
                     <div>
                       <p className="text-sm font-medium">Post-load maintenance</p>
-                      <p className="text-xs text-gray-400">Switched from loading (≥10g) — stores stay fully saturated</p>
+                      <p className="text-xs text-pens-cream/50">Switched from loading (≥10g) — stores stay fully saturated</p>
                     </div>
                   </label>
                 </div>
