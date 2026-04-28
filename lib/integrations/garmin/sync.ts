@@ -58,12 +58,37 @@ export async function importPushedActivities(activities: GarminActivity[]): Prom
   }
 }
 
+/**
+ * Hosts we are willing to send the Garmin bearer token to. Garmin PING
+ * payloads are unauthenticated (we only check that `userId` matches our
+ * stored connection), so a forged webhook could otherwise smuggle a
+ * `callbackURL` pointing at an attacker host and exfiltrate the token.
+ * Allowlist by exact suffix match on `.garmin.com`.
+ */
+const GARMIN_HOST_SUFFIX = '.garmin.com'
+
+function isAllowedGarminCallback(rawUrl: string): boolean {
+  let u: URL
+  try {
+    u = new URL(rawUrl)
+  } catch {
+    return false
+  }
+  if (u.protocol !== 'https:') return false
+  const host = u.hostname.toLowerCase()
+  return host === 'garmin.com' || host.endsWith(GARMIN_HOST_SUFFIX)
+}
+
 /** Fetch a Garmin activity payload from a `callbackURL` provided by a PING
  * notification. Returns the parsed activities array (Garmin returns the same
  * `{ activities: [...] }` envelope as the push body). */
 export async function fetchPingActivities(callbackUrl: string, accessToken: string): Promise<GarminActivity[]> {
+  if (!isAllowedGarminCallback(callbackUrl)) {
+    throw new Error(`Garmin ping callbackURL rejected (not on garmin.com): ${callbackUrl}`)
+  }
   const res = await fetch(callbackUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    redirect: 'error', // never follow a redirect off the allowlisted host
   })
   if (!res.ok) {
     const text = await res.text()
