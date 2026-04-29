@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "BymYuK8k6HNJOqsj7FLci"
+uri = "file://project_context.txt"
+type = "text"
+title = "Project Context Bundle (for ChatGPT upload)"

@@ -6,7 +6,8 @@
     "dev": "next dev -p 5000 -H 0.0.0.0",
     "build": "next build",
     "start": "next start -p 5000 -H 0.0.0.0",
-    "lint": "eslint"
+    "lint": "eslint",
+    "bundle:context": "node scripts/bundle-context.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
