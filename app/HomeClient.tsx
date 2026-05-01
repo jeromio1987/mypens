@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText } from 'lucide-react'
+import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText, Anchor } from 'lucide-react'
 import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 import NotificationsBadge from '@/components/shared/NotificationsBadge'
 
@@ -44,6 +44,7 @@ const CONTEXT_TAGS = [
 const MODULES = [
   { href: '/weight',       label: 'Weight',   icon: Scale },
   { href: '/sleep',        label: 'Sleep',    icon: Moon },
+  { href: '/anchor',       label: 'Anchor',   icon: Anchor },
   { href: '/measurements', label: 'Body',     icon: Ruler },
   { href: '/dashboard',    label: 'Overview', icon: LayoutDashboard },
 ]
@@ -127,6 +128,7 @@ export default function HomeClient() {
             <Link href="/dashboard" className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Dashboard</Link>
             <Link href="/context"   className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Journal</Link>
             <span             className="uppercase tracking-widest text-xs font-bold text-pens-crimson">Modes</span>
+            <Link href="/anchor"    className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Anchor</Link>
             <Link href="/data"      className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Vault</Link>
           </nav>
         </div>
@@ -344,7 +346,7 @@ export default function HomeClient() {
 
       {/* Bottom mobile nav (preserved) */}
       <nav className="fixed bottom-0 left-0 right-0 bg-pens-deep/95 backdrop-blur border-t border-pens-muted/20 md:hidden z-40">
-        <div className="max-w-sm mx-auto grid grid-cols-4">
+        <div className="max-w-sm mx-auto grid grid-cols-5">
           {MODULES.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}

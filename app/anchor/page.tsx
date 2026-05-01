@@ -5,6 +5,21 @@ import AnchorClient from './AnchorClient'
 
 export const dynamic = 'force-dynamic'
 
+// Walk backwards from yesterday, count consecutive days where condition is met
+function calcHealthStreak(qualifyingDates: Set<string>, today: string): number {
+  let streak = 0
+  const d = new Date(today + 'T12:00:00')
+  d.setDate(d.getDate() - 1)
+  for (let i = 0; i < 365; i++) {
+    const s = d.toISOString().slice(0, 10)
+    if (qualifyingDates.has(s)) {
+      streak++
+      d.setDate(d.getDate() - 1)
+    } else break
+  }
+  return streak
+}
+
 export default async function AnchorPage() {
   const today = todayStr()
 
@@ -26,6 +41,23 @@ export default async function AnchorPage() {
   const money = computeMoneySaved(entries, settings, today)
 
   const todayEntry = entries.find(e => e.date === today) ?? null
+
+  // ── Health streaks (sleep / training / protein) ─────────────────────────
+  const [sleepRows, trainingRows, foodRows] = await Promise.all([
+    prisma.sleepEntry.findMany({ orderBy: { date: 'desc' }, take: 60, select: { date: true, hours: true } }),
+    prisma.trainingEntry.findMany({ orderBy: { date: 'desc' }, take: 60, select: { date: true }, distinct: ['date'] }),
+    prisma.foodEntry.groupBy({ by: ['date'], _sum: { proteinG: true }, orderBy: { date: 'desc' }, take: 60 }),
+  ])
+
+  const sleepQualDates  = new Set(sleepRows.filter(r => (r.hours ?? 0) >= 7).map(r => r.date))
+  const trainQualDates  = new Set(trainingRows.map(r => r.date))
+  const proteinQualDates= new Set(foodRows.filter(r => (r._sum.proteinG ?? 0) >= 145).map(r => r.date))
+
+  const healthStreaks = {
+    sleepDays:    calcHealthStreak(sleepQualDates,   today),
+    trainingDays: calcHealthStreak(trainQualDates,   today),
+    proteinDays:  calcHealthStreak(proteinQualDates, today),
+  }
 
   // Last 14 days of cravings — for the in-screen pattern strip.
   const cravings = await prisma.cravingEvent.findMany({
@@ -94,6 +126,7 @@ export default async function AnchorPage() {
         total: phaseTotal,
         progress: phaseProgress,
       }}
+      healthStreaks={healthStreaks}
     />
   )
 }

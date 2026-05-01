@@ -55,6 +55,7 @@ interface Craving {
 }
 interface MilestoneInfo { target: number; daysLeft: number }
 interface Phase { dayNumber: number; total: number; progress: number }
+interface HealthStreaks { sleepDays: number; trainingDays: number; proteinDays: number }
 
 interface Props {
   today: string
@@ -66,6 +67,7 @@ interface Props {
   recentCravings: Craving[]
   milestone: { compound: MilestoneInfo; alcohol: MilestoneInfo }
   phase: Phase
+  healthStreaks: HealthStreaks
 }
 
 // ----- Supplement chips: match the protocol ------------------------------
@@ -159,12 +161,20 @@ export default function AnchorClient(props: Props) {
           </h1>
           <div className="text-xs text-pens-cream/50 mt-0.5">{props.today}</div>
         </div>
-        <Link
-          href="/"
-          className="text-[11px] uppercase tracking-[0.15em] text-pens-cream/60 hover:text-pens-cream"
-        >
-          Home
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/dopamine"
+            className="text-[11px] uppercase tracking-[0.15em] text-pens-crimson hover:text-pens-crimson/80 font-semibold"
+          >
+            Route →
+          </Link>
+          <Link
+            href="/"
+            className="text-[11px] uppercase tracking-[0.15em] text-pens-cream/60 hover:text-pens-cream"
+          >
+            Home
+          </Link>
+        </div>
       </header>
 
       {/* — MONEY SAVED HERO — */}
@@ -221,6 +231,18 @@ export default function AnchorClient(props: Props) {
             </span>{' '}
             ({props.milestone.compound.daysLeft} to go)
           </div>
+        </div>
+      </section>
+
+      {/* — HEALTH STREAKS — */}
+      <section className="px-5 pt-4">
+        <div className="text-[10px] uppercase tracking-[0.2em] text-pens-cream/50 mb-2">
+          Health streaks
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <StreakCard label="Sleep 7h+" days={props.healthStreaks.sleepDays}    color="text-pens-gold" />
+          <StreakCard label="Training"  days={props.healthStreaks.trainingDays} color="text-pens-gold" />
+          <StreakCard label="Protein"   days={props.healthStreaks.proteinDays}  color="text-pens-gold" />
         </div>
       </section>
 
