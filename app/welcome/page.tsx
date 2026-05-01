@@ -24,12 +24,12 @@ export default function WelcomePage() {
                           bg-gradient-to-br from-pens-surface to-pens-navy
                           shadow-[0_32px_64px_rgba(0,0,0,0.4)] border border-pens-muted/20">
             <Image
-              src="/illustrations/editorial-portrait.png"
-              alt="The Member — editorial portrait"
+              src="/illustrations/welcome-hero.png"
+              alt="Lacing up — the work begins"
               fill
               priority
               sizes="(max-width: 768px) 100vw, 40vw"
-              className="object-cover object-[center_25%] grayscale-[25%] contrast-110"
+              className="object-cover object-center contrast-110"
             />
             {/* Top vignette to keep it readable on light highlights */}
             <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-pens-deep/60 to-transparent pointer-events-none" />
