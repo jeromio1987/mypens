@@ -18,6 +18,36 @@ uri = "file://attached_assets/generated_images/welcome-option-d-window-noir.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "JZro2_G-hzEdiPq9vngdZ"
+uri = "file://attached_assets/generated_images/welcome-opt-e-sink.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "zIhw1bwIQkQkwfQi9NYC6"
+uri = "file://attached_assets/generated_images/welcome-opt-f-belt.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "2YljkBSITsGz5Qx1xwQRh"
+uri = "file://attached_assets/generated_images/welcome-opt-g-dawn-run.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "VaTs5oEFVqOmYw7Hvmv2o"
+uri = "file://attached_assets/generated_images/welcome-opt-h-fridge.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "hHmylZ-aH3i12z7GSRuBK"
+uri = "file://attached_assets/generated_images/welcome-opt-i-old-gym.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "BymYuK8k6HNJOqsj7FLci"
 uri = "file://project_context.txt"
@@ -53,3 +83,33 @@ id = "YECa1Gv_0M0vFi9h-LPVm"
 uri = "file://attached_assets/generated_images/welcome-option-d-window-noir.png"
 type = "image"
 title = "Option D — Whisky at the rain-streaked window"
+
+[[outputs]]
+id = "EZNdd6_aJYa9F6neR059N"
+uri = "file://attached_assets/generated_images/welcome-opt-e-sink.png"
+type = "image"
+title = "Option E — Bathroom sink reckoning"
+
+[[outputs]]
+id = "0XPinApt4FrQE_itQ_VQc"
+uri = "file://attached_assets/generated_images/welcome-opt-f-belt.png"
+type = "image"
+title = "Option F — Punching a new hole in the belt"
+
+[[outputs]]
+id = "H4BWJ4h2QQkUnnrLa_ZEY"
+uri = "file://attached_assets/generated_images/welcome-opt-g-dawn-run.png"
+type = "image"
+title = "Option G — Pre-dawn run, fog & streetlight"
+
+[[outputs]]
+id = "4SdJbs-1SOQ3nj1OJzMEr"
+uri = "file://attached_assets/generated_images/welcome-opt-h-fridge.png"
+type = "image"
+title = "Option H — Midnight fridge, the 2am snack"
+
+[[outputs]]
+id = "W09kTYc5bDPBxizsBeocO"
+uri = "file://attached_assets/generated_images/welcome-opt-i-old-gym.png"
+type = "image"
+title = "Option I — Forgotten basement gym corner"
