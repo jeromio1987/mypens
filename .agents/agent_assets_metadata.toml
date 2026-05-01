@@ -6,3 +6,15 @@ id = "BymYuK8k6HNJOqsj7FLci"
 uri = "file://project_context.txt"
 type = "text"
 title = "Project Context Bundle (for ChatGPT upload)"
+
+[[outputs]]
+id = "Mw_ys14qOmnqP9wepzXDy"
+uri = "file://public/illustrations/gritty-portrait.png"
+type = "image"
+title = "Option A — gritty B&W portrait (already in your project)"
+
+[[outputs]]
+id = "cXUh4smLxVEj3iyaQF6RP"
+uri = "file://public/illustrations/editorial-portrait.png"
+type = "image"
+title = "Current — illustrated palm-tree dad"
