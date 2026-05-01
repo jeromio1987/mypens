@@ -1,11 +1,32 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 
-// Set the "seen welcome" cookie the moment the user lands on /welcome,
-// so the first-time-visitor redirect at `/` doesn't loop.
-export function proxy(req: NextRequest) {
-  const res = NextResponse.next()
-  if (req.nextUrl.pathname === '/welcome') {
+const PUBLIC_API_PREFIXES = [
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/integrations/garmin/callback',
+  '/api/integrations/garmin/webhook',
+  '/api/integrations/garmin/cron',
+  '/api/integrations/strava/callback',
+  '/api/integrations/strava/webhook',
+  '/api/integrations/strava/cron',
+  '/api/integrations/healthkit/ingest',
+  '/api/integrations/healthconnect/ingest',
+  '/api/cron/',
+]
+
+const PUBLIC_PAGES = new Set<string>(['/login', '/welcome'])
+
+function isPublicApiRoute(pathname: string): boolean {
+  return PUBLIC_API_PREFIXES.some(prefix => pathname.startsWith(prefix))
+}
+
+export async function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl
+
+  if (pathname === '/welcome') {
+    const res = NextResponse.next()
     if (req.cookies.get('mp_seen_welcome')?.value !== '1') {
       res.cookies.set('mp_seen_welcome', '1', {
         sameSite: 'lax',
@@ -13,10 +34,39 @@ export function proxy(req: NextRequest) {
         maxAge: 60 * 60 * 24 * 365,
       })
     }
+    return res
   }
-  return res
+
+  if (pathname.startsWith('/api/')) {
+    if (isPublicApiRoute(pathname)) {
+      return NextResponse.next()
+    }
+    const token = req.cookies.get(SESSION_COOKIE)?.value
+    const ok = await verifySessionToken(token)
+    if (!ok) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    return NextResponse.next()
+  }
+
+  if (PUBLIC_PAGES.has(pathname)) {
+    return NextResponse.next()
+  }
+
+  const token = req.cookies.get(SESSION_COOKIE)?.value
+  const ok = await verifySessionToken(token)
+  if (!ok) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/login'
+    url.search = `?next=${encodeURIComponent(pathname + req.nextUrl.search)}`
+    return NextResponse.redirect(url)
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/welcome'],
+  matcher: [
+    '/((?!_next/|favicon.ico|manifest.webmanifest|sw.js|workbox-|icon-|apple-touch-icon|illustrations/|images/|fonts/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|woff|woff2|ttf|map)$).*)',
+  ],
 }
