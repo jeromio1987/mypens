@@ -298,6 +298,86 @@ model Preset {
   usedCount Int      @default(0)
 }
 
+// =====================================================================
+// ANCHOR — recovery & ADD self-management module.
+// All models below are ADDITIVE; no existing model is altered. Local-only,
+// single-user. Sensitive data — never logged to console, never serialized
+// off-host except via the explicit /api/anchor/export endpoint.
+// =====================================================================
+
+// One row per calendar date — the daily check-in.
+model RecoveryEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  date      String   @unique // yyyy-mm-dd local
+
+  // Hard substance/behavior flags
+  alcoholDrinks Int     @default(0) // 0 = clean
+  cocaineUsed   Boolean @default(false)
+  escortUsed    Boolean @default(false)
+
+  // Soft signals (1-5)
+  mood        Int? // 1 (very low) — 5 (very good)
+  energy      Int? // 1 — 5
+  sleepHours  Float?
+
+  // Supplement checklist (JSON array of strings, e.g. ["NAC","Creatine"])
+  supplements String @default("[]")
+
+  // Free text — kept short on purpose
+  notes String?
+}
+
+// Each tap on "I'm having a craving NOW" creates one row.
+model CravingEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) // = the moment of craving
+
+  // What it was for: alcohol | cocaine | escort | other
+  target   String  @default("alcohol")
+  // Free-text trigger: "Friday 18:00 work stress"
+  trigger  String?
+  // What you did about it: cold_shower | walk | training | gaming | breath | other
+  action   String  @default("cold_shower")
+  // Outcome: resisted | partial | slipped
+  outcome  String  @default("resisted")
+  notes    String?
+}
+
+// Singleton row holding the user's cost assumptions and clean-day targets.
+model RecoverySettings {
+  id        String   @id @default("default")
+  updatedAt DateTime @updatedAt
+
+  // Per-unit costs (EUR) for the money-saved calculator
+  drinkCostEur   Float @default(7)   // average price of one drink
+  cocaineGramEur Float @default(70)  // street price per gram
+  escortNightEur Float @default(1000)
+
+  // Baseline weekly consumption BEFORE the protocol started.
+  // Used to compute "drinks avoided" = baseline_per_day - actual.
+  baselineDrinksPerWeek Float @default(45)
+  baselineCocaineGramsPerMonth Float @default(3)
+  baselineEscortsPerMonth      Float @default(1.5)
+
+  // The reset start date. Streaks and money-saved are measured from here.
+  resetStartDate String @default("2026-05-01")
+
+  // Phase target lengths (days)
+  phase1ResetDays Int @default(45)
+}
+
+// Treatment milestones — appointments, med starts, phase boundaries.
+model RecoveryMilestone {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  date      String   // yyyy-mm-dd
+  kind      String   // appointment | med_start | phase_change | note
+  label     String
+  notes     String?
+}
+
 // In-app notification inbox. Currently the only producer is the
 // stale-pairing cron, but the model is intentionally generic so future
 // alerts (goal milestones, weekly recaps, etc.) can reuse it.

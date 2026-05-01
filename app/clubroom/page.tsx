@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   ArrowLeft, Flame, Dumbbell, Moon, UtensilsCrossed, Scale,
   Trophy, TrendingDown, Layers, Star, Lock,
@@ -206,6 +207,19 @@ export default function ClubroomPage() {
             <Link href="/" className="text-pens-muted hover:text-pens-cream transition-colors">
               <ArrowLeft size={20} />
             </Link>
+            {/* Member crest — editorial portrait used as Clubroom avatar fallback (decorative) */}
+            <div
+              aria-hidden="true"
+              className="relative w-12 h-12 rounded-full overflow-hidden ring-2 ring-pens-gold/40 bg-pens-surface shrink-0"
+            >
+              <Image
+                src="/illustrations/editorial-portrait.png"
+                alt=""
+                fill
+                sizes="48px"
+                className="object-cover object-[center_25%] grayscale contrast-125"
+              />
+            </div>
             <div>
               <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">Private · V1</p>
               <h1 className="text-2xl font-bold text-pens-cream leading-tight">The Clubroom</h1>
