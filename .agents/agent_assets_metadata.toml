@@ -1,5 +1,22 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "nZeIcMLYYVbVY4AGsEBAj"
+uri = "file://attached_assets/generated_images/welcome-option-b-gym-bench.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "glqS3m-RB317l6uDaB0bW"
+uri = "file://attached_assets/generated_images/welcome-option-c-hands-barbell.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "78VwV1k1fImVUJC3TkeO-"
+uri = "file://attached_assets/generated_images/welcome-option-d-window-noir.png"
+type = "image"
+title = "generated_image"
 
 [[outputs]]
 id = "BymYuK8k6HNJOqsj7FLci"
@@ -18,3 +35,21 @@ id = "cXUh4smLxVEj3iyaQF6RP"
 uri = "file://public/illustrations/editorial-portrait.png"
 type = "image"
 title = "Current — illustrated palm-tree dad"
+
+[[outputs]]
+id = "JnL-ohDQEM9U1lLR-Z-a7"
+uri = "file://attached_assets/generated_images/welcome-option-b-gym-bench.png"
+type = "image"
+title = "Option B — Empty gym at night"
+
+[[outputs]]
+id = "q_QqT4K0afMoest4GTV13"
+uri = "file://attached_assets/generated_images/welcome-option-c-hands-barbell.png"
+type = "image"
+title = "Option C — Weathered hands on barbell"
+
+[[outputs]]
+id = "YECa1Gv_0M0vFi9h-LPVm"
+uri = "file://attached_assets/generated_images/welcome-option-d-window-noir.png"
+type = "image"
+title = "Option D — Whisky at the rain-streaked window"
