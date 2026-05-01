@@ -1,8 +1,20 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
+import { cookies } from 'next/headers'
+import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth'
+
+async function requireAuth(): Promise<NextResponse | null> {
+  const jar = await cookies()
+  const token = jar.get(SESSION_COOKIE)?.value
+  const ok = await verifySessionToken(token)
+  if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  return null
+}
 
 export async function POST() {
+  const authError = await requireAuth()
+  if (authError) return authError
   try {
     const dbPath = path.join(process.cwd(), 'prisma', 'dev.db')
     const backupDir = path.join(process.cwd(), 'prisma', 'backups')
@@ -50,6 +62,8 @@ export async function POST() {
 }
 
 export async function GET() {
+  const authError = await requireAuth()
+  if (authError) return authError
   try {
     const backupDir = path.join(process.cwd(), 'prisma', 'backups')
 

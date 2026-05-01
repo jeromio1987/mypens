@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { writeFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { consume, isSameOrigin } from '@/lib/rateLimit'
+import { cookies } from 'next/headers'
+import { consume } from '@/lib/rateLimit'
+import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 
@@ -44,10 +46,10 @@ function sniffImageExt(buf: Buffer): string | null {
 
 export async function POST(req: Request) {
   try {
-    // — Origin check: REQUIRE a same-origin Origin header. Cross-site or
-    //   no-Origin requests (e.g. crafted curl) are rejected outright.
-    if (!isSameOrigin(req)) {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    const jar = await cookies()
+    const token = jar.get(SESSION_COOKIE)?.value
+    if (!(await verifySessionToken(token))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     // — Rate limit: GLOBAL bucket. We deliberately don't key off IP because
     //   x-forwarded-for / x-real-ip are caller-controlled and trivially
