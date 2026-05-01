@@ -48,6 +48,36 @@ uri = "file://attached_assets/generated_images/welcome-opt-i-old-gym.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "ubA6wZ3GcIG1QE_EAWPAA"
+uri = "file://attached_assets/generated_images/welcome-opt-j-cyclist-dusk.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "z6MU3YYuwRrrJiczP0rN4"
+uri = "file://attached_assets/generated_images/welcome-opt-k-punching-bag.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "IHsCBJeq6-rK3He61aKEu"
+uri = "file://attached_assets/generated_images/welcome-opt-l-laces.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Vns_L3GhSjPXnbc2DzyL2"
+uri = "file://attached_assets/generated_images/welcome-opt-m-scale.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "FfPD5noft5tOXEXYU7dUp"
+uri = "file://attached_assets/generated_images/welcome-opt-n-cigarette.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "BymYuK8k6HNJOqsj7FLci"
 uri = "file://project_context.txt"
@@ -113,3 +143,33 @@ id = "W09kTYc5bDPBxizsBeocO"
 uri = "file://attached_assets/generated_images/welcome-opt-i-old-gym.png"
 type = "image"
 title = "Option I — Forgotten basement gym corner"
+
+[[outputs]]
+id = "6PMYw5QpB-rPto5GAVhwy"
+uri = "file://attached_assets/generated_images/welcome-opt-j-cyclist-dusk.png"
+type = "image"
+title = "Option J — Cyclist on a country road at dusk"
+
+[[outputs]]
+id = "l3-N3ZO6FQez5EnxcI1Ch"
+uri = "file://attached_assets/generated_images/welcome-opt-k-punching-bag.png"
+type = "image"
+title = "Option K — Old leather punching bag in dusty light"
+
+[[outputs]]
+id = "mPVFfnYQ4I-OOaUqy87qF"
+uri = "file://attached_assets/generated_images/welcome-opt-l-laces.png"
+type = "image"
+title = "Option L — Lacing old running shoes at dawn"
+
+[[outputs]]
+id = "avHh5WC1_6CjHWx8E3oBy"
+uri = "file://attached_assets/generated_images/welcome-opt-m-scale.png"
+type = "image"
+title = "Option M — Vintage bathroom scale, moment of truth"
+
+[[outputs]]
+id = "K6TlE1y-vNX1YiDActKi0"
+uri = "file://attached_assets/generated_images/welcome-opt-n-cigarette.png"
+type = "image"
+title = "Option N — The last cigarette"
