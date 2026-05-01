@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server'
 import { listRecentActivities } from '@/lib/integrations/garmin/api'
 import { mapActivityToDraft } from '@/lib/integrations/garmin/mapping'
 import { markAlreadyImported } from '@/lib/integrations/_shared/import'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 export async function GET(request: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const { searchParams } = new URL(request.url)
     const days = Math.max(1, Math.min(30, Number(searchParams.get('days') || 14)))

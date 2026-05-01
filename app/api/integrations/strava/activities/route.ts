@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { listRecentActivities } from '@/lib/integrations/strava/api'
 import { mapActivityToDraft } from '@/lib/integrations/strava/mapping'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 /** GET — fetch recent Strava activities and mark which have already been imported. */
 export async function GET(request: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const { searchParams } = new URL(request.url)
     const days = Math.max(1, Math.min(90, Number(searchParams.get('days') || 30)))

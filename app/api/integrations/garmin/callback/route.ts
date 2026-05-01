@@ -8,6 +8,7 @@ import {
   getAppBaseUrl,
   persistConnection,
 } from '@/lib/integrations/garmin/oauth'
+import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -34,7 +35,17 @@ export async function GET(request: Request) {
     )
   }
 
+  // Verify the owner session. The OAuth redirect returns to the same browser
+  // that started the flow, so the session cookie must still be valid.
   const cookieStore = await cookies()
+  const sessionToken = cookieStore.get(SESSION_COOKIE)?.value
+  const authenticated = await verifySessionToken(sessionToken)
+  if (!authenticated) {
+    return clearCookies(
+      NextResponse.redirect(`${redirectBase}/login?next=/integrations`),
+    )
+  }
+
   const expectedState = cookieStore.get(GARMIN_STATE_COOKIE)?.value
   const verifier = cookieStore.get(GARMIN_VERIFIER_COOKIE)?.value
   if (!expectedState || !stateParam || expectedState !== stateParam) {

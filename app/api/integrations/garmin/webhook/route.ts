@@ -18,11 +18,15 @@ import type { GarminActivity } from '@/lib/integrations/garmin/api'
  * immediately and process asynchronously — slow imports must not time out
  * the webhook.
  *
- * Auth: Garmin does not sign payloads, but every notification includes the
- * `userId` for the originating Garmin user. We reject anything that doesn't
- * carry a `userId` matching the `garminUserId` stored on our connection row.
- * Missing `userId` is treated as foreign — we never trust unauthenticated
- * activity items, even if the connection has a stored `garminUserId`.
+ * Auth: Garmin does not sign payloads. We require a shared secret supplied as
+ * the `verify_token` query parameter on every inbound request. Set
+ * `GARMIN_WEBHOOK_VERIFY_TOKEN` in the environment and register the webhook
+ * URL with `?verify_token=<secret>` appended in the Garmin developer portal.
+ * Requests without a valid token are rejected (403) before any DB access.
+ *
+ * Within verified payloads, activity items are further validated against the
+ * `garminUserId` stored on the connection row. Items for a different user are
+ * silently discarded, and items missing `userId` are treated as foreign.
  */
 
 interface PingActivityRef {
@@ -48,6 +52,21 @@ function hasFullSummary(a: IncomingActivity): a is GarminActivity & PingActivity
 }
 
 export async function POST(request: Request) {
+  // Verify the shared webhook secret. Set GARMIN_WEBHOOK_VERIFY_TOKEN in the
+  // environment and append ?verify_token=<secret> to the webhook URL
+  // registered in the Garmin developer portal. This is required — requests
+  // without a valid token are rejected regardless of their payload content.
+  const verifyToken = process.env.GARMIN_WEBHOOK_VERIFY_TOKEN
+  if (!verifyToken) {
+    console.error('[garmin webhook] GARMIN_WEBHOOK_VERIFY_TOKEN is not configured; rejecting request')
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 })
+  }
+  const url = new URL(request.url)
+  const incoming = url.searchParams.get('verify_token')
+  if (!incoming || incoming !== verifyToken) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   let body: GarminWebhookBody
   try {
     body = (await request.json()) as GarminWebhookBody

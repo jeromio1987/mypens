@@ -6,8 +6,12 @@ import {
   generateState,
   getAuthorizeUrl,
 } from '@/lib/integrations/garmin/oauth'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 export async function GET(request: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     if (!process.env.GARMIN_CLIENT_ID || !process.env.GARMIN_CLIENT_SECRET) {
       return NextResponse.json(

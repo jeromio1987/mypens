@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { issuePairingToken } from '@/lib/integrations/healthkit/auth'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 /** POST { deviceLabel? } — mint (or rotate) the pairing token shown to the user. */
 export async function POST(request: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const body = await request.json().catch(() => ({}))
     const deviceLabel: string | null =

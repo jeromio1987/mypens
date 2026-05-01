@@ -3,6 +3,7 @@ import { exchangeCode, getAppBaseUrl, persistConnection, STRAVA_STATE_COOKIE } f
 import { ensureSubscription } from '@/lib/integrations/strava/webhook'
 import { prisma } from '@/lib/db'
 import { cookies } from 'next/headers'
+import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -35,8 +36,18 @@ export async function GET(request: Request) {
     )
   }
 
-  // CSRF protection: verify state matches the cookie set in /authorize
+  // Verify the owner session. The OAuth redirect returns to the same browser
+  // that started the flow, so the session cookie must still be valid.
   const cookieStore = await cookies()
+  const sessionToken = cookieStore.get(SESSION_COOKIE)?.value
+  const authenticated = await verifySessionToken(sessionToken)
+  if (!authenticated) {
+    return clearStateCookie(
+      NextResponse.redirect(`${redirectBase}/login?next=/integrations`),
+    )
+  }
+
+  // CSRF protection: verify state matches the cookie set in /authorize
   const expectedState = cookieStore.get(STRAVA_STATE_COOKIE)?.value
   if (!expectedState || !stateParam || expectedState !== stateParam) {
     return clearStateCookie(

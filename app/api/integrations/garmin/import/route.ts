@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { importDrafts, type DraftItem } from '@/lib/integrations/_shared/import'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 export async function POST(request: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const body = await request.json()
     const items: DraftItem[] = Array.isArray(body?.items) ? body.items : []

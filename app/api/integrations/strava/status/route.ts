@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { isIntegrationErrorStale } from '@/lib/integrations/errorTtl'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 export async function GET() {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const configured = Boolean(
       process.env.STRAVA_CLIENT_ID && process.env.STRAVA_CLIENT_SECRET,

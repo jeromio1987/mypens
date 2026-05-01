@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
 import { issuePairingToken } from '@/lib/integrations/healthconnect/auth'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 export async function POST(request: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const body = await request.json().catch(() => ({}))
     const deviceLabel: string | null =

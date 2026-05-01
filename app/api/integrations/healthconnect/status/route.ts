@@ -3,8 +3,12 @@ import { prisma } from '@/lib/db'
 import { getConnection } from '@/lib/integrations/healthconnect/auth'
 import { getMobileStaleThresholdHours } from '@/lib/integrations/staleThreshold'
 import { isIntegrationErrorStale } from '@/lib/integrations/errorTtl'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 export async function GET() {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const conn = await getConnection()
     const pending = conn

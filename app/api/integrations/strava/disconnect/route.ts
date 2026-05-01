@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { deleteSubscription } from '@/lib/integrations/strava/webhook'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 export async function POST() {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const conn = await prisma.stravaConnection.findUnique({ where: { userId: 'default' } })
     if (conn?.webhookId) {

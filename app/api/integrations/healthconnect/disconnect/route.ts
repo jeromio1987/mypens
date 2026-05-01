@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 export async function POST() {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     await prisma.healthConnectConnection.deleteMany({ where: { userId: 'default' } })
     await prisma.pushedWorkout.deleteMany({ where: { source: 'healthconnect' } })

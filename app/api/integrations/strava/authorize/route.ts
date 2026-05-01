@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
 import { generateState, getAuthorizeUrl, STRAVA_STATE_COOKIE } from '@/lib/integrations/strava/oauth'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 export async function GET(request: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     if (!process.env.STRAVA_CLIENT_ID || !process.env.STRAVA_CLIENT_SECRET) {
       return NextResponse.json(

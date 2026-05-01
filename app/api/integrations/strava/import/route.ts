@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 interface DraftItem {
   date: string
@@ -16,6 +17,9 @@ interface DraftItem {
 
 /** POST { items: DraftItem[] } — create TrainingEntry rows from approved Strava drafts. */
 export async function POST(request: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const body = await request.json()
     const items: DraftItem[] = Array.isArray(body?.items) ? body.items : []

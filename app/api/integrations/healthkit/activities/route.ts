@@ -5,10 +5,14 @@ import { markAlreadyImported } from '@/lib/integrations/_shared/import'
 import { getConnection } from '@/lib/integrations/healthkit/auth'
 import { cleanupExpiredSkippedTombstones } from '@/lib/integrations/_shared/skippedTombstoneRetention'
 import { prisma } from '@/lib/db'
+import { requireOwner } from '@/lib/integrations/requireOwner'
 
 const SOURCE = 'healthkit'
 
 export async function GET(req: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const conn = await getConnection()
     if (!conn) return NextResponse.json({ error: 'Not connected to Apple Health' }, { status: 401 })
@@ -53,6 +57,9 @@ export async function GET(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const conn = await getConnection()
     if (!conn) return NextResponse.json({ error: 'Not connected to Apple Health' }, { status: 401 })
@@ -121,6 +128,9 @@ export async function DELETE(req: Request) {
  * workouts. Body: { ids: string[] }.
  */
 export async function POST(req: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
   try {
     const conn = await getConnection()
     if (!conn) return NextResponse.json({ error: 'Not connected to Apple Health' }, { status: 401 })
