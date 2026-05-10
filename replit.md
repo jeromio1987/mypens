@@ -1,45 +1,60 @@
-# [Project name]
+# My Pens Mobile
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A React Native / Expo health tracking companion app with 6 modules: Weight, Food, Sleep, Training, Measurements, and Journal. Backed by Supabase (PostgreSQL).
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/my-pens-mobile run dev` — Expo dev server (via workflow)
+- `pnpm --filter @workspace/api-server run dev` — Express API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Expo SDK 54, expo-router v6, React Native 0.81
+- Supabase (PostgreSQL) for all data persistence
+- @tanstack/react-query for server state
+- react-native-gifted-charts for trend charts
+- Inter font (400/500/600/700)
+- NativeTabs (iOS 26 liquid glass) + classic Tabs fallback
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/my-pens-mobile/` — Expo mobile app
+  - `app/(tabs)/` — 6 module screens (index=Weight, food, sleep, training, measurements, journal)
+  - `lib/supabase.ts` — lazy Supabase client (proxy pattern to avoid init-time crash)
+  - `lib/retentionModels.ts` — weight retention business logic (creatine, alcohol, glycogen, sodium, training)
+  - `constants/colors.ts` — light/dark theme + per-module accent colors
+  - `hooks/useColors.ts` — color scheme hook
+- `artifacts/api-server/` — Express API server (healthz only in v1)
+
+## Supabase tables used
+
+- `WeightEntry` — scale weight + confounders + computed trueWeightKg
+- `FoodEntry` — meals with macros (kcal, protein, carbs, fat, fiber)
+- `SleepEntry` — bedtime, wakeTime, hours, quality, HRV
+- `TrainingEntry` — exercise, sets, reps, weightKg, RPE, volume
+- `BodyMeasurement` — waist, chest, hips, arms, thighs, neck
+- `JournalEntry` — title, content, mood (1–5)
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Supabase client uses a Proxy for lazy initialization — avoids "invalid supabaseUrl" crash when env vars aren't available at module parse time
+- Food daily targets stored in AsyncStorage (`@mypens/food_targets`) — no server round-trip needed
+- Recent exercises stored in AsyncStorage (`@mypens/recent_exercises`) — autocomplete in Training tab
+- Sleep entries use `upsert` with `onConflict: 'date'` — one entry per day
+- Measurements use `upsert` with `onConflict: 'date'` — one entry per day
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+A mobile health companion for logging: body weight (with retention model to estimate true weight), food intake with macro tracking, sleep quality, gym training sets, body measurements, and daily journal entries. Each module shows a 30-day trend chart using react-native-gifted-charts.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+_Populate as you build._
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- `EXPO_PUBLIC_*` secrets must be set before the Expo workflow starts — they are bundled at build time by Metro
+- Do not rename Supabase table names — they're referenced by string in all queries
+- `react-native-gifted-charts` requires `react-native-svg` (already installed)

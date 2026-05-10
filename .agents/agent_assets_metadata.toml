@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "su7ADG00Bo0i1I0hzsO1w"
+uri = "file://artifacts/my-pens-mobile/assets/images/icon.png"
+type = "image"
+title = "my pens health app icon"

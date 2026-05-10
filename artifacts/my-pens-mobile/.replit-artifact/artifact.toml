@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "My Pens Mobile"
+version = "1.0.0"
+id = "artifacts/my-pens-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 22877
+
+[services.development]
+run = "pnpm --filter @workspace/my-pens-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/my-pens-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/my-pens-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "22877"
+BASE_PATH = "/"
