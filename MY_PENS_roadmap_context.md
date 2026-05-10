@@ -1,7 +1,8 @@
 # MY PENS – Multidimensional Roadmap (Context for AI sessions)
 
-> Use this file as context at the start of any new Claude or ChatGPT session.
-> Paste it in full and say: "This is my current roadmap. I want to continue working on it."
+> ⚠️ **SUPERSEDED — Do not use this file as session context.**  
+> The master roadmap is at `C:\Users\jerom\Desktop\claude\mypens-master-roadmap.md`.  
+> This file is kept for reference only and is no longer updated.
 
 ---
 
@@ -111,10 +112,10 @@
 
 | Phase | Focus | Deliverables |
 |-------|-------|-------------|
-| 1 – Foundation | Manual first | Fast manual entry (weight + body metrics), CSV import/export basics, source labels and override rules |
-| 2 – Trust MVP | Broker integrations | Apple HealthKit + Android Health Connect (read only), cross-source mapping (workouts, sleep, weight) |
-| 3 – Convenience | Direct convenience | Strava direct for workouts/context, Garmin evaluated post-broker, import review screens for duplicates |
-| 4 – Scale & Monetize | Selective expansion | Tanita via approved route, deeper vendor deals only when retention supports it |
+| 1 – Foundation | Manual first | ✅ Fast manual entry (weight + body metrics), ✅ Tanita CSV import (`/import-tanita`, `lib/tanitaCsv.ts`), source labels + override rules, CSV export (pending) |
+| 2 – Trust MVP | Broker integrations | ✅ Apple HealthKit + Android Health Connect schemas + pairing + push ingestion, ✅ cross-source provenance on TrainingEntry, ✅ PushedWorkout review inbox |
+| 3 – Convenience | Direct convenience | ✅ Strava OAuth + webhook + live sync, ✅ Garmin OAuth + activity ping + bulk .fit import, ✅ SkippedWorkout tombstones for de-dup |
+| 4 – Scale & Monetize | Selective expansion | Tanita direct API (CSV route now live as Phase 1 substitute), deeper vendor deals only when retention supports it |
 
 **Success looks like:** High-value import coverage. Clear source trust hierarchy. Integrations support the wedge — don't bloat the product.
 
@@ -133,27 +134,68 @@
 
 ---
 
-## Next 30 Days (Priority Order)
+## Build Status — May 2026
 
-1. Lock core schema and adjustment v1
-2. Polish the mobile trust loop and trip flow
-3. Ship privacy baseline and review pack
-4. Start HealthKit / Health Connect evaluation
+The codebase is ahead of the roadmap document. Actual state by track:
+
+| Track | Roadmap Phase | Actual State |
+|-------|--------------|-------------|
+| 1 – Dev | Phase 1–2 | ✅ Schema complete (WeightEntry + confounders, Food, Sleep, Training, Events, Goals, Body Measurements). ✅ Adjustment engine v3 (creatine/alcohol/glycogen/sodium/hardTraining models, EWMA rolling baseline, dynamic volatility band, outlier detection). ✅ Confidence layer (high/medium/low, uncertainty band). Backtest harness pending. |
+| 2 – Mobile/Design | Phase 1 | Mobile companion clients exist (`mobile-companions/`, `my-pens-mobile-test/`). Trust surface UI (confidence meter, explanation cards visible in weight module). Trip/event tagging page at `/events`. CSV export UI pending. |
+| 3 – Legal | Pre-Phase 1 | `threat_model.md` drafted. Privacy policy, terms, in-app consent flows not yet shipped. |
+| 4 – Brand/GTM | Pre-Phase 1 | Name and design language established (PENS navy theme). Landing page and proof story not yet published. |
+| 5 – Integrations | Phase 2–3 | ✅ Tanita CSV import. ✅ Strava OAuth + webhook. ✅ Garmin OAuth + ping + .fit bulk import. ✅ Apple HealthKit + Android Health Connect pairing + ingestion. ✅ PushedWorkout review inbox. CSV export pending. |
+
+---
+
+## Next Priorities (updated May 2026)
+
+1. **CSV export** — complete the Phase 1 import/export pair (weight + body metrics as downloadable CSV)
+2. **Privacy baseline** — ship privacy policy, terms, and in-app consent screen before any external users
+3. **Explanation cards** — surface the adjustment engine reasoning to the user in plain language (trust surface)
+4. **Backtest harness** — validate the adjustment models against historical data
+5. **Mobile trust loop polish** — morning reading prompt, post-trip reassurance flow
+6. **Monetization model** — define free vs paid tiers before any go-to-market work
+
+---
+
+## AI Parallel Workstreams
+
+### What Cursor should work on
+Cursor is best suited for implementation tasks with clear scope. Current open items:
+
+- **CSV export endpoint + UI** — `POST /api/export/weight` returning CSV, download button on `/weight`. Pair with existing import.
+- **Explanation card component** — a reusable `<ExplanationCard>` that takes a `WeightBreakdown` (from `lib/retentionModels.ts`) and renders plain-language reasoning. Already wired in the model; needs the UI.
+- **Backtest harness** — a script or internal page (`/data` or `/verdict`) that replays historical `WeightEntry` rows through `calculateWeightBreakdown()` and shows predicted vs actual drift.
+- **Source label UI on weight entries** — surface `tanitaReliable`, `morningReading`, and active confounders as readable badges on the weight log.
+- **Event attribution panel** — on `/weight`, when a date falls within an `EventTag` range, surface an inline banner explaining expected scale behaviour (similar to `EventBanner` component but inline in the trend).
+- **Empty state flows** — `/weight`, `/sleep`, `/training` empty states that guide a first-time user through logging their first entry (onboarding completion).
+
+### What ChatGPT Enterprise should work on
+ChatGPT Enterprise is best for writing, strategy, and structured thinking — not code:
+
+- **Privacy policy + terms of service** — draft for a single-user local health app (GDPR-framed, EU user). Reference the `threat_model.md` already in the repo for data flows. Needs: data collected, retention, deletion rights, no-third-party-sale clause, health data disclaimer.
+- **In-app consent copy** — short, plain-English consent screen text for first launch. Must cover health data, local storage only, what "adjustment" means.
+- **Explanation copy library** — write the plain-language strings for each adjustment type (creatine, alcohol, glycogen, sodium, hard training, flight, illness) to be used in explanation cards. One sentence per scenario, e.g. "You trained hard yesterday — your muscles are holding ~0.3 kg of water from inflammation."
+- **Monetization model** — define free vs paid tiers. Given the roadmap (personal utility, premium daily use), draft options: one-time purchase vs subscription vs freemium. Include price point rationale.
+- **Landing page copy** — one-sentence promise, three-bullet value prop, one proof story (e.g. the post-trip rebound walkthrough). Match the anti-jargon tone of the roadmap.
+- **DPIA-style risk review** — structured risk table: data category × risk × mitigation × residual risk. Based on the schema (health data, recovery/substance data in the Anchor module which is the most sensitive).
+- **MVP scope cut** — given everything built, write a crisp definition of what the minimum viable external-facing version is. What must work, what can be hidden behind a flag, what can be cut entirely for v1.
 
 ---
 
 ## What This Roadmap Does NOT Yet Cover (gaps to fill)
 
-- [ ] **Tech stack decisions** — what language/framework for mobile? React Native? Swift/Kotlin native?
-- [ ] **Solo vs team** — who is building this? Are you coding it yourself or directing AI/developers?
-- [ ] **Monetization model** — freemium tiers not yet defined (what's free, what's paid, price points)
-- [ ] **Data model spec** — the canonical schema is named but not designed (field names, types, relationships)
-- [ ] **Adjustment logic spec** — "adjustment v1" is referenced but algorithm not defined
-- [ ] **MVP scope cut** — Phase 2 deliverables are still broad; what is the absolute minimum to ship?
-- [ ] **Design language** — no visual identity yet (colors, typography, UI tone)
+- [ ] **Monetization model** — freemium tiers not yet defined (what's free, what's paid, price points) → ChatGPT Enterprise
+- [x] ~~**Data model spec**~~ — canonical schema fully designed and migrated
+- [x] ~~**Adjustment logic spec**~~ — adjustment engine v3 live in `lib/retentionModels.ts`
+- [ ] **MVP scope cut** — Phase 2 deliverables are still broad; what is the absolute minimum to ship? → ChatGPT Enterprise
+- [x] ~~**Design language**~~ — PENS navy theme established and applied consistently
 - [ ] **Name / domain** — is "MY PENS" final? Is a domain available?
 - [ ] **Metrics / success KPIs** — retention targets, engagement benchmarks not defined
+- [ ] **Privacy / legal baseline** — policy, terms, consent not yet shipped → ChatGPT Enterprise
+- [ ] **Tech stack decision for native mobile** — companion clients exist but React Native vs native not locked
 
 ---
 
-*Roadmap version: revised — exported March 2026*
+*Roadmap version: updated May 2026 — reflects actual build state*

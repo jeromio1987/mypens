@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText, Anchor } from 'lucide-react'
+import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText, Anchor, BookOpen } from 'lucide-react'
 import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 import NotificationsBadge from '@/components/shared/NotificationsBadge'
 
@@ -47,7 +47,8 @@ const MODULES = [
   { href: '/anchor',       label: 'Anchor',   icon: Anchor },
   { href: '/measurements', label: 'Body',     icon: Ruler },
   { href: '/dashboard',    label: 'Overview', icon: LayoutDashboard },
-]
+  { href: '/journal',      label: 'Journal',  icon: BookOpen, emeraldNav: true },
+] as const
 
 interface DayEntry {
   mode: string | null
@@ -125,6 +126,7 @@ export default function HomeClient() {
             <h1 className="text-xl font-[family-name:var(--font-headline)] font-black italic text-pens-cream">Auditor</h1>
           </div>
           <nav className="hidden md:flex gap-8">
+            <Link href="/landing"    className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">About</Link>
             <Link href="/dashboard" className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Dashboard</Link>
             <Link href="/context"   className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Journal</Link>
             <span             className="uppercase tracking-widest text-xs font-bold text-pens-crimson">Modes</span>
@@ -346,17 +348,24 @@ export default function HomeClient() {
 
       {/* Bottom mobile nav (preserved) */}
       <nav className="fixed bottom-0 left-0 right-0 bg-pens-deep/95 backdrop-blur border-t border-pens-muted/20 md:hidden z-40">
-        <div className="max-w-sm mx-auto grid grid-cols-5">
-          {MODULES.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="flex flex-col items-center gap-1 py-4 text-pens-cream/40 hover:text-pens-cream transition-colors"
-            >
-              <Icon size={18} />
-              <span className="text-[10px] uppercase tracking-widest font-medium">{label}</span>
-            </Link>
-          ))}
+        <div className="max-w-lg mx-auto grid grid-cols-3 sm:grid-cols-6">
+          {MODULES.map(({ href, label, icon: Icon, ...rest }) => {
+            const emerald = 'emeraldNav' in rest && rest.emeraldNav
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`flex flex-col items-center gap-1 py-3 transition-colors ${
+                  emerald ? 'text-emerald-500 hover:text-emerald-400' : 'text-pens-cream/40 hover:text-pens-cream'
+                }`}
+              >
+                <Icon size={18} />
+                <span className="text-[9px] uppercase tracking-widest font-medium text-center leading-tight px-0.5">
+                  {label}
+                </span>
+              </Link>
+            )
+          })}
         </div>
       </nav>
     </main>

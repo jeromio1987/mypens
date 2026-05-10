@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "MY PENS",
+    "slug": "mypens-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "mypens",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mypens.mobile"
+    },
+    "android": {
+      "package": "com.mypens.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#f9fafb"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "extra": {}
+  }
+}

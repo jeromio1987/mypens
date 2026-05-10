@@ -33,10 +33,14 @@ export default function BodyCompTrend({ refresh }: { refresh?: number }) {
   const [showUnreliable, setShowUnreliable] = useState(false)
 
   useEffect(() => {
-    setLoading(true)
-    fetch('/api/weight')
-      .then(r => r.json())
-      .then((entries: WeightEntry[]) => {
+    let cancelled = false
+    void (async () => {
+      await Promise.resolve()
+      if (cancelled) return
+      setLoading(true)
+      try {
+        const r = await fetch('/api/weight')
+        const entries: WeightEntry[] = await r.json()
         const sorted = [...entries]
           .filter(e => e.bodyFatPct != null || e.muscleMassKg != null)
           .sort((a, b) => a.date.localeCompare(b.date))
@@ -50,8 +54,13 @@ export default function BodyCompTrend({ refresh }: { refresh?: number }) {
             reliable: e.tanitaReliable,
           }))
         setData(sorted)
-      })
-      .finally(() => setLoading(false))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [refresh])
 
   if (loading)

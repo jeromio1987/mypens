@@ -8,6 +8,8 @@ import {
   Download, TrendingUp, TrendingDown,
 } from 'lucide-react'
 import type { VerdictData, VerdictPillar, LedgerItem } from '@/app/api/verdict/route'
+import { VERDICT_LABELS } from '@/lib/explanationCopy'
+import PremiumGate from '@/components/shared/PremiumGate'
 
 const PILLAR_ICONS: Record<string, React.ElementType> = {
   'arrow-up-right': ArrowUpRight,
@@ -17,10 +19,10 @@ const PILLAR_ICONS: Record<string, React.ElementType> = {
 }
 
 const PILLAR_TITLE: Record<VerdictPillar['key'], string> = {
-  P: 'The Training Ledger',
-  E: 'The Endurance Reserve',
-  N: 'The Nutrition Tax',
-  S: 'The Sleep Debt',
+  P: VERDICT_LABELS.verdict_training,
+  E: VERDICT_LABELS.verdict_anchor,
+  N: VERDICT_LABELS.verdict_food,
+  S: VERDICT_LABELS.verdict_sleep,
 }
 
 const PILLAR_SECTION: Record<VerdictPillar['key'], string> = {
@@ -153,10 +155,22 @@ function PillarSection({
   )
 }
 
+function formatHoursAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime()
+  if (!Number.isFinite(ms) || ms < 60_000) return 'just now'
+  const h = Math.floor(ms / 3600000)
+  if (h < 1) return 'under 1 hour ago'
+  if (h === 1) return '1 hour ago'
+  return `${h} hours ago`
+}
+
 export default function VerdictPage() {
   const [data, setData]       = useState<VerdictData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
+  const [aiSummary, setAiSummary]       = useState<string | null>(null)
+  const [aiGeneratedAt, setAiGeneratedAt] = useState<string | null>(null)
+  const [aiLoading, setAiLoading]       = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -174,6 +188,43 @@ export default function VerdictPage() {
         if (!cancelled) setError('Could not reach the verdict API.')
       } finally {
         if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/verdict/summary')
+        const json = (await res.json().catch(() => null)) as {
+          summary?: string | null
+          error?: boolean
+          generatedAt?: string
+        } | null
+        if (cancelled) return
+        if (
+          json &&
+          typeof json.summary === 'string' &&
+          json.summary.trim().length > 0 &&
+          !json.error
+        ) {
+          setAiSummary(json.summary.trim())
+          setAiGeneratedAt(
+            typeof json.generatedAt === 'string' ? json.generatedAt : null,
+          )
+        } else {
+          setAiSummary(null)
+          setAiGeneratedAt(null)
+        }
+      } catch {
+        if (!cancelled) {
+          setAiSummary(null)
+          setAiGeneratedAt(null)
+        }
+      } finally {
+        if (!cancelled) setAiLoading(false)
       }
     })()
     return () => { cancelled = true }
@@ -312,6 +363,33 @@ export default function VerdictPage() {
               ))}
             </div>
           </div>
+        )}
+
+        {/* Weekly AI audit — above pillar breakdown; fetch is independent */}
+        {(aiLoading || aiSummary) && (
+          <PremiumGate feature="AI weekly audit" className="rounded-2xl">
+            <div className="rounded-2xl border border-pens-muted/30 bg-black/60 p-5 space-y-3 min-h-[120px]">
+              {aiLoading ? (
+                <>
+                  <div className="h-3 w-full bg-pens-cream/10 rounded animate-pulse" />
+                  <div className="h-3 w-[92%] bg-pens-cream/10 rounded animate-pulse" />
+                  <div className="h-3 w-[88%] bg-pens-cream/10 rounded animate-pulse" />
+                </>
+              ) : (
+                <>
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-pens-crimson font-bold">
+                    THE WEEKLY AUDIT — AI VERDICT
+                  </p>
+                  <p className="text-sm text-pens-cream font-mono leading-relaxed">{aiSummary}</p>
+                  {aiGeneratedAt && (
+                    <p className="text-xs text-pens-cream/30 pt-1">
+                      Generated {formatHoursAgo(aiGeneratedAt)} · Claude
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </PremiumGate>
         )}
 
         {/* Per-pillar editorial sections */}

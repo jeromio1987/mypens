@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  Scale, Moon, Ruler, LayoutDashboard,
+  Scale, Moon, BookOpen, LayoutDashboard,
   Droplets, Utensils, Plane, Dumbbell,
   ArrowLeft, Check, BarChart2, ListChecks, FileText,
 } from 'lucide-react'
@@ -28,7 +28,7 @@ interface QuickEntry {
 const QUICK_ENTRIES: QuickEntry[] = [
   { href: '/weight',       label: 'Weight',   icon: Scale,           action: 'RECORD', subtitle: 'Last entry' },
   { href: '/sleep',        label: 'Sleep',    icon: Moon,            action: 'AUDIT',  subtitle: 'Last entry' },
-  { href: '/measurements', label: 'Body',     icon: Ruler,           action: 'SYNC',   subtitle: 'Measurements & body data' },
+            { href: '/journal',      label: 'Journal',  icon: BookOpen,       action: 'OPEN',   subtitle: 'Mood ledger & reflections' },
   { href: '/dashboard',    label: 'Overview', icon: LayoutDashboard, action: 'VIEW',   subtitle: "The Day's P.E.N.S. Score" },
 ]
 
@@ -40,6 +40,12 @@ interface DayState {
 interface LastEntries {
   weight: string | null
   sleep: string | null
+}
+
+function formatHours(h: number): string {
+  const hrs = Math.floor(h)
+  const mins = Math.round((h - hrs) * 60)
+  return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`
 }
 
 export default function ContextPage() {
@@ -74,12 +80,6 @@ export default function ContextPage() {
     }
     loadData()
   }, [])
-
-  function formatHours(h: number): string {
-    const hrs  = Math.floor(h)
-    const mins = Math.round((h - hrs) * 60)
-    return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`
-  }
 
   const toggleTag = async (tagId: string) => {
     const next = day.tags.includes(tagId)
@@ -280,7 +280,7 @@ export default function ContextPage() {
           {[
             { href: '/weight',       label: 'Weight',   icon: Scale },
             { href: '/sleep',        label: 'Sleep',    icon: Moon },
-            { href: '/measurements', label: 'Body',     icon: Ruler },
+            { href: '/journal',      label: 'Journal',  icon: BookOpen },
             { href: '/dashboard',    label: 'Overview', icon: LayoutDashboard },
           ].map(({ href, label, icon: Icon }) => (
             <Link

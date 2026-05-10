@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ComposedChart,
   Line,
@@ -13,6 +13,8 @@ import {
 } from 'recharts'
 import { ChevronRight, ChevronDown, Pencil, Check, X } from 'lucide-react'
 import type { ConfidenceLevel } from '@/lib/retentionModels'
+import PremiumGate from '@/components/shared/PremiumGate'
+import { useTier } from '@/hooks/useTier'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -286,12 +288,32 @@ function ScaleDot(props: any) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+type TrendRange = 30 | 90 | 'all'
+
 type ChartEntry = Entry & {
   label: string
   retention: number
   __bandLow: number
   __bandWidth: number
 }
+
+function minDateISOForRollingDays(daysInclusive: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - (daysInclusive - 1))
+  return d.toISOString().slice(0, 10)
+}
+
+function filterByTrendRange(entries: ChartEntry[], range: TrendRange): ChartEntry[] {
+  if (range === 'all') return entries
+  const min =
+    range === 30 ? minDateISOForRollingDays(30) : minDateISOForRollingDays(90)
+  return entries.filter(e => e.date >= min)
+}
+
+const rangeBtnBase =
+  'text-xs px-2.5 py-1 rounded-lg border transition-colors whitespace-nowrap'
+const rangeBtnIdle = 'border-pens-muted/40 text-pens-cream/55 hover:text-pens-cream'
+const rangeBtnActive = 'border-pens-gold/50 text-pens-gold bg-pens-gold/10'
 
 interface WeightEditForm {
   scaleKg: string
@@ -306,12 +328,20 @@ interface WeightEditForm {
 }
 
 export default function WeightTrend({ refresh }: { refresh?: number }) {
+  const { isPremium, isLoading: tierLoading } = useTier()
   const [data, setData]             = useState<ChartEntry[]>([])
   const [loading, setLoading]       = useState(true)
+  const [trendRange, setTrendRange]   = useState<TrendRange>(30)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingId, setEditingId]   = useState<string | null>(null)
   const [editForm, setEditForm]     = useState<WeightEditForm | null>(null)
   const [saving, setSaving]         = useState(false)
+
+  useEffect(() => {
+    if (!tierLoading && !isPremium && trendRange !== 30) {
+      setTrendRange(30)
+    }
+  }, [tierLoading, isPremium, trendRange])
 
   useEffect(() => {
     setLoading(true)
@@ -396,6 +426,15 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
     }
   }
 
+  const displayChart = useMemo(() => {
+    if (data.length === 0) return []
+    const slice = filterByTrendRange(data, trendRange)
+    return slice.length > 0 ? slice : data
+  }, [data, trendRange])
+
+  const rangeTitle =
+    trendRange === 30 ? '30-day' : trendRange === 90 ? '90-day' : 'Full history'
+
   if (loading)
     return <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 text-sm text-pens-cream/40">Loading chart…</div>
 
@@ -408,13 +447,44 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
 
   return (
     <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 w-full">
-      <h2 className="text-xl font-semibold text-pens-cream mb-0.5">30-Day Trend</h2>
-      <p className="text-xs text-pens-cream/40 mb-4">
-        Green band = uncertainty interval · Dashed = 7-day baseline trend · Red dots = statistical outliers
-      </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-2">
+        <div>
+          <h2 className="text-xl font-semibold text-pens-cream capitalize">{rangeTitle} trend</h2>
+          <p className="text-xs text-pens-cream/40 mt-0.5">
+            Green band = uncertainty interval · Dashed = 7-day baseline trend · Red dots = statistical outliers
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 shrink-0 items-center justify-end">
+          <button
+            type="button"
+            className={`${rangeBtnBase} ${trendRange === 30 ? rangeBtnActive : rangeBtnIdle}`}
+            onClick={() => setTrendRange(30)}
+          >
+            30 days
+          </button>
+          <PremiumGate feature="Extended history">
+            <button
+              type="button"
+              className={`${rangeBtnBase} ${trendRange === 90 ? rangeBtnActive : rangeBtnIdle}`}
+              onClick={() => setTrendRange(90)}
+            >
+              90 days
+            </button>
+          </PremiumGate>
+          <PremiumGate feature="Extended history">
+            <button
+              type="button"
+              className={`${rangeBtnBase} ${trendRange === 'all' ? rangeBtnActive : rangeBtnIdle}`}
+              onClick={() => setTrendRange('all')}
+            >
+              All time
+            </button>
+          </PremiumGate>
+        </div>
+      </div>
 
       <ResponsiveContainer width="100%" height={300}>
-        <ComposedChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+        <ComposedChart data={displayChart} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#3D405B50" />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#F5E6D360' }} />
           <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: '#F5E6D360' }} unit=" kg" width={52} />
@@ -474,7 +544,7 @@ export default function WeightTrend({ refresh }: { refresh?: number }) {
           History — tap any entry for breakdown
         </h3>
         <div className="space-y-px max-h-96 overflow-y-auto">
-          {[...data].reverse().map(e => {
+          {[...displayChart].reverse().map(e => {
             const bandKg     = e.dynamicBandKg
             const isExpanded = expandedId === e.id
             const isEditing  = editingId  === e.id

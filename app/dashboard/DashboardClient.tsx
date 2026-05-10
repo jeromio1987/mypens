@@ -4,15 +4,18 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, TrendingDown, TrendingUp, Minus, Download, Scale,
-  Moon, Dumbbell, Ruler, DatabaseBackup,
+  Moon, Dumbbell, Ruler, DatabaseBackup, BookOpen,
   Plane, Thermometer, Palmtree, Salad, Trophy, Tag,
   CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Map, Target, Sparkles, Image as ImageIcon,
+  FileText,
 } from 'lucide-react'
 import type { StructuredInsight } from '@/app/api/dashboard/route'
 import GoalsPanel from '@/components/goals/GoalsPanel'
 import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 import NotificationsBadge from '@/components/shared/NotificationsBadge'
 import WeightExplanationCard from '@/components/weight/WeightExplanationCard'
+import PremiumGate from '@/components/shared/PremiumGate'
+import { useTier, setTierInStore } from '@/hooks/useTier'
 
 interface StreakModule { current: number; longest: number; lastLogged: string | null; coverage: number }
 interface StreaksData {
@@ -123,6 +126,7 @@ const MODULES = [
   { href: '/sleep',        label: 'Sleep',        icon: Moon,         color: 'text-violet-400' },
   { href: '/training',     label: 'Training',     icon: Dumbbell,     color: 'text-orange-400' },
   { href: '/measurements', label: 'Measurements', icon: Ruler,        color: 'text-rose-400' },
+  { href: '/journal',      label: 'Journal',      icon: BookOpen,     color: 'text-emerald-400' },
   { href: '/events',       label: 'Events',       icon: CalendarDays, color: 'text-sky-400' },
 ]
 
@@ -134,11 +138,45 @@ const STREAK_MODULES = [
 ]
 
 export default function DashboardClient() {
+  const { tier, isPremium, isLoading: tierLoading } = useTier()
+  const [tierBusy, setTierBusy]   = useState(false)
   const [data, setData]         = useState<DashboardData | null>(null)
   const [loading, setLoading]   = useState(true)
   const [streaks, setStreaks]   = useState<StreaksData | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   const [showGoals, setShowGoals] = useState(false)
+
+  async function downloadWeeklyReport() {
+    try {
+      const res = await fetch('/api/report/weekly')
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'my-pens-weekly.pdf'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {}
+  }
+
+  async function handlePremiumDevToggle() {
+    const next = tier === 'premium' ? 'free' : 'premium'
+    setTierBusy(true)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier: next }),
+      })
+      if (res.ok) {
+        const j = (await res.json()) as { tier?: string }
+        setTierInStore(j.tier === 'premium' ? 'premium' : 'free')
+      }
+    } finally {
+      setTierBusy(false)
+    }
+  }
 
   useEffect(() => {
     fetch('/api/dashboard')
@@ -161,6 +199,30 @@ export default function DashboardClient() {
         {showGoals && <GoalsPanel onClose={() => setShowGoals(false)} />}
         <SyncStatusBadge />
         <NotificationsBadge />
+
+        <div className="rounded-xl border border-pens-muted/25 bg-pens-navy/40 px-3 py-3 space-y-2 text-sm">
+          <label className="flex items-center gap-2 text-pens-cream/85 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="rounded accent-pens-gold"
+              checked={isPremium}
+              disabled={tierLoading || tierBusy}
+              onChange={() => { void handlePremiumDevToggle() }}
+            />
+            Premium mode: ON/OFF
+          </label>
+          <PremiumGate feature="Weekly PDF report" className="rounded-lg w-full">
+            <button
+              type="button"
+              onClick={() => void downloadWeeklyReport()}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-pens-muted/40 bg-pens-deep/40 text-pens-cream text-xs w-full justify-center hover:border-pens-gold/40 hover:bg-pens-navy transition-colors"
+            >
+              <FileText size={14} className="shrink-0 text-pens-gold" />
+              Download weekly report (PDF)
+            </button>
+          </PremiumGate>
+        </div>
+
         {/* Header */}
         <div className="flex items-center gap-2 flex-wrap">
           <Link href="/" className="text-pens-cream/40 hover:text-pens-cream/70 transition-colors">

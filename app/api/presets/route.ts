@@ -5,10 +5,10 @@ import { prisma } from '@/lib/db'
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const module = searchParams.get('module')
+    const moduleFilter = searchParams.get('module')
 
     const presets = await prisma.preset.findMany({
-      where: module ? { module } : undefined,
+      where: moduleFilter ? { module: moduleFilter } : undefined,
       orderBy: [{ usedCount: 'desc' }, { createdAt: 'desc' }],
     })
     return NextResponse.json(presets)

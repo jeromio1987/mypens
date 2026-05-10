@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Nested tooling / sandbox app (avoid linting bundled .next churn)
+    "my-pens-mobile-test/**",
   ]),
 ]);
 

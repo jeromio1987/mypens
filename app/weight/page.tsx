@@ -26,9 +26,17 @@ export default function WeightPage() {
               <p className="text-xs text-pens-cream/40 mt-0.5">Scale weight · Water retention · True weight v3</p>
             </div>
           </div>
-          <Link href="/events" className="text-xs text-pens-gold hover:text-pens-cream transition-colors">
-            Events →
-          </Link>
+          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
+            <Link
+              href="/import-tanita"
+              className="text-xs px-2.5 py-1 rounded-lg border border-pens-muted/40 text-pens-cream/60 hover:text-pens-cream hover:border-pens-cream/25 transition-colors whitespace-nowrap"
+            >
+              Import Tanita CSV
+            </Link>
+            <Link href="/events" className="text-xs text-pens-gold hover:text-pens-cream transition-colors">
+              Events →
+            </Link>
+          </div>
         </div>
 
         <EventBanner />

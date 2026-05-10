@@ -46,38 +46,39 @@ const qualityColor = (q: number) => {
 const editInputCls = 'w-full text-sm bg-pens-navy border border-pens-muted/40 rounded-lg px-2 py-1.5 text-pens-cream focus:outline-none focus:border-violet-500/60'
 const editSelectCls = 'w-full text-sm bg-pens-navy border border-pens-muted/40 rounded-lg px-2 py-1.5 text-pens-cream focus:outline-none focus:border-violet-500/60'
 
-export default function SleepTrend({ refresh }: { refresh?: number }) {
+interface Props {
+  entries: SleepEntry[]
+  loading?: boolean
+  onSleepDataMutate: () => void | Promise<void>
+}
+
+export default function SleepTrend({
+  entries: rawEntries,
+  loading: parentLoading,
+  onSleepDataMutate,
+}: Props) {
   const [data, setData] = useState<ChartEntry[]>([])
-  const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const load = () => {
-    setLoading(true)
-    fetch('/api/sleep')
-      .then(r => r.json())
-      .then((entries: SleepEntry[]) => {
-        const sorted = [...entries]
-          .sort((a, b) => a.date.localeCompare(b.date))
-          .slice(-30)
-          .map(e => ({
-            ...e,
-            label: new Date(e.date + 'T00:00:00').toLocaleDateString('en-GB', {
-              day: 'numeric', month: 'short',
-            }),
-            qualityLine: e.quality,
-          }))
-        setData(sorted)
-      })
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => { load() }, [refresh])
+  useEffect(() => {
+    const sorted = [...rawEntries]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-30)
+      .map(e => ({
+        ...e,
+        label: new Date(e.date + 'T00:00:00').toLocaleDateString('en-GB', {
+          day: 'numeric', month: 'short',
+        }),
+        qualityLine: e.quality,
+      }))
+    setData(sorted)
+  }, [rawEntries])
 
   const handleDelete = async (id: string) => {
     await fetch('/api/sleep', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
-    load()
+    await onSleepDataMutate()
   }
 
   const startEdit = (e: SleepEntry) => {
@@ -109,13 +110,16 @@ export default function SleepTrend({ refresh }: { refresh?: number }) {
           notes:    editForm.notes,
         }),
       })
-      if (res.ok) { load(); cancelEdit() }
+      if (res.ok) {
+        await onSleepDataMutate()
+        cancelEdit()
+      }
     } finally {
       setSaving(false)
     }
   }
 
-  if (loading)
+  if (parentLoading)
     return <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 text-sm text-pens-cream/40">Loading chart…</div>
 
   if (data.length === 0)

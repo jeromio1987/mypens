@@ -1,0 +1,1 @@
+export { notificationHaptic } from './useNotificationHaptic'

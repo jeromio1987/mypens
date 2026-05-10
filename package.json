@@ -10,6 +10,8 @@
     "bundle:context": "node scripts/bundle-context.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@react-pdf/renderer": "^4.3.0",
     "@prisma/client": "^5.22.0",
     "@replit/connectors-sdk": "^0.3.0",
     "heic-convert": "^2.1.0",

@@ -82,30 +82,34 @@ export default function GarminLog({ year, sport }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setLoading(true)
-    setError(null)
-    const params = new URLSearchParams()
-    if (year !== 'all') params.set('year', year)
-    if (sport !== 'all') params.set('sport', sport)
-    params.set('limit', '1000')
-
-    fetch(`/api/garmin?${params}`)
-      .then(async r => {
+    let cancelled = false
+    void (async () => {
+      await Promise.resolve()
+      if (cancelled) return
+      setLoading(true)
+      setError(null)
+      const params = new URLSearchParams()
+      if (year !== 'all') params.set('year', year)
+      if (sport !== 'all') params.set('sport', sport)
+      params.set('limit', '1000')
+      try {
+        const r = await fetch(`/api/garmin?${params}`)
         if (!r.ok) {
           const body = await r.text().catch(() => '')
           throw new Error(`HTTP ${r.status}${body ? ` — ${body.slice(0, 200)}` : ''}`)
         }
-        return r.json()
-      })
-      .then(data => {
+        const data = await r.json()
         if (!Array.isArray(data)) throw new Error('Unexpected response shape from /api/garmin')
         setActivities(data)
-        setLoading(false)
-      })
-      .catch(e => {
+      } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
-        setLoading(false)
-      })
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [year, sport])
 
   if (loading)

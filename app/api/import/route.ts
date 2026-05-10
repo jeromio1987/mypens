@@ -64,15 +64,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'CSV appears empty or has no data rows' }, { status: 400 })
     }
 
-    const module = detectModule(headers)
-    if (!module) {
+    const csvModule = detectModule(headers)
+    if (!csvModule) {
       return NextResponse.json({ error: 'Could not detect module from CSV headers. Expected headers for weight, food, sleep, training, or measurements.' }, { status: 400 })
     }
 
     let inserted = 0
     let skipped = 0
 
-    if (module === 'weight') {
+    if (csvModule === 'weight') {
       for (const row of rows) {
         if (!row.date || !row.scaleKg) { skipped++; continue }
         const scaleKg = num(row.scaleKg)
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (module === 'food') {
+    if (csvModule === 'food') {
       for (const row of rows) {
         if (!row.date || !row.name) { skipped++; continue }
         try {
@@ -144,7 +144,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (module === 'sleep') {
+    if (csvModule === 'sleep') {
       for (const row of rows) {
         if (!row.date || !row.bedtime || !row.wakeTime) { skipped++; continue }
         const hours = num(row.hours) ?? 0
@@ -160,7 +160,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (module === 'training') {
+    if (csvModule === 'training') {
       for (const row of rows) {
         if (!row.date || !row.exercise) { skipped++; continue }
         const sets = int(row.sets) ?? 1
@@ -182,7 +182,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (module === 'measurements') {
+    if (csvModule === 'measurements') {
       for (const row of rows) {
         if (!row.date) { skipped++; continue }
         try {
@@ -209,7 +209,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ module, inserted, skipped, total: rows.length })
+    return NextResponse.json({ module: csvModule, inserted, skipped, total: rows.length })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Import failed' }, { status: 500 })

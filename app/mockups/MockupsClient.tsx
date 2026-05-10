@@ -72,7 +72,8 @@ export default function MockupsClient({ manifest }: Props) {
 
   // Reset openIdx if the filtered list shrinks past it
   useEffect(() => {
-    if (openIdx !== null && openIdx >= visibleFlat.length) setOpenIdx(null)
+    if (openIdx === null || openIdx < visibleFlat.length) return
+    queueMicrotask(() => setOpenIdx(null))
   }, [openIdx, visibleFlat.length])
 
   const current = openIdx !== null ? visibleFlat[openIdx] : null

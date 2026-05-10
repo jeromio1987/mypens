@@ -9,7 +9,7 @@ function toMinutes(time: string): number {
 
 /** Calculate sleep hours, crossing midnight if wake < bed */
 function calcHours(bedtime: string, wakeTime: string): number {
-  let bed = toMinutes(bedtime)
+  const bed = toMinutes(bedtime)
   let wake = toMinutes(wakeTime)
   if (wake <= bed) wake += 24 * 60 // crossed midnight
   return parseFloat(((wake - bed) / 60).toFixed(2))

@@ -1,15 +1,35 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import SleepEntry from '@/components/sleep/SleepEntry'
 import SleepTrend from '@/components/sleep/SleepTrend'
+import SleepDebt, { type SleepEntryRow } from '@/components/sleep/SleepDebt'
 
 export default function SleepPage() {
   const today = new Date().toISOString().split('T')[0]
   const [date, setDate] = useState(today)
   const [refresh, setRefresh] = useState(0)
+  const [sleepEntries, setSleepEntries] = useState<SleepEntryRow[]>([])
+  const [sleepLoading, setSleepLoading] = useState(true)
+
+  const loadSleepEntries = useCallback(async () => {
+    setSleepLoading(true)
+    try {
+      const res = await fetch('/api/sleep')
+      const data = await res.json()
+      setSleepEntries(Array.isArray(data) ? data : [])
+    } catch {
+      setSleepEntries([])
+    } finally {
+      setSleepLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadSleepEntries()
+  }, [refresh, loadSleepEntries])
 
   return (
     <main className="min-h-screen bg-pens-deep px-4 py-8">
@@ -34,7 +54,12 @@ export default function SleepPage() {
         </div>
 
         <SleepEntry date={date} onSaved={() => setRefresh(r => r + 1)} />
-        <SleepTrend refresh={refresh} />
+        <SleepTrend
+          entries={sleepEntries}
+          loading={sleepLoading}
+          onSleepDataMutate={loadSleepEntries}
+        />
+        <SleepDebt entries={sleepEntries} />
       </div>
     </main>
   )

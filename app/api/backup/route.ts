@@ -12,10 +12,25 @@ async function requireAuth(): Promise<NextResponse | null> {
   return null
 }
 
+function isSqliteFileDatabase(): boolean {
+  const url = process.env.DATABASE_URL ?? ''
+  return url.startsWith('file:')
+}
+
 export async function POST() {
   const authError = await requireAuth()
   if (authError) return authError
   try {
+    if (!isSqliteFileDatabase()) {
+      return NextResponse.json(
+        {
+          error:
+            'File-based backup only applies to SQLite. With PostgreSQL (e.g. Supabase), use automated backups in the Supabase dashboard or export data from the app (Dashboard → Export CSV).',
+        },
+        { status: 400 },
+      )
+    }
+
     const dbPath = path.join(process.cwd(), 'prisma', 'dev.db')
     const backupDir = path.join(process.cwd(), 'prisma', 'backups')
 
@@ -65,6 +80,13 @@ export async function GET() {
   const authError = await requireAuth()
   if (authError) return authError
   try {
+    if (!isSqliteFileDatabase()) {
+      return NextResponse.json({
+        backups: [],
+        note: 'PostgreSQL hosts (e.g. Supabase) do not use local .db file backups. Use Supabase backups or CSV export from the dashboard.',
+      })
+    }
+
     const backupDir = path.join(process.cwd(), 'prisma', 'backups')
 
     if (!fs.existsSync(backupDir)) {

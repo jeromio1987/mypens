@@ -77,7 +77,7 @@ function WeeklyWrapCard({ wrap }: { wrap: WeeklyWrap }) {
       </div>
 
       <p className="text-xs text-pens-cream/80 leading-relaxed border-l-2 border-pens-crimson pl-3 italic">
-        "{wrap.headline}"
+        &ldquo;{wrap.headline}&rdquo;
       </p>
 
       <div className="grid grid-cols-2 gap-2">

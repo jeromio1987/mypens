@@ -35,15 +35,26 @@ export default function ExerciseHistoryDrawer({ exercise, onClose }: Props) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setLoading(true)
-    fetch(`/api/training/history?exercise=${encodeURIComponent(exercise)}`)
-      .then(r => r.json())
-      .then(data => {
+    let cancelled = false
+    void (async () => {
+      await Promise.resolve()
+      if (cancelled) return
+      setLoading(true)
+      try {
+        const r = await fetch(`/api/training/history?exercise=${encodeURIComponent(exercise)}`)
+        const data = await r.json()
         setEntries(data.entries ?? [])
         setPersonalBest(data.personalBest ?? 0)
-      })
-      .catch(() => { setEntries([]); setPersonalBest(0) })
-      .finally(() => setLoading(false))
+      } catch {
+        setEntries([])
+        setPersonalBest(0)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [exercise])
 
   const chartData = entries.map(e => ({

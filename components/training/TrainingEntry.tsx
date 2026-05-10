@@ -1,24 +1,53 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import QuickToggle from '@/components/shared/QuickToggle'
 import PresetPicker from '@/components/shared/PresetPicker'
 
+export type ProgrammeExerciseQueueItem = {
+  id: string
+  name: string
+  sets: number
+  reps: string
+  weightKg?: number | null
+}
+
 interface Props {
   date: string
-  onSaved?: () => void
+  onSaved?: (detail?: { fromProgramme?: boolean }) => void
+  programmeQueue?: ProgrammeExerciseQueueItem[]
 }
 
 const BLANK = { exercise: '', sets: '', reps: '', weightKg: '', rpe: '', notes: '' }
 
 const inputCls = 'w-full bg-pens-deep border border-pens-muted/40 text-pens-cream rounded-lg px-3 py-2 text-sm placeholder:text-pens-cream/30 focus:outline-none focus:ring-1 focus:ring-pens-gold focus:border-pens-gold [color-scheme:dark]'
 
-export default function TrainingEntry({ date, onSaved }: Props) {
+function firstIntFromReps(reps: string): string {
+  const m = reps.match(/\d+/)
+  return m ? m[0] : '1'
+}
+
+export default function TrainingEntry({ date, onSaved, programmeQueue }: Props) {
   const [quick, setQuick] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState<{ exercise: string; volume: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState(BLANK)
+
+  const queueSig = programmeQueue?.map(q => q.id).join('|') ?? ''
+
+  useEffect(() => {
+    const cur = programmeQueue?.[0]
+    if (!cur) return
+    setForm({
+      exercise: cur.name,
+      sets: String(cur.sets),
+      reps: firstIntFromReps(cur.reps),
+      weightKg: cur.weightKg != null ? String(cur.weightKg) : '',
+      rpe: '',
+      notes: '',
+    })
+  }, [queueSig])
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -43,6 +72,7 @@ export default function TrainingEntry({ date, onSaved }: Props) {
     setSaving(true)
     setError(null)
     setSaved(null)
+    const fromProgramme = (programmeQueue?.length ?? 0) > 0
     try {
       const res = await fetch('/api/training', {
         method: 'POST',
@@ -50,10 +80,10 @@ export default function TrainingEntry({ date, onSaved }: Props) {
         body: JSON.stringify({
           date,
           exercise: form.exercise,
-          sets: parseInt(form.sets),
-          reps: parseInt(form.reps),
+          sets: parseInt(form.sets, 10),
+          reps: parseInt(form.reps, 10),
           weightKg: form.weightKg ? parseFloat(form.weightKg) : 0,
-          rpe: form.rpe ? parseInt(form.rpe) : undefined,
+          rpe: form.rpe ? parseInt(form.rpe, 10) : undefined,
           notes: form.notes || undefined,
         }),
       })
@@ -61,7 +91,7 @@ export default function TrainingEntry({ date, onSaved }: Props) {
       if (!res.ok) throw new Error(data.error || 'Save failed')
       setSaved({ exercise: data.exercise, volume: data.volume })
       setForm(BLANK)
-      onSaved?.()
+      onSaved?.({ fromProgramme })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
@@ -79,6 +109,14 @@ export default function TrainingEntry({ date, onSaved }: Props) {
         <h2 className="text-xl font-semibold text-pens-cream">Log Exercise</h2>
         <QuickToggle quick={quick} onChange={setQuick} />
       </div>
+
+      {programmeQueue && programmeQueue.length > 0 && (
+        <p className="mb-4 text-xs text-orange-400">
+          Programme queue:{' '}
+          <strong>{programmeQueue.length}</strong> lift{programmeQueue.length !== 1 ? 's' : ''} remaining (next:{' '}
+          {programmeQueue[0].name})
+        </p>
+      )}
 
       <div className="mb-4">
         <PresetPicker
@@ -149,7 +187,6 @@ export default function TrainingEntry({ date, onSaved }: Props) {
           </p>
         )}
 
-        {/* Detailed only: RPE + notes */}
         {!quick && (
           <div className="grid grid-cols-2 gap-3">
             <div>

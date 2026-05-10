@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model WeightEntry {
@@ -92,6 +92,38 @@ model TrainingEntry {
   externalRaw String? // JSON blob of the raw source payload, kept for reference
 
   @@unique([source, externalId])
+}
+
+model Programme {
+  id        String         @id @default(cuid())
+  createdAt DateTime       @default(now())
+  name      String
+  active    Boolean        @default(false)
+  days      ProgrammeDay[]
+}
+
+model ProgrammeDay {
+  id          String             @id @default(cuid())
+  programmeId String
+  dayLabel    String
+  order       Int
+  programme   Programme          @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  exercises   ProgrammeExercise[]
+
+  @@index([programmeId])
+}
+
+model ProgrammeExercise {
+  id       String       @id @default(cuid())
+  dayId    String
+  name     String
+  sets     Int
+  reps     String
+  weightKg Float?
+  order    Int
+  day      ProgrammeDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+
+  @@index([dayId])
 }
 
 // Strava — OAuth connection (single-user app, so userId is a placeholder for now)
@@ -296,6 +328,31 @@ model Preset {
   name      String
   data      String   // JSON blob of form fields
   usedCount Int      @default(0)
+}
+
+// Daily journal — shared with mobile JournalEntry table
+model JournalEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  date      String   @unique
+  title     String?
+  content   String
+  mood      Int? // 1–5
+  notes     String?
+}
+
+// Single-user app: one row; tier gates premium features (no payment integration yet).
+model UserSettings {
+  id        String   @id @default("default")
+  tier      String   @default("free") // "free" | "premium"
+  updatedAt DateTime @updatedAt
+}
+
+// Singleton cache for Claude-generated weekly Verdict prose
+model AiVerdictCache {
+  id          String   @id @default("singleton")
+  summary     String
+  generatedAt DateTime @default(now())
 }
 
 // =====================================================================
