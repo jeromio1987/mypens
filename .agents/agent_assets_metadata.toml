@@ -1,8 +1,13 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "su7ADG00Bo0i1I0hzsO1w"
 uri = "file://artifacts/my-pens-mobile/assets/images/icon.png"
 type = "image"
 title = "my pens health app icon"
+
+[[outputs]]
+id = "uAk5pO70oc5YSPJAH4rGv"
+uri = "file://HANDOFF.md"
+type = "text"
+title = "My Pens Mobile — Handoff Document"
