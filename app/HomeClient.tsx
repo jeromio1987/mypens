@@ -135,6 +135,7 @@ export default function HomeClient() {
             <span             className="uppercase tracking-widest text-xs font-bold text-pens-crimson">Modes</span>
             <Link href="/anchor"    className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Anchor</Link>
             <Link href="/data"      className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Vault</Link>
+            <Link href="/share"     className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Share</Link>
           </nav>
         </div>
       </header>

@@ -46,11 +46,15 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date')
+    const limitRaw = searchParams.get('limit')
+    const limit = limitRaw
+      ? Math.min(120, Math.max(1, Number(limitRaw) || 30))
+      : 30
 
     const entries = await prisma.sleepEntry.findMany({
       where: date ? { date } : undefined,
       orderBy: { date: 'desc' },
-      take: 30,
+      take: limit,
     })
     return NextResponse.json(entries)
   } catch (error) {

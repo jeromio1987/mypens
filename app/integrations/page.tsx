@@ -4,6 +4,8 @@ import { useEffect, useState, Suspense, useCallback } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 
+import { WebhookSyncStrip } from '@/components/integrations/WebhookSyncStrip'
+
 type ProviderId = 'strava' | 'garmin' | 'healthkit' | 'healthconnect'
 
 interface ProviderConfig {
@@ -855,6 +857,8 @@ function IntegrationsInner() {
           </div>
           <Link href="/garmin" className="px-3 py-2 rounded-lg bg-sky-600 text-white text-xs font-medium hover:bg-sky-700">Open archive →</Link>
         </div>
+
+        <WebhookSyncStrip />
 
         {PROVIDERS.map(p => (
           <ProviderCard key={p.id} provider={p} banner={bannerFor(p.id)} />

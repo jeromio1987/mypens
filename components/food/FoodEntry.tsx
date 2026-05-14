@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Camera } from 'lucide-react'
 import { MEAL_LABELS, MEAL_ORDER, type MealType } from '@/lib/foodModels'
 import QuickToggle from '@/components/shared/QuickToggle'
@@ -19,6 +19,24 @@ interface ScanItem {
   carbsG: number
   fatG: number
   fiberG: number
+}
+
+interface FoodSuggestion {
+  id: string
+  name: string
+  meal: string
+  kcal: number
+  proteinG: number
+  carbsG: number
+  fatG: number
+  fiberG: number
+}
+
+interface RotationPreset {
+  id: string
+  name: string
+  data: string
+  usedCount: number
 }
 
 const DEFAULTS = {
@@ -42,6 +60,9 @@ export default function FoodEntry({ date, onSaved }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState(DEFAULTS)
+  const [rotationPresets, setRotationPresets] = useState<RotationPreset[]>([])
+  const [suggestions, setSuggestions] = useState<FoodSuggestion[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   const [analyzing, setAnalyzing] = useState(false)
   const [refining, setRefining] = useState(false)
@@ -56,6 +77,24 @@ export default function FoodEntry({ date, onSaved }: Props) {
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
+  useEffect(() => {
+    fetch('/api/presets?module=food')
+      .then(r => r.json())
+      .then((data: RotationPreset[]) => setRotationPresets(data.slice(0, 6)))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (form.name.length < 2) { setSuggestions([]); return }
+    const timer = setTimeout(() => {
+      fetch(`/api/food?search=${encodeURIComponent(form.name)}`)
+        .then(r => r.ok ? r.json() : [])
+        .then((data: FoodSuggestion[]) => setSuggestions(data))
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [form.name])
+
   const applyPreset = (data: Record<string, unknown>) => {
     setForm(f => ({
       ...f,
@@ -67,6 +106,29 @@ export default function FoodEntry({ date, onSaved }: Props) {
       ...(data.fatG != null ? { fatG: String(data.fatG) } : {}),
       ...(data.fiberG != null ? { fiberG: String(data.fiberG) } : {}),
     }))
+  }
+
+  const applyRotationPreset = (preset: RotationPreset) => {
+    try {
+      const data = JSON.parse(preset.data) as Record<string, unknown>
+      applyPreset(data)
+      fetch('/api/presets', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: preset.id }) })
+      setRotationPresets(p => p.map(x => x.id === preset.id ? { ...x, usedCount: x.usedCount + 1 } : x))
+    } catch {}
+  }
+
+  const applySuggestion = (s: FoodSuggestion) => {
+    setForm(f => ({
+      ...f,
+      name: s.name,
+      kcal: s.kcal ? String(Math.round(s.kcal)) : '',
+      proteinG: s.proteinG ? String(s.proteinG) : '',
+      carbsG: s.carbsG ? String(s.carbsG) : '',
+      fatG: s.fatG ? String(s.fatG) : '',
+      fiberG: s.fiberG ? String(s.fiberG) : '',
+    }))
+    setSuggestions([])
+    setShowSuggestions(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -265,6 +327,24 @@ export default function FoodEntry({ date, onSaved }: Props) {
         <QuickToggle quick={quick} onChange={setQuick} />
       </div>
 
+      {rotationPresets.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[10px] uppercase tracking-wide text-pens-cream/35 mb-2">My Rotation</p>
+          <div className="flex flex-wrap gap-1.5">
+            {rotationPresets.map(preset => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyRotationPreset(preset)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-pens-navy border border-pens-muted/40 text-pens-cream/80 hover:border-emerald-500/50 hover:text-pens-cream transition-colors"
+              >
+                {preset.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mb-4">
         <PresetPicker
           module="food"
@@ -385,18 +465,35 @@ export default function FoodEntry({ date, onSaved }: Props) {
           </div>
         </div>
 
-        <div>
+        <div className="relative">
           <label className={labelCls}>
             Food / item <span className="text-red-400">*</span>
           </label>
           <input
             type="text"
             value={form.name}
-            onChange={e => set('name', e.target.value)}
+            onChange={e => { set('name', e.target.value); setShowSuggestions(true) }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             className={inputCls}
             placeholder="e.g. Chicken breast 150g"
             required
           />
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute z-30 top-full left-0 right-0 mt-1 rounded-xl border border-pens-muted/40 bg-pens-surface shadow-lg overflow-hidden">
+              {suggestions.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onMouseDown={() => applySuggestion(s)}
+                  className="w-full text-left px-3 py-2 hover:bg-pens-deep/60 transition-colors border-b border-pens-muted/20 last:border-0"
+                >
+                  <p className="text-sm text-pens-cream truncate">{s.name}</p>
+                  <p className="text-xs text-pens-cream/45">{Math.round(s.kcal)} kcal · P {s.proteinG}g · C {s.carbsG}g · F {s.fatG}g</p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {quick ? (

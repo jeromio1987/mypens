@@ -121,6 +121,12 @@ export default function ProgrammesPage() {
             <h1 className="mt-1 text-2xl font-bold text-pens-cream">Programmes</h1>
             <p className="text-sm text-pens-cream/50">Build days and exercises, then start from Training.</p>
           </div>
+          <Link
+            href="/programmes/compare"
+            className="text-xs font-semibold text-pens-gold border border-pens-gold/40 rounded-lg px-3 py-2 hover:bg-pens-gold/10"
+          >
+            Compare two →
+          </Link>
         </div>
 
         <section className="rounded-2xl border border-pens-muted/30 bg-pens-navy/80 p-5">

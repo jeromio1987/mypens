@@ -25,6 +25,8 @@ import { Feather, Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
+import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
+import { usePensSync } from '@/hooks/usePensSync'
 
 const MOD = MODULE_COLORS.food
 const TARGETS_KEY = '@mypens/food_targets'
@@ -75,6 +77,7 @@ export default function FoodScreen() {
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const qc = useQueryClient()
+  const { online, refresh: refreshQueue } = usePensSync()
 
   const [selectedDate, setSelectedDate] = useState(today())
   const [selectedMeal, setSelectedMeal] = useState<FoodEntry['meal']>('breakfast')
@@ -162,26 +165,37 @@ export default function FoodScreen() {
   const mutation = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw new Error('Enter a food name')
-      const res = await pensFetch('/api/food', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: selectedDate,
-          meal: selectedMeal,
-          name: name.trim(),
-          kcal: parseInt(kcal, 10) || 0,
-          proteinG: parseFloat(proteinG) || 0,
-          carbsG: parseFloat(carbsG) || 0,
-          fatG: parseFloat(fatG) || 0,
-          fiberG: parseFloat(fiberG) || 0,
-          notes: notes.trim() || undefined,
-        }),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Save failed')
+      const payload = {
+        date: selectedDate,
+        meal: selectedMeal,
+        name: name.trim(),
+        kcal: parseInt(kcal, 10) || 0,
+        proteinG: parseFloat(proteinG) || 0,
+        carbsG: parseFloat(carbsG) || 0,
+        fatG: parseFloat(fatG) || 0,
+        fiberG: parseFloat(fiberG) || 0,
+        notes: notes.trim() || undefined,
+      }
+      if (!online) {
+        await enqueueOp({ type: 'food_post', payload })
+        return
+      }
+      try {
+        const res = await pensFetch('/api/food', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Save failed')
+      } catch {
+        await enqueueOp({ type: 'food_post', payload })
+      }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      await flushOfflineQueue()
+      await refreshQueue()
       qc.invalidateQueries({ queryKey: ['food'] })
       qc.invalidateQueries({ queryKey: ['food-chart'] })
       setName('')
@@ -197,16 +211,27 @@ export default function FoodScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await pensFetch('/api/food', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Delete failed')
+      const payload = { id }
+      if (!online) {
+        await enqueueOp({ type: 'food_delete', payload })
+        return
+      }
+      try {
+        const res = await pensFetch('/api/food', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Delete failed')
+      } catch {
+        await enqueueOp({ type: 'food_delete', payload })
+      }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      await flushOfflineQueue()
+      await refreshQueue()
       qc.invalidateQueries({ queryKey: ['food'] })
       qc.invalidateQueries({ queryKey: ['food-chart'] })
     },

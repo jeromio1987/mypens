@@ -104,8 +104,72 @@ export async function GET() {
       // Anchor table may not exist yet — non-fatal
     }
 
+    type Priority = { rank: number; label: string; hint: string; module: string }
+    const priorities: Priority[] = []
+
+    if (sleep && sleep.hours < 6.5) {
+      priorities.push({
+        rank: 1,
+        label: 'Protect sleep debt',
+        hint: sleepVerdict(sleep.hours, sleep.quality, sleep.hrv ?? null),
+        module: 'sleep',
+      })
+    }
+    if (latestWeight && avgTrueWeight != null && Math.abs(latestWeight.trueWeightKg - avgTrueWeight) > 0.35) {
+      const dir = latestWeight.trueWeightKg > avgTrueWeight ? 'above' : 'below'
+      priorities.push({
+        rank: priorities.length + 1,
+        label: 'True weight vs 7-day mean',
+        hint: `Latest true weight is ${dir} your rolling mean — check sodium, training, and scale timing before changing calories.`,
+        module: 'weight',
+      })
+    }
+    if (dayEntry?.mode === 'locked_in' && (!sleep || sleep.quality < 3)) {
+      priorities.push({
+        rank: priorities.length + 1,
+        label: 'Mode vs recovery',
+        hint: 'Locked-in mode with mediocre sleep — bias toward maintenance and technique, not new PRs.',
+        module: 'mode',
+      })
+    }
+    if (latestRegime?.regime === 'risk_off' || latestRegime?.regime === 'defensive') {
+      priorities.push({
+        rank: priorities.length + 1,
+        label: 'Portfolio regime',
+        hint: `Macro regime is ${latestRegime?.regime ?? 'unset'} — size risk deliberately; calendar events below matter more.`,
+        module: 'investing',
+      })
+    }
+    if (priorities.length === 0 && (sleep || latestWeight)) {
+      priorities.push({
+        rank: 1,
+        label: 'Steady state',
+        hint: 'No red flags in the quick scan — keep logging; consistency beats intensity.',
+        module: 'general',
+      })
+    }
+
+    const narrativeParts: string[] = []
+    if (sleep) {
+      narrativeParts.push(`Sleep: ${sleepVerdict(sleep.hours, sleep.quality, sleep.hrv ?? null)}`)
+    }
+    if (latestWeight && avgTrueWeight != null) {
+      const d = Math.round((latestWeight.trueWeightKg - avgTrueWeight) * 10) / 10
+      narrativeParts.push(
+        `Weight: true weight ${latestWeight.trueWeightKg} kg (${d >= 0 ? '+' : ''}${d} kg vs 7d mean).`,
+      )
+    }
+    narrativeParts.push(modeVerdict(dayEntry?.mode ?? null))
+    if (latestRegime?.regime) {
+      narrativeParts.push(`Investing regime: ${latestRegime.regime} (since ${latestRegime.effectiveDate}).`)
+    }
+    const narrative = narrativeParts.join(' ')
+
     return NextResponse.json({
       date: today,
+
+      narrative,
+      priorities: priorities.slice(0, 6),
 
       sleep: sleep
         ? {

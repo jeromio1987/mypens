@@ -1,12 +1,21 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
-/** Last 30 journal entries by calendar date descending */
-export async function GET() {
+function parseLimit(request: Request, fallback: number, cap: number): number {
+  const raw = new URL(request.url).searchParams.get('limit')
+  if (raw == null || raw === '') return fallback
+  const n = parseInt(raw, 10)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(cap, Math.max(1, n))
+}
+
+/** Last journal entries by calendar date descending (`limit` query, default 30, max 120). */
+export async function GET(request: Request) {
   try {
+    const take = parseLimit(request, 30, 120)
     const entries = await prisma.journalEntry.findMany({
       orderBy: { date: 'desc' },
-      take: 30,
+      take,
     })
     return NextResponse.json(entries)
   } catch (error) {

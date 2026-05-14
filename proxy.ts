@@ -15,9 +15,10 @@ const PUBLIC_API_PREFIXES = [
   '/api/integrations/healthkit/ingest',
   '/api/integrations/healthconnect/ingest',
   '/api/cron/',
+  '/api/public/',
 ]
 
-const PUBLIC_PAGES = new Set<string>(['/login', '/welcome'])
+const PUBLIC_PAGES = new Set<string>(['/login', '/welcome', '/design', '/snapshot'])
 
 function isPublicApiRoute(pathname: string): boolean {
   return PUBLIC_API_PREFIXES.some(prefix => pathname.startsWith(prefix))

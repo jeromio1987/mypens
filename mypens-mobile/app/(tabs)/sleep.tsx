@@ -20,9 +20,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
+import { usePensSync } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
+import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
+import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 
 const MOD = MODULE_COLORS.sleep
 const today = () => {
@@ -80,6 +83,8 @@ export default function SleepScreen() {
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const qc = useQueryClient()
+  const useApi = isPensApiConfigured()
+  const { pending, online, refresh: refreshQueue } = usePensSync()
 
   const [date, setDate] = useState(today())
   const [bedtime, setBedtime] = useState('23:00')
@@ -91,8 +96,18 @@ export default function SleepScreen() {
   const hours = calcHours(bedtime, wakeTime)
 
   const { data: entries = [], isLoading, refetch, isRefetching } = useQuery<SleepEntry[]>({
-    queryKey: ['sleep'],
+    queryKey: ['sleep', useApi ? 'api' : 'supabase'],
     queryFn: async () => {
+      if (useApi) {
+        const r = await pensFetch('/api/sleep?limit=90')
+        if (!r.ok) {
+          const t = await r.text()
+          throw new Error(t || 'Sleep fetch failed')
+        }
+        const rows = (await r.json()) as SleepEntry[]
+        if (!Array.isArray(rows)) return []
+        return [...rows].sort((a, b) => a.date.localeCompare(b.date))
+      }
       const { data, error } = await supabase
         .from('SleepEntry')
         .select('*')
@@ -106,6 +121,39 @@ export default function SleepScreen() {
   const mutation = useMutation({
     mutationFn: async () => {
       if (hours <= 0) throw new Error('Enter valid bedtime and wake time')
+      const payload: Record<string, unknown> = {
+        date,
+        bedtime,
+        wakeTime,
+        quality,
+      }
+      if (hrv.trim()) payload.hrv = parseFloat(hrv)
+      if (notes.trim()) payload.notes = notes.trim()
+
+      if (useApi) {
+        if (!online) {
+          await enqueueOp({ type: 'sleep_post', payload })
+          await refreshQueue()
+          return
+        }
+        try {
+          const r = await pensFetch('/api/sleep', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!r.ok) {
+            const t = await r.text()
+            throw new Error(t || 'Save failed')
+          }
+        } catch {
+          await enqueueOp({ type: 'sleep_post', payload })
+          await refreshQueue()
+          return
+        }
+        return
+      }
+
       const { error } = await supabase.from('SleepEntry').upsert({
         id: generateId(),
         date,
@@ -118,8 +166,12 @@ export default function SleepScreen() {
       }, { onConflict: 'date' })
       if (error) throw error
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      if (useApi) {
+        await flushOfflineQueue()
+        await refreshQueue()
+      }
       qc.invalidateQueries({ queryKey: ['sleep'] })
       setNotes('')
       setHrv('')
@@ -159,6 +211,24 @@ export default function SleepScreen() {
           </View>
         )}
       </View>
+
+      {pending > 0 ? (
+        <View
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 8,
+            padding: 10,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: colors.warning,
+            backgroundColor: isDark ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.18)',
+          }}
+        >
+          <Text style={{ color: colors.foreground, fontSize: 13 }}>
+            {pending} change{pending > 1 ? 's' : ''} queued for sync when you are back online.
+          </Text>
+        </View>
+      ) : null}
 
       {/* Form */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

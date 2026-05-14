@@ -8,6 +8,8 @@ const ANCHOR_PIN = '4033'
 
 interface MorningBriefData {
   date: string
+  narrative?: string
+  priorities?: { rank: number; label: string; hint: string; module: string }[]
   sleep: {
     date: string
     hours: number
@@ -169,67 +171,24 @@ function WeightCard({ data }: { data: MorningBriefData['weight'] }) {
   )
 }
 
-function AnchorBadge({ streak }: { streak: number }) {
-  const [unlocked, setUnlocked] = useState(false)
-  const [open, setOpen] = useState(false)
+function ModeCard({
+  mode, anchor, anchorUnlocked, onAnchorUnlock,
+}: {
+  mode: MorningBriefData['mode']
+  anchor: MorningBriefData['anchor']
+  anchorUnlocked: boolean
+  onAnchorUnlock: () => void
+}) {
+  const style = mode.value ? MODE_STYLE[mode.value] : null
+  const [pinOpen, setPinOpen] = useState(false)
   const [pin, setPin] = useState('')
   const [shake, setShake] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  if (streak === 0) return null
-
-  function attempt(value: string) {
-    if (value === ANCHOR_PIN) {
-      setUnlocked(true)
-      setOpen(false)
-      setPin('')
-    } else if (value.length === 4) {
-      setShake(true)
-      setPin('')
-      setTimeout(() => setShake(false), 500)
-    }
+  function openPin() {
+    setPinOpen(true)
+    setTimeout(() => inputRef.current?.focus(), 50)
   }
-
-  if (unlocked) {
-    return (
-      <div className="flex items-center gap-1.5">
-        <Anchor size={11} className="text-slate-400" />
-        <span className="text-xs font-bold text-slate-400 tabular-nums">{streak}d</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => { setOpen(o => !o); setTimeout(() => inputRef.current?.focus(), 50) }}
-        className="flex items-center gap-1.5 group"
-      >
-        <Anchor size={11} className="text-slate-500" />
-        <span className="text-xs font-bold text-slate-500 tabular-nums">••d</span>
-        <Lock size={9} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
-      </button>
-
-      {open && (
-        <div className={`absolute right-0 top-6 z-10 bg-pens-deep border border-pens-muted/30 rounded-xl p-3 shadow-xl ${shake ? 'animate-[shake_0.4s_ease]' : ''}`}>
-          <p className="text-[9px] uppercase tracking-widest text-pens-cream/30 font-semibold mb-2 whitespace-nowrap">Enter PIN</p>
-          <input
-            ref={inputRef}
-            type="password"
-            inputMode="numeric"
-            maxLength={4}
-            value={pin}
-            onChange={e => { const v = e.target.value.replace(/\D/g, ''); setPin(v); attempt(v) }}
-            className="w-20 bg-pens-navy/60 border border-pens-muted/30 rounded-lg px-2 py-1.5 text-sm font-mono text-center text-pens-cream tracking-[0.3em] outline-none focus:border-slate-500"
-          />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ModeCard({ mode, anchor }: { mode: MorningBriefData['mode']; anchor: MorningBriefData['anchor'] }) {
-  const style = mode.value ? MODE_STYLE[mode.value] : null
 
   return (
     <div className={`bg-pens-navy/60 border rounded-2xl p-5 ${style ? style.border : 'border-pens-muted/20'}`}>
@@ -238,7 +197,51 @@ function ModeCard({ mode, anchor }: { mode: MorningBriefData['mode']; anchor: Mo
           {style && <span className={`w-2 h-2 rounded-full ${style.dot}`} />}
           <p className="text-[10px] uppercase tracking-widest text-pens-cream/40 font-semibold">Today&apos;s Mode</p>
         </div>
-        <AnchorBadge streak={anchor.streak} />
+
+        {anchor.streak > 0 && (
+          anchorUnlocked ? (
+            <div className="flex items-center gap-1.5">
+              <Anchor size={11} className="text-slate-400" />
+              <span className="text-xs font-bold text-slate-400 tabular-nums">{anchor.streak}d</span>
+            </div>
+          ) : (
+            <div className="relative">
+              <button onClick={openPin} className="flex items-center gap-1.5 group">
+                <Anchor size={11} className="text-slate-500" />
+                <span className="text-xs font-bold text-slate-500 tabular-nums">••d</span>
+                <Lock size={9} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
+              </button>
+              {pinOpen && (
+                <div className={`absolute right-0 top-7 z-20 bg-pens-deep border border-pens-muted/30 rounded-xl p-3 shadow-2xl ${shake ? 'animate-[shake_0.4s_ease]' : ''}`}>
+                  <p className="text-[9px] uppercase tracking-widest text-pens-cream/30 font-semibold mb-2 whitespace-nowrap">Enter PIN</p>
+                  <input
+                    ref={inputRef}
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={pin}
+                    onChange={e => {
+                      const v = e.target.value.replace(/\D/g, '')
+                      if (v === ANCHOR_PIN) {
+                        onAnchorUnlock()
+                        setPinOpen(false)
+                        setPin('')
+                      } else if (v.length === 4) {
+                        setPin('')
+                        setShake(true)
+                        setTimeout(() => setShake(false), 500)
+                      } else {
+                        setPin(v)
+                      }
+                    }}
+                    onBlur={() => { setPinOpen(false); setPin('') }}
+                    className="w-20 bg-pens-navy/60 border border-pens-muted/30 rounded-lg px-2 py-1.5 text-sm font-mono text-center text-pens-cream tracking-[0.3em] outline-none focus:border-slate-500"
+                  />
+                </div>
+              )}
+            </div>
+          )
+        )}
       </div>
 
       {mode.value && style ? (
@@ -354,6 +357,7 @@ export default function MorningBriefPage() {
   const [data, setData] = useState<MorningBriefData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [anchorUnlocked, setAnchorUnlocked] = useState(false)
 
   useEffect(() => {
     fetch('/api/morning-brief')
@@ -410,9 +414,28 @@ export default function MorningBriefPage() {
 
         {!loading && !error && data && (
           <>
+            {data.narrative && (
+              <div className="bg-pens-navy/70 border border-pens-gold/25 rounded-2xl p-5">
+                <p className="text-[10px] uppercase tracking-widest text-pens-gold font-semibold mb-2">Today in one pass</p>
+                <p className="text-sm text-pens-cream/85 leading-relaxed">{data.narrative}</p>
+              </div>
+            )}
+            {data.priorities && data.priorities.length > 0 && (
+              <div className="bg-pens-navy/60 border border-pens-muted/25 rounded-2xl p-5 space-y-3">
+                <p className="text-[10px] uppercase tracking-widest text-pens-cream/50 font-semibold">Priorities</p>
+                <ol className="space-y-2 list-decimal list-inside text-sm text-pens-cream/75">
+                  {data.priorities.map((p, i) => (
+                    <li key={i} className="leading-snug">
+                      <span className="font-semibold text-pens-cream">{p.label}</span>
+                      <span className="text-pens-cream/55"> — {p.hint}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
             <SleepCard data={data.sleep} />
             <WeightCard data={data.weight} />
-            <ModeCard mode={data.mode} anchor={data.anchor} />
+            <ModeCard mode={data.mode} anchor={data.anchor} anchorUnlocked={anchorUnlocked} onAnchorUnlock={() => setAnchorUnlocked(true)} />
             <JournalCard data={data.journal} />
             <InvestingCard data={data.investing} />
           </>

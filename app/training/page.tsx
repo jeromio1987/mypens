@@ -172,6 +172,24 @@ export default function TrainingPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link
+              href="/training/activity-stream"
+              className="text-xs font-semibold text-pens-cream hover:text-white border border-pens-muted/40 rounded-lg px-2.5 py-2 transition-colors"
+            >
+              Feed
+            </Link>
+            <Link
+              href="/training/analytics"
+              className="text-xs font-semibold text-pens-cream hover:text-white border border-pens-muted/40 rounded-lg px-2.5 py-2 transition-colors"
+            >
+              Analytics
+            </Link>
+            <Link
+              href="/programmes/compare"
+              className="text-xs font-semibold text-pens-gold/90 hover:text-pens-gold border border-pens-gold/35 rounded-lg px-2.5 py-2 transition-colors"
+            >
+              Compare
+            </Link>
+            <Link
               href="/programmes"
               className="text-xs font-semibold text-orange-500 hover:text-orange-400 border border-orange-500/40 rounded-lg px-2.5 py-2 transition-colors"
             >

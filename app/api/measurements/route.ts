@@ -116,11 +116,21 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+function parseLimit(request: Request, fallback: number, cap: number): number {
+  const raw = new URL(request.url).searchParams.get('limit')
+  if (raw == null || raw === '') return fallback
+  const n = parseInt(raw, 10)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(cap, Math.max(1, n))
+}
+
+/** Body measurements, newest first (`limit` query, default 50, max 120). */
+export async function GET(request: Request) {
   try {
+    const take = parseLimit(request, 50, 120)
     const entries = await prisma.bodyMeasurement.findMany({
       orderBy: { date: 'desc' },
-      take: 50,
+      take,
     })
     return NextResponse.json(entries)
   } catch (error) {

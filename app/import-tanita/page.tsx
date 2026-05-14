@@ -9,6 +9,7 @@ type Mode = 'skip' | 'overwrite'
 
 export default function ImportTanitaPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [batchFiles, setBatchFiles] = useState<File[]>([])
   const [fileName, setFileName] = useState<string | null>(null)
   const [preview, setPreview] = useState<ReturnType<typeof analyzeTanitaCsv> | null>(null)
   const [mode, setMode] = useState<Mode>('skip')
@@ -26,6 +27,7 @@ export default function ImportTanitaPage() {
     } catch {
       setPreview(null)
       setSelectedFile(null)
+      setBatchFiles([])
       setClientError('Could not read that file as CSV.')
     }
   }, [])
@@ -37,6 +39,7 @@ export default function ImportTanitaPage() {
         setClientError('Please choose a .csv file.')
         return
       }
+      setBatchFiles([])
       const reader = new FileReader()
       reader.onload = () => {
         const text = typeof reader.result === 'string' ? reader.result : ''
@@ -47,17 +50,44 @@ export default function ImportTanitaPage() {
     [runPreview],
   )
 
+  const handleFileList = useCallback(
+    (list: File[]) => {
+      const csvs = list.filter((file) => file.name.toLowerCase().endsWith('.csv'))
+      if (!csvs.length) {
+        setClientError('Please choose at least one .csv file.')
+        return
+      }
+      setClientError(null)
+      setResult(null)
+      if (csvs.length === 1) {
+        onFile(csvs[0])
+        return
+      }
+      setBatchFiles(csvs)
+      const first = csvs[0]
+      const reader = new FileReader()
+      reader.onload = () => {
+        const text = typeof reader.result === 'string' ? reader.result : ''
+        runPreview(first, text)
+        setFileName(`${csvs.length} CSV files selected`)
+      }
+      reader.readAsText(first)
+    },
+    [onFile, runPreview],
+  )
+
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
-      const f = e.dataTransfer.files[0]
-      onFile(f ?? null)
+      const list = Array.from(e.dataTransfer.files ?? [])
+      handleFileList(list)
     },
-    [onFile],
+    [handleFileList],
   )
 
   const onImport = async () => {
-    if (!preview || !selectedFile) {
+    const filesToImport = batchFiles.length > 0 ? batchFiles : selectedFile ? [selectedFile] : []
+    if (!preview || filesToImport.length === 0) {
       setClientError('Select a file first.')
       return
     }
@@ -65,26 +95,35 @@ export default function ImportTanitaPage() {
     setImporting(true)
     setResult(null)
     setClientError(null)
+    let imported = 0
+    let skipped = 0
+    const allErrors: string[] = []
     try {
-      const fd = new FormData()
-      fd.append('file', selectedFile)
-      fd.append('mode', mode)
-      const res = await fetch('/api/import/tanita', { method: 'POST', body: fd })
-      const data = await res.json()
-      if (!res.ok) {
-        setClientError(typeof data.error === 'string' ? data.error : 'Import failed.')
-        setResult(
-          typeof data.imported === 'number'
-            ? { imported: data.imported, skipped: data.skipped ?? 0, errors: data.errors ?? [] }
-            : null,
-        )
-        return
+      for (const file of filesToImport) {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('mode', mode)
+        const res = await fetch('/api/import/tanita', { method: 'POST', body: fd })
+        const data = await res.json()
+        if (!res.ok) {
+          allErrors.push(
+            `${file.name}: ${typeof data.error === 'string' ? data.error : 'Import failed.'}`,
+          )
+          if (typeof data.imported === 'number') imported += data.imported
+          if (typeof data.skipped === 'number') skipped += data.skipped
+          if (Array.isArray(data.errors)) {
+            for (const err of data.errors) allErrors.push(`${file.name}: ${String(err)}`)
+          }
+          continue
+        }
+        imported += data.imported ?? 0
+        skipped += data.skipped ?? 0
+        if (Array.isArray(data.errors)) {
+          for (const err of data.errors) allErrors.push(`${file.name}: ${String(err)}`)
+        }
       }
-      setResult({
-        imported: data.imported ?? 0,
-        skipped: data.skipped ?? 0,
-        errors: Array.isArray(data.errors) ? data.errors : [],
-      })
+      setResult({ imported, skipped, errors: allErrors })
+      setBatchFiles([])
     } catch {
       setClientError('Network error — try again.')
     } finally {
@@ -129,15 +168,21 @@ export default function ImportTanitaPage() {
           >
             <Upload className="text-pens-gold" size={28} />
             <p className="text-sm text-pens-cream text-center">
-              Drop a Tanita <span className="text-pens-gold">.csv</span> here, or click to browse
+              Drop Tanita <span className="text-pens-gold">.csv</span> files here, or click to browse. Multi-select
+              runs one import per file in sequence (first file drives the column preview).
             </p>
             <p className="text-xs text-pens-cream/40">Tanita Health Planet column layout is detected automatically</p>
             <input
               id="tanita-csv-input"
               type="file"
               accept=".csv,text/csv"
+              multiple
               className="hidden"
-              onChange={e => onFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                const list = Array.from(e.target.files ?? [])
+                e.target.value = ''
+                handleFileList(list)
+              }}
             />
           </label>
         </div>
@@ -269,6 +314,11 @@ export default function ImportTanitaPage() {
                 <>
                   <Loader2 className="animate-spin" size={18} />
                   Importing…
+                </>
+              ) : batchFiles.length > 1 ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  Importing… ({batchFiles.length} files)
                 </>
               ) : (
                 'Import to database'

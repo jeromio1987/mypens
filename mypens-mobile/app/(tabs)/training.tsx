@@ -22,9 +22,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
+import { usePensSync } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
+import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
+import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 
 const MOD = MODULE_COLORS.training
 const EXERCISES_KEY = '@mypens/recent_exercises'
@@ -54,6 +57,9 @@ export default function TrainingScreen() {
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const qc = useQueryClient()
+  const useApi = isPensApiConfigured()
+  const { pending, online, refresh: refreshQueue } = usePensSync()
+  const dayStr = today()
 
   const [exercise, setExercise] = useState('')
   const [sets, setSets] = useState('3')
@@ -79,28 +85,61 @@ export default function TrainingScreen() {
   const volume = (parseInt(sets) || 0) * (parseInt(reps) || 0) * (parseFloat(weightKg) || 0)
 
   const { data: todayEntries = [], isLoading, refetch, isRefetching } = useQuery<TrainingEntry[]>({
-    queryKey: ['training', today()],
+    queryKey: ['training', dayStr, useApi ? 'api' : 'supabase'],
     queryFn: async () => {
+      if (useApi) {
+        const r = await pensFetch(`/api/training?date=${encodeURIComponent(dayStr)}`)
+        if (!r.ok) {
+          const t = await r.text()
+          throw new Error(t || 'Training fetch failed')
+        }
+        const data = await r.json()
+        return Array.isArray(data) ? (data as TrainingEntry[]) : []
+      }
       const { data, error } = await supabase
         .from('TrainingEntry')
         .select('*')
-        .eq('date', today())
+        .eq('date', dayStr)
         .order('createdAt', { ascending: true })
       if (error) throw error
       return data ?? []
     },
   })
 
-  const { data: weeklyEntries = [] } = useQuery<TrainingEntry[]>({
-    queryKey: ['training-weekly'],
+  const {
+    data: weeklyEntries = [],
+    refetch: refetchWeekly,
+    isRefetching: isRefetchingWeekly,
+  } = useQuery<TrainingEntry[]>({
+    queryKey: ['training-weekly', useApi ? 'api' : 'supabase'],
     queryFn: async () => {
+      if (useApi) {
+        const r = await pensFetch('/api/training')
+        if (!r.ok) {
+          const t = await r.text()
+          throw new Error(t || 'Training list failed')
+        }
+        const data = await r.json()
+        if (!Array.isArray(data)) return []
+        return (data as TrainingEntry[]).map((e) => ({
+          id: e.id,
+          date: e.date,
+          exercise: e.exercise,
+          sets: e.sets,
+          reps: e.reps,
+          weightKg: e.weightKg,
+          rpe: e.rpe,
+          notes: e.notes,
+          volume: e.volume,
+        }))
+      }
       const { data, error } = await supabase
         .from('TrainingEntry')
-        .select('date, volume')
+        .select('date, volume, id, exercise, sets, reps, weightKg, rpe, notes')
         .order('date', { ascending: true })
         .limit(200)
       if (error) throw error
-      return data ?? []
+      return (data ?? []) as TrainingEntry[]
     },
   })
 
@@ -108,14 +147,54 @@ export default function TrainingScreen() {
     mutationFn: async () => {
       if (!exercise.trim()) throw new Error('Enter an exercise name')
       if (!weightKg) throw new Error('Enter weight')
-      const vol = (parseInt(sets) || 0) * (parseInt(reps) || 0) * (parseFloat(weightKg) || 0)
+      const s = parseInt(sets) || 1
+      const rep = parseInt(reps) || 1
+      const kg = parseFloat(weightKg)
+      const payload: Record<string, unknown> = {
+        date: dayStr,
+        exercise: exercise.trim(),
+        sets: s,
+        reps: rep,
+        weightKg: kg,
+        notes: notes.trim() || undefined,
+      }
+      if (rpe != null) payload.rpe = Math.round(rpe)
+
+      if (useApi) {
+        if (!online) {
+          await enqueueOp({ type: 'training_post', payload })
+          await saveExercise(exercise.trim())
+          await refreshQueue()
+          return
+        }
+        try {
+          const r = await pensFetch('/api/training', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!r.ok) {
+            const t = await r.text()
+            throw new Error(t || 'Save failed')
+          }
+        } catch {
+          await enqueueOp({ type: 'training_post', payload })
+          await saveExercise(exercise.trim())
+          await refreshQueue()
+          return
+        }
+        await saveExercise(exercise.trim())
+        return
+      }
+
+      const vol = s * rep * kg
       const { error } = await supabase.from('TrainingEntry').insert({
         id: generateId(),
-        date: today(),
+        date: dayStr,
         exercise: exercise.trim(),
-        sets: parseInt(sets) || 1,
-        reps: parseInt(reps) || 1,
-        weightKg: parseFloat(weightKg),
+        sets: s,
+        reps: rep,
+        weightKg: kg,
         rpe: rpe != null ? Math.round(rpe) : null,
         notes: notes.trim() || null,
         volume: vol,
@@ -123,8 +202,12 @@ export default function TrainingScreen() {
       if (error) throw error
       await saveExercise(exercise.trim())
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      if (useApi) {
+        await flushOfflineQueue()
+        await refreshQueue()
+      }
       qc.invalidateQueries({ queryKey: ['training'] })
       setExercise('')
       setWeightKg('')
@@ -136,11 +219,39 @@ export default function TrainingScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      const payload = { id }
+      if (useApi) {
+        if (!online) {
+          await enqueueOp({ type: 'training_delete', payload })
+          await refreshQueue()
+          return
+        }
+        try {
+          const r = await pensFetch('/api/training', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!r.ok) {
+            const t = await r.text()
+            throw new Error(t || 'Delete failed')
+          }
+        } catch {
+          await enqueueOp({ type: 'training_delete', payload })
+          await refreshQueue()
+          return
+        }
+        return
+      }
       const { error } = await supabase.from('TrainingEntry').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      if (useApi) {
+        await flushOfflineQueue()
+        await refreshQueue()
+      }
       qc.invalidateQueries({ queryKey: ['training'] })
     },
   })
@@ -174,7 +285,16 @@ export default function TrainingScreen() {
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingTop: topInset + 16, paddingBottom: insets.bottom + 100 }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={MOD.primary} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching || isRefetchingWeekly}
+          onRefresh={() => {
+            void refetch()
+            void refetchWeekly()
+          }}
+          tintColor={MOD.primary}
+        />
+      }
       keyboardShouldPersistTaps="handled"
     >
       {/* Header */}
@@ -192,6 +312,24 @@ export default function TrainingScreen() {
           </View>
         )}
       </View>
+
+      {pending > 0 ? (
+        <View
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 8,
+            padding: 10,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: colors.warning,
+            backgroundColor: isDark ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.18)',
+          }}
+        >
+          <Text style={{ color: colors.foreground, fontSize: 13 }}>
+            {pending} change{pending > 1 ? 's' : ''} queued for sync when you are back online.
+          </Text>
+        </View>
+      ) : null}
 
       {/* Form */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

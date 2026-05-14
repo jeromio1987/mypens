@@ -40,6 +40,7 @@ interface Props {
   date: string
   refresh?: number
   targets?: DailyTargets
+  onSaved?: () => void
 }
 
 function MacroBar({
@@ -70,13 +71,14 @@ function MacroBar({
 const inputCls =
   'w-full text-sm bg-pens-navy border border-pens-muted/40 rounded-lg px-2 py-1.5 text-pens-cream focus:outline-none focus:border-pens-gold/50'
 
-export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS }: Props) {
+export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSaved }: Props) {
   const [entries, setEntries] = useState<FoodEntryRow[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
+  const [copying, setCopying] = useState<MealType | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -150,6 +152,30 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS }: Pr
     }
   }
 
+  const copyFromYesterday = async (meal: MealType) => {
+    setCopying(meal)
+    try {
+      const yesterday = new Date(date + 'T00:00:00')
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayStr = yesterday.toISOString().slice(0, 10)
+      const res = await fetch(`/api/food?date=${yesterdayStr}`)
+      const all: FoodEntryRow[] = await res.json()
+      const mealEntries = all.filter(e => e.meal === meal)
+      if (mealEntries.length === 0) return
+      for (const e of mealEntries) {
+        await fetch('/api/food', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date, meal: e.meal, name: e.name, kcal: e.kcal, proteinG: e.proteinG, carbsG: e.carbsG, fatG: e.fatG, fiberG: e.fiberG, notes: e.notes }),
+        })
+      }
+      load()
+      onSaved?.()
+    } finally {
+      setCopying(null)
+    }
+  }
+
   const totals = sumMacros(entries)
   const byMeal = MEAL_ORDER.reduce(
     (acc, m) => ({ ...acc, [m]: entries.filter(e => e.meal === m) }),
@@ -177,6 +203,21 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS }: Pr
         {entries.length > 0 && (
           <span className="text-sm text-pens-cream/40">{Math.round(totals.kcal)} kcal total</span>
         )}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        <span className="text-[10px] uppercase tracking-wide text-pens-cream/30 self-center mr-1">Copy from yesterday</span>
+        {MEAL_ORDER.map(meal => (
+          <button
+            key={meal}
+            type="button"
+            disabled={copying === meal}
+            onClick={() => void copyFromYesterday(meal)}
+            className="px-2.5 py-1 rounded-lg text-xs text-pens-cream/50 border border-pens-muted/30 hover:border-pens-muted/60 hover:text-pens-cream/80 disabled:opacity-40 transition-colors"
+          >
+            {copying === meal ? '…' : MEAL_LABELS[meal]}
+          </button>
+        ))}
       </div>
 
       {entries.length === 0 ? (

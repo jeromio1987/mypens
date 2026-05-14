@@ -11,9 +11,12 @@ import {
   FlaskConical,
   RefreshCw,
   Trash2,
+  StickyNote,
 } from 'lucide-react'
 
-type Tab = 'calendar' | 'watchlist' | 'regime' | 'sentiment' | 'backtest'
+type Tab = 'calendar' | 'watchlist' | 'regime' | 'sentiment' | 'backtest' | 'scenarios'
+
+const SCENARIOS_KEY = 'mypens_investing_scenarios_v1'
 
 type CalEvent = { id?: string; date: string; title: string; kind: string; symbol?: string | null; source: string }
 
@@ -54,6 +57,41 @@ export default function InvestingHubPage() {
 
   const [bt, setBt] = useState<{ sleepGte: number; regime: string }>({ sleepGte: 4, regime: 'risk_on' })
   const [btResult, setBtResult] = useState<string | null>(null)
+
+  const eventWeekBuckets = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const e of calEvents) {
+      const d = new Date(e.date + 'T12:00:00')
+      const sun = new Date(d)
+      sun.setDate(d.getDate() - d.getDay())
+      const k = sun.toISOString().slice(0, 10)
+      m.set(k, (m.get(k) ?? 0) + 1)
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-12)
+  }, [calEvents])
+
+  type Scenario = { id: string; title: string; body: string; createdAt: string }
+  const [scenarios, setScenarios] = useState<Scenario[]>([])
+  const [scTitle, setScTitle] = useState('')
+  const [scBody, setScBody] = useState('')
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(SCENARIOS_KEY) : null
+      if (raw) setScenarios(JSON.parse(raw) as Scenario[])
+    } catch {
+      setScenarios([])
+    }
+  }, [])
+
+  const persistScenarios = (next: Scenario[]) => {
+    setScenarios(next)
+    try {
+      localStorage.setItem(SCENARIOS_KEY, JSON.stringify(next))
+    } catch {
+      /* ignore */
+    }
+  }
 
   const loadCalendar = useCallback(async () => {
     setLoading(true)
@@ -159,6 +197,7 @@ export default function InvestingHubPage() {
     { id: 'regime', label: 'Regime', icon: Radio },
     { id: 'sentiment', label: 'Sentiment', icon: Newspaper },
     { id: 'backtest', label: 'Backtest', icon: FlaskConical },
+    { id: 'scenarios', label: 'Scenarios', icon: StickyNote },
   ]
 
   return (
@@ -244,6 +283,30 @@ export default function InvestingHubPage() {
                   </li>
                 ))}
               </ul>
+            )}
+
+            {!loading && calEvents.length > 0 && (
+              <div className="rounded-xl border border-pens-muted/20 bg-black/20 p-3">
+                <p className="text-[10px] uppercase tracking-widest text-pens-cream/40 font-semibold mb-2">
+                  Calendar density (weeks, Sun-start)
+                </p>
+                <div className="flex items-end gap-1 h-24">
+                  {eventWeekBuckets.map(([wk, n]) => {
+                    const max = Math.max(...eventWeekBuckets.map(([, c]) => c), 1)
+                    const h = Math.max(6, Math.round((n / max) * 80))
+                    return (
+                      <div key={wk} className="flex-1 flex flex-col items-center gap-1 justify-end">
+                        <div
+                          className="w-full rounded-t bg-amber-500/70"
+                          style={{ height: h }}
+                          title={`Week of ${wk}: ${n} events`}
+                        />
+                        <span className="text-[8px] text-pens-cream/35 truncate w-full text-center">{wk.slice(5)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             )}
 
             <div className="rounded-xl border border-pens-muted/30 bg-pens-navy/30 p-4 space-y-3">
@@ -394,6 +457,68 @@ export default function InvestingHubPage() {
                       <li key={i}>· {s}</li>
                     ))}
                   </ul>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {tab === 'scenarios' && (
+          <section className="space-y-4">
+            <p className="text-xs text-pens-cream/50">
+              Saved only in this browser (localStorage). Use for trade theses, sizing rules, or “if CPI prints hot” playbooks.
+            </p>
+            <div className="rounded-xl border border-pens-muted/30 bg-pens-navy/30 p-4 space-y-2">
+              <input
+                placeholder="Title"
+                value={scTitle}
+                onChange={(e) => setScTitle(e.target.value)}
+                className="w-full rounded-lg bg-pens-deep border border-pens-muted/30 px-3 py-2 text-sm"
+              />
+              <textarea
+                placeholder="Notes — regimes, hedges, levels…"
+                value={scBody}
+                onChange={(e) => setScBody(e.target.value)}
+                className="w-full rounded-lg bg-pens-deep border border-pens-muted/30 px-3 py-2 text-sm min-h-[100px]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const title = scTitle.trim()
+                  if (!title) return
+                  const row: Scenario = {
+                    id: crypto.randomUUID(),
+                    title,
+                    body: scBody.trim(),
+                    createdAt: new Date().toISOString(),
+                  }
+                  persistScenarios([row, ...scenarios])
+                  setScTitle('')
+                  setScBody('')
+                }}
+                className="rounded-lg bg-pens-gold/20 border border-pens-gold/40 px-4 py-2 text-xs font-bold text-pens-gold"
+              >
+                Save scenario
+              </button>
+            </div>
+            <ul className="space-y-2">
+              {scenarios.map((s) => (
+                <li key={s.id} className="rounded-xl border border-pens-muted/20 bg-pens-navy/40 p-4">
+                  <div className="flex justify-between gap-2 items-start">
+                    <div>
+                      <p className="font-bold text-pens-cream">{s.title}</p>
+                      <p className="text-[10px] text-pens-cream/35 mt-1">{new Date(s.createdAt).toLocaleString()}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => persistScenarios(scenarios.filter((x) => x.id !== s.id))}
+                      className="text-pens-cream/30 hover:text-red-300 p-1"
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  {s.body ? <p className="text-sm text-pens-cream/70 mt-2 whitespace-pre-wrap">{s.body}</p> : null}
                 </li>
               ))}
             </ul>

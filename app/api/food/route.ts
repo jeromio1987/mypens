@@ -32,6 +32,23 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date')
+    const search = searchParams.get('search')
+
+    if (search && search.length >= 2) {
+      const entries = await prisma.foodEntry.findMany({
+        where: { name: { contains: search, mode: 'insensitive' } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      })
+      const seen = new Set<string>()
+      const unique = entries.filter(e => {
+        const key = e.name.toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      }).slice(0, 8)
+      return NextResponse.json(unique)
+    }
 
     const entries = await prisma.foodEntry.findMany({
       where: date ? { date } : undefined,

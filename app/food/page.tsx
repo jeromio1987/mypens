@@ -40,7 +40,7 @@ export default function FoodPage() {
 
         <MacroTargets onTargetsChange={setTargets} />
         <FoodEntry date={date} onSaved={bump} />
-        <FoodLog date={date} refresh={refresh} targets={targets} />
+        <FoodLog date={date} refresh={refresh} targets={targets} onSaved={bump} />
       </div>
     </main>
   )

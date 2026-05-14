@@ -20,20 +20,16 @@ import { LineChart } from 'react-native-gifted-charts'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
 
+import { IntegrationStatusStrip } from '@/components/IntegrationStatusStrip'
 import { useColors } from '@/hooks/useColors'
+import { usePensSync } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
-import { generateId } from '@/lib/generateId'
-import {
-  calculateWeightBreakdown,
-  calculateRollingBaseline,
-  detectOutlier,
-  calculateDynamicBand,
-  estimateSodiumRetention,
-  estimateHardTrainingRetention,
-  type WeightInput,
-  type HistoryEntry,
-} from '@/lib/retentionModels'
+import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
+import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
+import { enrichWeightSeriesFromRows, type EnrichedWeightRow, type WeightRow } from '@/lib/enrichWeightSeriesMobile'
+import { confidenceLabel, confidenceDetail, bandCaption } from '@/lib/pensCopy'
+import type { ConfidenceLevel } from '@/lib/retentionModels'
 
 const MOD = MODULE_COLORS.weight
 const today = () => {
@@ -41,31 +37,16 @@ const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-interface WeightEntry {
+type ApiWeightEntry = EnrichedWeightRow & {
   id: string
   date: string
   scaleKg: number
   trueWeightKg: number
-  bodyFatPct?: number
-  muscleMassKg?: number
-  creatineRetentionKg: number
-  alcoholRetentionKg: number
-  glycogenRetentionKg: number
-  hardTraining: boolean
-  morningReading: boolean
-  highSodium: boolean
-  restaurantMeal: boolean
-  flightDay: boolean
-  illnessDay: boolean
-  creatineDoseG: number
-  creatineDaysOn: number
-  alcoholUnits: number
-  hoursSinceAlcohol: number
-  carbsG: number
-  tanitaReliable: boolean
-  boneMassKg?: number
-  bodyWaterPct?: number
-  visceralFat?: number
+  confidence: ConfidenceLevel
+  baselineTrendKg: number | null
+  dynamicBandKg: number
+  dynamicBandSource: 'dynamic' | 'static'
+  isOutlier: boolean
 }
 
 const defaultForm = {
@@ -89,6 +70,35 @@ const defaultForm = {
   visceralFat: '',
 }
 
+function mapSupabaseToWeightRow(raw: Record<string, unknown>): WeightRow {
+  return {
+    id: String(raw.id),
+    date: String(raw.date),
+    scaleKg: Number(raw.scaleKg),
+    creatineRetentionKg: Number(raw.creatineRetentionKg ?? 0),
+    alcoholRetentionKg: Number(raw.alcoholRetentionKg ?? 0),
+    glycogenRetentionKg: Number(raw.glycogenRetentionKg ?? 0),
+    hardTraining: Boolean(raw.hardTraining),
+    morningReading: Boolean(raw.morningReading),
+    highSodium: Boolean(raw.highSodium),
+    restaurantMeal: Boolean(raw.restaurantMeal),
+    flightDay: Boolean(raw.flightDay),
+    illnessDay: Boolean(raw.illnessDay),
+    creatineDoseG: Number(raw.creatineDoseG ?? 0),
+    creatineDaysOn: Number(raw.creatineDaysOn ?? 0),
+    creatinePostLoad: Boolean(raw.creatinePostLoad),
+    alcoholUnits: Number(raw.alcoholUnits ?? 0),
+    hoursSinceAlcohol: Number(raw.hoursSinceAlcohol ?? 48),
+    carbsG: Number(raw.carbsG ?? 0),
+    tanitaReliable: Boolean(raw.tanitaReliable ?? true),
+    bodyFatPct: raw.bodyFatPct != null ? Number(raw.bodyFatPct) : null,
+    muscleMassKg: raw.muscleMassKg != null ? Number(raw.muscleMassKg) : null,
+    boneMassKg: raw.boneMassKg != null ? Number(raw.boneMassKg) : null,
+    bodyWaterPct: raw.bodyWaterPct != null ? Number(raw.bodyWaterPct) : null,
+    visceralFat: raw.visceralFat != null ? Number(raw.visceralFat) : null,
+  }
+}
+
 export default function WeightScreen() {
   const colors = useColors()
   const colorScheme = useColorScheme()
@@ -96,21 +106,32 @@ export default function WeightScreen() {
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const qc = useQueryClient()
+  const useApi = isPensApiConfigured()
+  const { pending, online, refresh: refreshQueue } = usePensSync()
 
   const [form, setForm] = useState({ ...defaultForm })
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showTanita, setShowTanita] = useState(false)
 
-  const { data: entries = [], isLoading, refetch, isRefetching } = useQuery<WeightEntry[]>({
-    queryKey: ['weight'],
+  const { data: entries = [], isLoading, refetch, isRefetching } = useQuery<ApiWeightEntry[]>({
+    queryKey: ['weight', useApi ? 'api' : 'supabase'],
     queryFn: async () => {
+      if (useApi) {
+        const r = await pensFetch('/api/weight')
+        if (!r.ok) {
+          const t = await r.text()
+          throw new Error(t || 'Weight fetch failed')
+        }
+        return (await r.json()) as ApiWeightEntry[]
+      }
       const { data, error } = await supabase
         .from('WeightEntry')
         .select('*')
         .order('date', { ascending: true })
         .limit(60)
       if (error) throw error
-      return data ?? []
+      const rows = (data ?? []).map((r) => mapSupabaseToWeightRow(r as Record<string, unknown>))
+      return enrichWeightSeriesFromRows(rows) as ApiWeightEntry[]
     },
   })
 
@@ -119,12 +140,14 @@ export default function WeightScreen() {
       const scaleKg = parseFloat(form.scaleKg)
       if (isNaN(scaleKg) || scaleKg <= 0) throw new Error('Enter a valid weight')
 
-      const input: WeightInput = {
+      const payload: Record<string, unknown> = {
+        date: form.date,
         scaleKg,
         creatineDoseG: parseFloat(form.creatineDoseG) || 0,
         creatineDaysOn: parseFloat(form.creatineDaysOn) || 0,
+        creatinePostLoad: false,
         alcoholUnits: parseFloat(form.alcoholUnits) || 0,
-        hoursSinceAlcohol: parseFloat(form.hoursSinceAlcohol) || 0,
+        hoursSinceAlcohol: parseFloat(form.hoursSinceAlcohol) || 48,
         carbsG: parseFloat(form.carbsG) || 0,
         hardTraining: form.hardTraining,
         morningReading: form.morningReading,
@@ -133,17 +156,62 @@ export default function WeightScreen() {
         flightDay: form.flightDay,
         illnessDay: form.illnessDay,
       }
+      if (form.bodyFatPct) payload.bodyFatPct = parseFloat(form.bodyFatPct)
+      if (form.muscleMassKg) payload.muscleMassKg = parseFloat(form.muscleMassKg)
+      if (form.boneMassKg) payload.boneMassKg = parseFloat(form.boneMassKg)
+      if (form.bodyWaterPct) payload.bodyWaterPct = parseFloat(form.bodyWaterPct)
+      if (form.visceralFat) payload.visceralFat = parseFloat(form.visceralFat)
 
-      const bd = calculateWeightBreakdown(input)
+      if (useApi) {
+        if (!online) {
+          await enqueueOp({ type: 'weight_post', payload })
+          await refreshQueue()
+          return
+        }
+        try {
+          const r = await pensFetch('/api/weight', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!r.ok) {
+            const t = await r.text()
+            throw new Error(t || 'Save failed')
+          }
+        } catch {
+          await enqueueOp({ type: 'weight_post', payload })
+          await refreshQueue()
+          return
+        }
+        return
+      }
+
+      const { generateId } = await import('@/lib/generateId')
+      const { calculateWeightBreakdown } = await import('@/lib/retentionModels')
+      const bd = calculateWeightBreakdown({
+        scaleKg,
+        creatineDoseG: parseFloat(form.creatineDoseG) || 0,
+        creatineDaysOn: parseFloat(form.creatineDaysOn) || 0,
+        creatinePostLoad: false,
+        alcoholUnits: parseFloat(form.alcoholUnits) || 0,
+        hoursSinceAlcohol: parseFloat(form.hoursSinceAlcohol) || 48,
+        carbsG: parseFloat(form.carbsG) || 0,
+        hardTraining: form.hardTraining,
+        morningReading: form.morningReading,
+        highSodium: form.highSodium,
+        restaurantMeal: form.restaurantMeal,
+        flightDay: form.flightDay,
+        illnessDay: form.illnessDay,
+      })
 
       const row: Record<string, unknown> = {
         id: generateId(),
         date: form.date,
         scaleKg,
         trueWeightKg: bd.trueWeightKg,
-        creatineRetentionKg: bd.creatineRetentionKg,
-        alcoholRetentionKg: bd.alcoholRetentionKg,
-        glycogenRetentionKg: bd.glycogenRetentionKg,
+        creatineRetentionKg: bd.creatineKg,
+        alcoholRetentionKg: bd.alcoholKg,
+        glycogenRetentionKg: bd.glycogenKg,
         tanitaReliable: bd.tanitaReliable,
         hardTraining: form.hardTraining,
         morningReading: form.morningReading,
@@ -151,13 +219,13 @@ export default function WeightScreen() {
         restaurantMeal: form.restaurantMeal,
         flightDay: form.flightDay,
         illnessDay: form.illnessDay,
-        creatineDoseG: input.creatineDoseG,
-        creatineDaysOn: input.creatineDaysOn,
-        alcoholUnits: input.alcoholUnits,
-        hoursSinceAlcohol: input.hoursSinceAlcohol,
-        carbsG: input.carbsG,
+        creatineDoseG: payload.creatineDoseG,
+        creatineDaysOn: payload.creatineDaysOn,
+        creatinePostLoad: false,
+        alcoholUnits: payload.alcoholUnits,
+        hoursSinceAlcohol: payload.hoursSinceAlcohol,
+        carbsG: payload.carbsG,
       }
-
       if (form.bodyFatPct) row.bodyFatPct = parseFloat(form.bodyFatPct)
       if (form.muscleMassKg) row.muscleMassKg = parseFloat(form.muscleMassKg)
       if (form.boneMassKg) row.boneMassKg = parseFloat(form.boneMassKg)
@@ -167,8 +235,12 @@ export default function WeightScreen() {
       const { error } = await supabase.from('WeightEntry').insert(row)
       if (error) throw error
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      if (useApi) {
+        await flushOfflineQueue()
+        await refreshQueue()
+      }
       qc.invalidateQueries({ queryKey: ['weight'] })
       setForm({ ...defaultForm })
       setShowAdvanced(false)
@@ -179,19 +251,7 @@ export default function WeightScreen() {
     },
   })
 
-  // Enrich entries with rolling baseline
-  const enriched = React.useMemo(() => {
-    const history: HistoryEntry[] = []
-    return entries.map((e) => {
-      const sodiumKg = estimateSodiumRetention(e.highSodium, e.restaurantMeal)
-      const hardTrainingKg = estimateHardTrainingRetention(e.hardTraining)
-      const baseline = calculateRollingBaseline(history)
-      const { bandKg } = calculateDynamicBand(history, 'medium')
-      const isOutlier = detectOutlier(e.scaleKg, baseline, bandKg)
-      history.push({ date: e.date, trueWeightKg: e.trueWeightKg, confidence: 'medium' })
-      return { ...e, sodiumKg, hardTrainingKg, baseline, isOutlier }
-    })
-  }, [entries])
+  const enriched = entries
 
   const chartData = enriched.slice(-30).map((e) => ({ value: e.scaleKg }))
   const chartData2 = enriched.slice(-30).map((e) => ({ value: e.trueWeightKg }))
@@ -288,9 +348,36 @@ export default function WeightScreen() {
                 {delta}
               </Text>
             ) : null}
+            <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4, textAlign: 'right', maxWidth: 200 }}>
+              {confidenceLabel(latest.confidence)} — {confidenceDetail(latest.confidence)}
+            </Text>
+            <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 2, textAlign: 'right', maxWidth: 220 }}>
+              {bandCaption(latest.dynamicBandKg, latest.dynamicBandSource)}
+              {latest.isOutlier ? ' Possible outlier vs trend.' : ''}
+            </Text>
           </View>
         ) : null}
       </View>
+
+      {pending > 0 ? (
+        <View
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 8,
+            padding: 10,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: colors.warning,
+            backgroundColor: isDark ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.18)',
+          }}
+        >
+          <Text style={{ color: colors.foreground, fontSize: 13 }}>
+            {pending} change{pending > 1 ? 's' : ''} queued for sync when you are back online.
+          </Text>
+        </View>
+      ) : null}
+
+      <IntegrationStatusStrip />
 
       {/* Form card */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
