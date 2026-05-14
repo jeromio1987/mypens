@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   Scale, Moon, BookOpen, LayoutDashboard,
   Droplets, Utensils, Plane, Dumbbell,
-  ArrowLeft, Check, BarChart2, ListChecks, FileText,
+  ArrowLeft, Check, BarChart2, ListChecks, FileText, UtensilsCrossed,
 } from 'lucide-react'
 
 const CONTEXT_TAGS = [
@@ -27,8 +27,9 @@ interface QuickEntry {
 
 const QUICK_ENTRIES: QuickEntry[] = [
   { href: '/weight',       label: 'Weight',   icon: Scale,           action: 'RECORD', subtitle: 'Last entry' },
+  { href: '/food',         label: 'Food',     icon: UtensilsCrossed, action: 'RECORD', subtitle: 'Macros & photo AI' },
   { href: '/sleep',        label: 'Sleep',    icon: Moon,            action: 'AUDIT',  subtitle: 'Last entry' },
-            { href: '/journal',      label: 'Journal',  icon: BookOpen,       action: 'OPEN',   subtitle: 'Mood ledger & reflections' },
+  { href: '/journal',      label: 'Journal',  icon: BookOpen,        action: 'OPEN',   subtitle: 'Mood ledger & reflections' },
   { href: '/dashboard',    label: 'Overview', icon: LayoutDashboard, action: 'VIEW',   subtitle: "The Day's P.E.N.S. Score" },
 ]
 
@@ -276,9 +277,10 @@ export default function ContextPage() {
 
       {/* Fixed bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-pens-deep/95 backdrop-blur border-t border-pens-muted/20">
-        <div className="max-w-sm mx-auto grid grid-cols-4">
+        <div className="max-w-sm mx-auto grid grid-cols-5">
           {[
             { href: '/weight',       label: 'Weight',   icon: Scale },
+            { href: '/food',         label: 'Food',     icon: UtensilsCrossed },
             { href: '/sleep',        label: 'Sleep',    icon: Moon },
             { href: '/journal',      label: 'Journal',  icon: BookOpen },
             { href: '/dashboard',    label: 'Overview', icon: LayoutDashboard },

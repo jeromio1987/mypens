@@ -24,10 +24,14 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
+import { generateId } from '@/lib/generateId'
 
 const MOD = MODULE_COLORS.training
 const EXERCISES_KEY = '@mypens/recent_exercises'
-const today = () => new Date().toISOString().split('T')[0]
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 interface TrainingEntry {
   id: string
@@ -106,12 +110,13 @@ export default function TrainingScreen() {
       if (!weightKg) throw new Error('Enter weight')
       const vol = (parseInt(sets) || 0) * (parseInt(reps) || 0) * (parseFloat(weightKg) || 0)
       const { error } = await supabase.from('TrainingEntry').insert({
+        id: generateId(),
         date: today(),
         exercise: exercise.trim(),
         sets: parseInt(sets) || 1,
         reps: parseInt(reps) || 1,
         weightKg: parseFloat(weightKg),
-        rpe: rpe ?? null,
+        rpe: rpe != null ? Math.round(rpe) : null,
         notes: notes.trim() || null,
         volume: vol,
       })

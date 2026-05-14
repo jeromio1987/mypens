@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
+import * as ImagePicker from 'expo-image-picker'
 import React, { useState, useEffect } from 'react'
 import {
   ActivityIndicator,
@@ -23,11 +24,14 @@ import { Feather, Ionicons } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
-import { supabase } from '@/lib/supabase'
+import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
 
 const MOD = MODULE_COLORS.food
 const TARGETS_KEY = '@mypens/food_targets'
-const today = () => new Date().toISOString().split('T')[0]
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 interface FoodEntry {
   id: string
@@ -40,6 +44,16 @@ interface FoodEntry {
   fatG: number
   fiberG: number
   notes?: string
+}
+
+interface ScanItem {
+  name: string
+  meal: FoodEntry['meal']
+  kcal: number
+  proteinG: number
+  carbsG: number
+  fatG: number
+  fiberG: number
 }
 
 interface Targets { kcal: number; proteinG: number; carbsG: number; fatG: number }
@@ -79,6 +93,14 @@ export default function FoodScreen() {
   const [targetCarbs, setTargetCarbs] = useState('200')
   const [targetFat, setTargetFat] = useState('70')
 
+  const [aiBusy, setAiBusy] = useState(false)
+  const [scanItems, setScanItems] = useState<ScanItem[]>([])
+  const [dishSummary, setDishSummary] = useState<string | null>(null)
+  const [analysisMode, setAnalysisMode] = useState<string | null>(null)
+  const [anthropicFileId, setAnthropicFileId] = useState<string | null>(null)
+  const [priorJson, setPriorJson] = useState<string | null>(null)
+  const [refineText, setRefineText] = useState('')
+
   useEffect(() => {
     AsyncStorage.getItem(TARGETS_KEY).then((raw) => {
       if (raw) {
@@ -108,49 +130,60 @@ export default function FoodScreen() {
   const { data: entries = [], isLoading, refetch, isRefetching } = useQuery<FoodEntry[]>({
     queryKey: ['food', selectedDate],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('FoodEntry')
-        .select('*')
-        .eq('date', selectedDate)
-        .order('createdAt', { ascending: true })
-      if (error) throw error
-      return data ?? []
+      const res = await pensFetch(`/api/food?date=${encodeURIComponent(selectedDate)}`)
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error((j as { error?: string }).error ?? `Food fetch ${res.status}`)
+      }
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
     },
+    enabled: isPensApiConfigured(),
   })
 
   const { data: chartEntries = [] } = useQuery<FoodEntry[]>({
     queryKey: ['food-chart'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('FoodEntry')
-        .select('date, kcal, proteinG')
-        .order('date', { ascending: true })
-        .limit(90)
-      if (error) throw error
-      return data ?? []
+      const res = await pensFetch('/api/food')
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error((j as { error?: string }).error ?? `Food chart ${res.status}`)
+      }
+      const data = await res.json()
+      const list = Array.isArray(data) ? (data as FoodEntry[]) : []
+      const cutoff = new Date()
+      cutoff.setDate(cutoff.getDate() - 90)
+      const cutoffStr = cutoff.toISOString().slice(0, 10)
+      return list.filter((e) => e.date >= cutoffStr)
     },
+    enabled: isPensApiConfigured(),
   })
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw new Error('Enter a food name')
-      if (!kcal) throw new Error('Enter calories')
-      const { error } = await supabase.from('FoodEntry').insert({
-        date: selectedDate,
-        meal: selectedMeal,
-        name: name.trim(),
-        kcal: parseInt(kcal),
-        proteinG: parseFloat(proteinG) || 0,
-        carbsG: parseFloat(carbsG) || 0,
-        fatG: parseFloat(fatG) || 0,
-        fiberG: parseFloat(fiberG) || 0,
-        notes: notes.trim() || null,
+      const res = await pensFetch('/api/food', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: selectedDate,
+          meal: selectedMeal,
+          name: name.trim(),
+          kcal: parseInt(kcal, 10) || 0,
+          proteinG: parseFloat(proteinG) || 0,
+          carbsG: parseFloat(carbsG) || 0,
+          fatG: parseFloat(fatG) || 0,
+          fiberG: parseFloat(fiberG) || 0,
+          notes: notes.trim() || undefined,
+        }),
       })
-      if (error) throw error
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Save failed')
     },
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       qc.invalidateQueries({ queryKey: ['food'] })
+      qc.invalidateQueries({ queryKey: ['food-chart'] })
       setName('')
       setKcal('')
       setProteinG('')
@@ -164,16 +197,184 @@ export default function FoodScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('FoodEntry').delete().eq('id', id)
-      if (error) throw error
+      const res = await pensFetch('/api/food', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Delete failed')
     },
     onSuccess: () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
       qc.invalidateQueries({ queryKey: ['food'] })
+      qc.invalidateQueries({ queryKey: ['food-chart'] })
     },
   })
 
-  // Totals for today
+  const checkApiOrAlert = () => {
+    if (!isPensApiConfigured()) {
+      Alert.alert('API not configured', 'Set EXPO_PUBLIC_PENS_API_URL and EXPO_PUBLIC_PENS_API_TOKEN in mypens-mobile/.env, then restart Expo.')
+      return false
+    }
+    return true
+  }
+
+  const pickAndScan = async () => {
+    if (!checkApiOrAlert()) return
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo library access to scan food.'); return }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.75 })
+    await runScan(result)
+  }
+
+  const takeAndScan = async () => {
+    if (!checkApiOrAlert()) return
+    const perm = await ImagePicker.requestCameraPermissionsAsync()
+    if (!perm.granted) { Alert.alert('Permission needed', 'Allow camera access to scan food.'); return }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.75 })
+    await runScan(result)
+  }
+
+  const runScan = async (result: ImagePicker.ImagePickerResult) => {
+    if (result.canceled || !result.assets[0]) return
+    const asset = result.assets[0]
+    setAiBusy(true)
+    setScanItems([])
+    setDishSummary(null)
+    setAnalysisMode(null)
+    setAnthropicFileId(null)
+    setPriorJson(null)
+    try {
+      const form = new FormData()
+      const mime = asset.mimeType ?? 'image/jpeg'
+      const ext = mime.includes('png') ? 'png' : 'jpg'
+      form.append('file', {
+        uri: asset.uri,
+        name: `scan.${ext}`,
+        type: mime,
+      } as unknown as Blob)
+      form.append('date', selectedDate)
+      form.append('meal', selectedMeal)
+      const res = await pensFetch('/api/food/photo-analyze', { method: 'POST', body: form })
+      const j = (await res.json()) as {
+        error?: string
+        items?: ScanItem[]
+        dishSummary?: string
+        analysisMode?: string
+        anthropicFileId?: string | null
+      }
+      if (!res.ok) throw new Error(j.error ?? `Scan failed (${res.status})`)
+      const items = Array.isArray(j.items) ? j.items : []
+      setScanItems(items)
+      setDishSummary(typeof j.dishSummary === 'string' ? j.dishSummary : null)
+      setAnalysisMode(typeof j.analysisMode === 'string' ? j.analysisMode : null)
+      const fid = j.anthropicFileId != null ? String(j.anthropicFileId) : null
+      setAnthropicFileId(fid && fid.length > 0 ? fid : null)
+      setPriorJson(JSON.stringify({
+        analysisMode: j.analysisMode ?? 'meal_estimate',
+        dishSummary: j.dishSummary ?? '',
+        items,
+      }))
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    } catch (e: unknown) {
+      Alert.alert('Photo scan', e instanceof Error ? e.message : 'Failed')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  const runRefine = async () => {
+    if (!isPensApiConfigured() || !anthropicFileId || !priorJson || !refineText.trim()) return
+    setAiBusy(true)
+    try {
+      const res = await pensFetch('/api/food/photo-refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          anthropicFileId,
+          date: selectedDate,
+          meal: selectedMeal,
+          priorAssistantText: priorJson,
+          refine: refineText.trim(),
+        }),
+      })
+      const j = (await res.json()) as {
+        error?: string
+        items?: ScanItem[]
+        dishSummary?: string
+        analysisMode?: string
+        anthropicFileId?: string | null
+      }
+      if (!res.ok) throw new Error(j.error ?? `Refine failed (${res.status})`)
+      const items = Array.isArray(j.items) ? j.items : []
+      setScanItems(items)
+      setDishSummary(typeof j.dishSummary === 'string' ? j.dishSummary : null)
+      setAnalysisMode(typeof j.analysisMode === 'string' ? j.analysisMode : null)
+      setRefineText('')
+      setPriorJson(JSON.stringify({
+        analysisMode: j.analysisMode ?? 'meal_estimate',
+        dishSummary: j.dishSummary ?? '',
+        items,
+      }))
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    } catch (e: unknown) {
+      Alert.alert('Refine', e instanceof Error ? e.message : 'Failed')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  const applyScanRow = (item: ScanItem) => {
+    setSelectedMeal(item.meal)
+    setName(item.name)
+    setKcal(item.kcal ? String(Math.round(item.kcal)) : '')
+    setProteinG(item.proteinG ? String(item.proteinG) : '')
+    setCarbsG(item.carbsG ? String(item.carbsG) : '')
+    setFatG(item.fatG ? String(item.fatG) : '')
+    setFiberG(item.fiberG ? String(item.fiberG) : '')
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+  }
+
+  const logAllScan = async () => {
+    if (!isPensApiConfigured() || scanItems.length === 0) return
+    setAiBusy(true)
+    try {
+      for (let i = 0; i < scanItems.length; i++) {
+        const item = scanItems[i]
+        const res = await pensFetch('/api/food', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: selectedDate,
+            meal: item.meal,
+            name: item.name,
+            kcal: item.kcal,
+            proteinG: item.proteinG,
+            carbsG: item.carbsG,
+            fatG: item.fatG,
+            fiberG: item.fiberG,
+            notes: i === 0 && dishSummary ? `AI: ${dishSummary.slice(0, 200)}` : undefined,
+          }),
+        })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Save failed')
+      }
+      qc.invalidateQueries({ queryKey: ['food'] })
+      qc.invalidateQueries({ queryKey: ['food-chart'] })
+      setScanItems([])
+      setDishSummary(null)
+      setAnalysisMode(null)
+      setAnthropicFileId(null)
+      setPriorJson(null)
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    } catch (e: unknown) {
+      Alert.alert('Log all', e instanceof Error ? e.message : 'Failed')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
   const totals = entries.reduce(
     (acc, e) => ({
       kcal: acc.kcal + e.kcal,
@@ -184,7 +385,6 @@ export default function FoodScreen() {
     { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
   )
 
-  // Daily kcal chart (last 14 days)
   const dailyMap = new Map<string, number>()
   chartEntries.forEach((e) => {
     dailyMap.set(e.date, (dailyMap.get(e.date) ?? 0) + e.kcal)
@@ -192,7 +392,7 @@ export default function FoodScreen() {
   const last14 = [...dailyMap.entries()].slice(-14)
   const barData = last14.map(([d, v]) => ({
     value: v,
-    label: new Date(d).toLocaleDateString('en', { weekday: 'narrow' }),
+    label: new Date(d + 'T12:00:00').toLocaleDateString('en', { weekday: 'narrow' }),
     frontColor: v >= targets.kcal * 0.9 && v <= targets.kcal * 1.1 ? MOD.primary : `${MOD.primary}70`,
   }))
 
@@ -232,7 +432,6 @@ export default function FoodScreen() {
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={MOD.primary} />}
       keyboardShouldPersistTaps="handled"
     >
-      {/* Header */}
       <View style={styles.header}>
         <View style={[styles.moduleTag, { backgroundColor: accentBg }]}>
           <Ionicons name="restaurant-outline" size={16} color={MOD.primary} />
@@ -243,7 +442,15 @@ export default function FoodScreen() {
         </Pressable>
       </View>
 
-      {/* Targets settings */}
+      {!isPensApiConfigured() && (
+        <View style={[styles.warnCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+          <Text style={[styles.warnTitle, { color: colors.foreground }]}>Connect to MY PENS</Text>
+          <Text style={[styles.warnBody, { color: colors.mutedForeground }]}>
+            Add EXPO_PUBLIC_PENS_API_URL and EXPO_PUBLIC_PENS_API_TOKEN to .env (token must match MOBILE_PENS_API_TOKEN on the Next server). Restart Expo after changing env.
+          </Text>
+        </View>
+      )}
+
       {showTargets && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Daily targets</Text>
@@ -266,31 +473,103 @@ export default function FoodScreen() {
               </View>
             </View>
           ))}
-          <Pressable
-            onPress={saveTargets}
-            style={[styles.submitBtn, { backgroundColor: MOD.primary }]}
-          >
+          <Pressable onPress={saveTargets} style={[styles.submitBtn, { backgroundColor: MOD.primary }]}>
             <Text style={styles.submitText}>Save targets</Text>
           </Pressable>
         </View>
       )}
 
-      {/* Macro progress */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          {new Date(selectedDate).toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' })}
+          {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' })}
         </Text>
+        <Text style={[styles.dateHint, { color: colors.mutedForeground }]}>Date (yyyy-mm-dd)</Text>
+        <TextInput
+          value={selectedDate}
+          onChangeText={setSelectedDate}
+          placeholder="2026-05-13"
+          placeholderTextColor={colors.mutedForeground}
+          autoCapitalize="none"
+          style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary, marginBottom: 12 }]}
+        />
         <MacroBar label="Calories" current={totals.kcal} target={targets.kcal} color={MOD.primary} />
         <MacroBar label="Protein" current={totals.proteinG} target={targets.proteinG} color="#3b82f6" />
         <MacroBar label="Carbs" current={totals.carbsG} target={targets.carbsG} color="#f97316" />
         <MacroBar label="Fat" current={totals.fatG} target={targets.fatG} color="#eab308" />
       </View>
 
-      {/* Entry form */}
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Photo (AI)</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable
+            onPress={() => void takeAndScan()}
+            disabled={aiBusy || !isPensApiConfigured()}
+            style={[styles.secondaryBtn, { flex: 1, borderColor: MOD.primary, opacity: aiBusy || !isPensApiConfigured() ? 0.5 : 1 }]}
+          >
+            {aiBusy ? (
+              <ActivityIndicator color={MOD.primary} />
+            ) : (
+              <Text style={[styles.secondaryBtnText, { color: MOD.primary }]}>📷 Take photo</Text>
+            )}
+          </Pressable>
+          <Pressable
+            onPress={() => void pickAndScan()}
+            disabled={aiBusy || !isPensApiConfigured()}
+            style={[styles.secondaryBtn, { flex: 1, borderColor: colors.border, opacity: aiBusy || !isPensApiConfigured() ? 0.5 : 1 }]}
+          >
+            <Text style={[styles.secondaryBtnText, { color: MOD.primary }]}>🖼 Choose photo</Text>
+          </Pressable>
+        </View>
+        {analysisMode && (
+          <Text style={[styles.aiMeta, { color: colors.mutedForeground }]}>Mode: {analysisMode}</Text>
+        )}
+        {dishSummary ? (
+          <Text style={[styles.aiSummary, { color: colors.mutedForeground }]}>{dishSummary}</Text>
+        ) : null}
+        {scanItems.length > 0 && (
+          <>
+            {scanItems.map((item, idx) => (
+              <View key={`${item.name}-${idx}`} style={[styles.scanRow, { borderColor: colors.border }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.entryName, { color: colors.foreground }]}>{item.name}</Text>
+                  <Text style={[styles.entrySub, { color: colors.mutedForeground }]}>
+                    {Math.round(item.kcal)} kcal · P {item.proteinG}g
+                  </Text>
+                </View>
+                <Pressable onPress={() => applyScanRow(item)} style={styles.scanApply}>
+                  <Text style={{ color: MOD.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Fill</Text>
+                </Pressable>
+              </View>
+            ))}
+            <Pressable onPress={() => void logAllScan()} disabled={aiBusy} style={[styles.submitBtn, { backgroundColor: '#7c3aed', marginTop: 8 }]}>
+              <Text style={styles.submitText}>Log all {scanItems.length}</Text>
+            </Pressable>
+          </>
+        )}
+        {anthropicFileId && priorJson && (
+          <View style={{ marginTop: 12 }}>
+            <Text style={[styles.macroInputLabel, { color: colors.mutedForeground, marginBottom: 6 }]}>Refine (same photo)</Text>
+            <TextInput
+              value={refineText}
+              onChangeText={setRefineText}
+              placeholder="e.g. That was salmon, not tuna"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+            />
+            <Pressable
+              onPress={() => void runRefine()}
+              disabled={aiBusy || !refineText.trim()}
+              style={[styles.secondaryBtn, { borderColor: MOD.primary, marginTop: 8, opacity: !refineText.trim() ? 0.5 : 1 }]}
+            >
+              <Text style={[styles.secondaryBtnText, { color: MOD.primary }]}>Apply correction</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Add food</Text>
 
-        {/* Meal picker */}
         <View style={styles.mealRow}>
           {MEAL_OPTIONS.map((m) => (
             <Pressable
@@ -305,18 +584,11 @@ export default function FoodScreen() {
               ]}
             >
               <Feather
-                name={MEAL_ICONS[m] as any}
+                name={MEAL_ICONS[m] as React.ComponentProps<typeof Feather>['name']}
                 size={14}
                 color={selectedMeal === m ? '#fff' : colors.mutedForeground}
               />
-              <Text
-                style={[
-                  styles.mealChipText,
-                  { color: selectedMeal === m ? '#fff' : colors.mutedForeground },
-                ]}
-              >
-                {m}
-              </Text>
+              <Text style={[styles.mealChipText, { color: selectedMeal === m ? '#fff' : colors.mutedForeground }]}>{m}</Text>
             </Pressable>
           ))}
         </View>
@@ -404,10 +676,10 @@ export default function FoodScreen() {
 
         <Pressable
           onPress={() => mutation.mutate()}
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || !isPensApiConfigured()}
           style={({ pressed }) => [
             styles.submitBtn,
-            { backgroundColor: MOD.primary, opacity: pressed || mutation.isPending ? 0.7 : 1 },
+            { backgroundColor: MOD.primary, opacity: pressed || mutation.isPending || !isPensApiConfigured() ? 0.6 : 1 },
           ]}
         >
           {mutation.isPending ? (
@@ -418,8 +690,7 @@ export default function FoodScreen() {
         </Pressable>
       </View>
 
-      {/* Today's log */}
-      {isLoading ? (
+      {isPensApiConfigured() && isLoading ? (
         <ActivityIndicator color={MOD.primary} style={{ marginTop: 8 }} />
       ) : (
         MEAL_OPTIONS.map((meal) =>
@@ -436,10 +707,7 @@ export default function FoodScreen() {
                       {e.kcal} kcal · {e.proteinG}g P
                     </Text>
                   </View>
-                  <Pressable
-                    onPress={() => deleteMutation.mutate(e.id)}
-                    hitSlop={12}
-                  >
+                  <Pressable onPress={() => deleteMutation.mutate(e.id)} hitSlop={12}>
                     <Feather name="trash-2" size={16} color={colors.mutedForeground} />
                   </Pressable>
                 </View>
@@ -449,7 +717,6 @@ export default function FoodScreen() {
         )
       )}
 
-      {/* Trend chart */}
       {barData.length > 1 && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.chartTitle, { color: colors.foreground }]}>14-day calorie trend</Text>
@@ -480,8 +747,12 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
   moduleTag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   moduleLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  warnCard: { marginHorizontal: 16, marginBottom: 16, borderRadius: 16, borderWidth: 1, padding: 14 },
+  warnTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 6 },
+  warnBody: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19 },
   card: { marginHorizontal: 16, marginBottom: 16, borderRadius: 16, borderWidth: 1, padding: 16 },
   sectionTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 12 },
+  dateHint: { fontSize: 11, marginBottom: 4 },
   mealRow: { flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' },
   mealChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   mealChipText: { fontSize: 12, fontFamily: 'Inter_500Medium', textTransform: 'capitalize' },
@@ -494,6 +765,12 @@ const styles = StyleSheet.create({
   detailedLabel: { fontSize: 13, fontFamily: 'Inter_400Regular' },
   submitBtn: { height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   submitText: { color: '#fff', fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  secondaryBtn: { height: 44, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  secondaryBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  aiMeta: { fontSize: 11, marginTop: 8 },
+  aiSummary: { fontSize: 12, marginTop: 6, lineHeight: 17 },
+  scanRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1 },
+  scanApply: { paddingHorizontal: 10, paddingVertical: 6 },
   macroBarWrap: { marginBottom: 10 },
   macroBarRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   macroBarLabel: { fontSize: 12, fontFamily: 'Inter_500Medium' },

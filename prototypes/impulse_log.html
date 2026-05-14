@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Log">
+<meta name="theme-color" content="#ffffff">
+<title>Impulse Log</title>
+<style>
+  :root {
+    --bg: #ffffff; --bg2: #f7f6f3; --bg3: #f0efe9;
+    --text: #1a1a18; --text2: #6b6b66; --text3: #9a9a95;
+    --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.2);
+    --green: #1D9E75; --green-bg: #e1f5ee; --green-text: #085041;
+    --blue: #378ADD; --blue-bg: #e6f1fb; --blue-text: #0C447C;
+    --red: #D85A30; --red-bg: #fdf0ec; --red-text: #7a2410;
+    --purple: #7F77DD; --purple-bg: #eeedfe; --purple-text: #3C3489;
+    --radius: 12px; --radius-sm: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #252522; --bg3: #2e2e2b;
+      --text: #f0efe9; --text2: #a8a89e; --text3: #6b6b66;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+      --green-bg: #0a3326; --green-text: #5DCAA5;
+      --blue-bg: #0a2440; --blue-text: #85B7EB;
+      --red-bg: #2d1508; --red-text: #e8875a;
+      --purple-bg: #1e1c42; --purple-text: #AFA9EC;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100%; }
+
+  .topbar { position: sticky; top: 0; z-index: 100; background: var(--bg); border-bottom: 0.5px solid var(--border); padding: 14px 16px 0; }
+  .topbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; }
+
+  .tabs { display: flex; gap: 0; border-bottom: 0.5px solid var(--border); }
+  .tab { flex: 1; padding: 10px 4px; font-size: 13px; font-weight: 500; color: var(--text2); text-align: center; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--text); border-bottom-color: var(--text); }
+
+  .pane { display: none; padding: 16px 16px 80px; }
+  .pane.active { display: block; }
+
+  .section-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; margin-top: 4px; }
+
+  /* LOG tab */
+  .chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .chip { padding: 9px 16px; border-radius: 40px; border: 0.5px solid var(--border); background: var(--bg2); font-size: 14px; color: var(--text2); cursor: pointer; font-weight: 500; -webkit-appearance: none; }
+  .chip:active { background: var(--bg3); }
+  .chip.sel-target-alcohol   { background: var(--red-bg);    color: var(--red-text);    border-color: var(--red);    }
+  .chip.sel-target-cocaine   { background: var(--purple-bg); color: var(--purple-text); border-color: var(--purple); }
+  .chip.sel-target-escort    { background: var(--blue-bg);   color: var(--blue-text);   border-color: var(--blue);   }
+  .chip.sel-target-other     { background: var(--bg3);       color: var(--text);        border-color: var(--border2);}
+  .chip.sel-trigger          { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+  .chip.sel-action-redirected{ background: var(--green-bg);  color: var(--green-text);  border-color: var(--green);  }
+  .chip.sel-action-gave_in   { background: var(--red-bg);    color: var(--red-text);    border-color: var(--red);    }
+  .chip.sel-action-fighting  { background: var(--blue-bg);   color: var(--blue-text);   border-color: var(--blue);   }
+
+  .submit-btn { width: 100%; padding: 16px; background: var(--text); color: var(--bg); border: none; border-radius: var(--radius-sm); font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+  .submit-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .success-msg { display: none; text-align: center; padding: 20px; font-size: 15px; color: var(--green); font-weight: 500; }
+
+  /* PATTERNS tab */
+  .pattern-intro { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 16px; padding: 12px 14px; background: var(--bg2); border-radius: var(--radius-sm); }
+  .heatmap-wrap { overflow-x: auto; }
+  .heatmap { display: grid; grid-template-columns: 48px repeat(7, 1fr); gap: 3px; min-width: 300px; }
+  .hm-col-label { font-size: 10px; color: var(--text3); text-align: center; padding: 2px 0; }
+  .hm-row-label { font-size: 10px; color: var(--text3); text-align: right; padding: 3px 6px 3px 0; display: flex; align-items: center; justify-content: flex-end; }
+  .hm-cell { height: 28px; border-radius: 4px; background: var(--bg2); }
+
+  .target-breakdown { margin-top: 24px; }
+  .breakdown-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-label { flex: 1; font-size: 14px; }
+  .breakdown-bar-wrap { width: 120px; height: 8px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
+  .breakdown-bar { height: 100%; border-radius: 4px; }
+  .breakdown-count { font-size: 13px; color: var(--text2); width: 30px; text-align: right; }
+
+  .outcome-row { display: flex; gap: 8px; margin-top: 20px; }
+  .outcome-pill { flex: 1; padding: 12px 8px; border-radius: var(--radius-sm); text-align: center; background: var(--bg2); }
+  .outcome-n { font-size: 22px; font-weight: 700; }
+  .outcome-l { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .outcome-n.green { color: var(--green); }
+  .outcome-n.red { color: var(--red); }
+  .outcome-n.blue { color: var(--blue); }
+
+  /* HISTORY tab */
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+  .history-item { background: var(--bg2); border-radius: var(--radius-sm); padding: 12px 14px; }
+  .history-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .history-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .history-dot.redirected { background: var(--green); }
+  .history-dot.gave_in    { background: var(--red); }
+  .history-dot.fighting   { background: var(--blue); }
+  .history-target { font-size: 14px; font-weight: 500; }
+  .history-time { font-size: 12px; color: var(--text3); margin-left: auto; }
+  .history-meta { font-size: 12px; color: var(--text2); }
+  .history-del { background: none; border: none; color: var(--text3); font-size: 16px; cursor: pointer; margin-left: 6px; }
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text3); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-title">Impulse Log</div>
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('log', this)">Log</div>
+    <div class="tab" onclick="showTab('patterns', this)">Patterns</div>
+    <div class="tab" onclick="showTab('history', this)">History</div>
+  </div>
+</div>
+
+<!-- LOG PANE -->
+<div id="pane-log" class="pane active">
+  <div class="section-label">What's the urge?</div>
+  <div class="chip-group" id="target-chips">
+    <button class="chip" onclick="select('target','alcohol',this)">🍺 Alcohol</button>
+    <button class="chip" onclick="select('target','cocaine',this)">⚡ Cocaine</button>
+    <button class="chip" onclick="select('target','escort',this)">📱 Escort</button>
+    <button class="chip" onclick="select('target','other',this)">Other</button>
+  </div>
+
+  <div class="section-label">What triggered it?</div>
+  <div class="chip-group" id="trigger-chips">
+    <button class="chip" onclick="select('trigger','bored',this)">Bored</button>
+    <button class="chip" onclick="select('trigger','understimulated',this)">Understimulated</button>
+    <button class="chip" onclick="select('trigger','anxious',this)">Anxious</button>
+    <button class="chip" onclick="select('trigger','post_work',this)">Post-work</button>
+    <button class="chip" onclick="select('trigger','social',this)">Social pressure</button>
+    <button class="chip" onclick="select('trigger','alone',this)">Alone + unstructured</button>
+    <button class="chip" onclick="select('trigger','other',this)">Other</button>
+  </div>
+
+  <div class="section-label">What did you do?</div>
+  <div class="chip-group" id="action-chips">
+    <button class="chip" onclick="select('action','redirected',this)">✓ Redirected it</button>
+    <button class="chip" onclick="select('action','gave_in',this)">Gave in</button>
+    <button class="chip" onclick="select('action','fighting',this)">Still fighting</button>
+  </div>
+
+  <button class="submit-btn" id="submit-btn" onclick="submitLog()" disabled>Log it</button>
+  <div class="success-msg" id="success-msg">Logged ✓</div>
+</div>
+
+<!-- PATTERNS PANE -->
+<div id="pane-patterns" class="pane">
+  <div class="pattern-intro">Patterns take a few weeks to show clearly. Every entry moves this from guesswork to evidence.</div>
+
+  <div class="section-label">Urges by time of day</div>
+  <div class="heatmap-wrap">
+    <div class="heatmap" id="heatmap"></div>
+  </div>
+
+  <div class="section-label" style="margin-top:24px">By target</div>
+  <div class="target-breakdown" id="target-breakdown"></div>
+
+  <div class="section-label" style="margin-top:24px">Outcomes</div>
+  <div class="outcome-row" id="outcome-row"></div>
+</div>
+
+<!-- HISTORY PANE -->
+<div id="pane-history" class="pane">
+  <div class="history-list" id="history-list"></div>
+</div>
+
+<script>
+// ─── Storage ──────────────────────────────────────────────────────────────
+function loadLog() {
+  try { return JSON.parse(localStorage.getItem('impulse_log') || '[]'); } catch { return []; }
+}
+function saveLog(arr) { localStorage.setItem('impulse_log', JSON.stringify(arr)); }
+
+// ─── State ────────────────────────────────────────────────────────────────
+let sel = { target: null, trigger: null, action: null };
+
+function select(group, value, el) {
+  sel[group] = value;
+  // Deselect others in group
+  const chips = document.getElementById(group + '-chips').querySelectorAll('.chip');
+  chips.forEach(c => {
+    // Remove all sel- classes
+    c.className = c.className.replace(/\bsel-\S+/g, '').trim();
+  });
+  // Apply selection class
+  if (group === 'action') el.className = `chip sel-action-${value}`;
+  else if (group === 'target') el.className = `chip sel-target-${value}`;
+  else el.className = 'chip sel-trigger';
+  checkSubmit();
+}
+
+function checkSubmit() {
+  document.getElementById('submit-btn').disabled = !(sel.target && sel.trigger && sel.action);
+}
+
+function submitLog() {
+  const log = loadLog();
+  log.unshift({ id: Date.now().toString(), ts: new Date().toISOString(), ...sel });
+  saveLog(log);
+  // Reset
+  sel = { target: null, trigger: null, action: null };
+  document.querySelectorAll('.chip').forEach(c => c.className = 'chip');
+  checkSubmit();
+  const msg = document.getElementById('success-msg');
+  msg.style.display = 'block';
+  setTimeout(() => { msg.style.display = 'none'; }, 2000);
+  renderPatterns();
+  renderHistory();
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────
+function showTab(id, el) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('pane-' + id).classList.add('active');
+  el.classList.add('active');
+  if (id === 'patterns') renderPatterns();
+  if (id === 'history') renderHistory();
+  window.scrollTo(0, 0);
+}
+
+// ─── Format helpers ───────────────────────────────────────────────────────
+function fmtTs(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now - d;
+  if (diffMs < 3600000) return Math.round(diffMs / 60000) + 'm ago';
+  if (diffMs < 86400000) return Math.round(diffMs / 3600000) + 'h ago';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+const TARGET_LABELS = { alcohol: '🍺 Alcohol', cocaine: '⚡ Cocaine', escort: '📱 Escort', other: '● Other' };
+const TRIGGER_LABELS = { bored: 'Bored', understimulated: 'Understimulated', anxious: 'Anxious', post_work: 'Post-work', social: 'Social pressure', alone: 'Alone + unstructured', other: 'Other' };
+const ACTION_LABELS = { redirected: 'Redirected', gave_in: 'Gave in', fighting: 'Fighting' };
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+// ─── Heatmap ──────────────────────────────────────────────────────────────
+function renderPatterns() {
+  const log = loadLog();
+
+  // Heatmap: hours (6am–midnight, every 3h) × days
+  const hours = [6, 9, 12, 15, 18, 21, 0];
+  const hourLabels = ['6am','9am','12pm','3pm','6pm','9pm','12am'];
+  const counts = {}; // `${dayOfWeek}_${hourBucket}` → count
+  let maxCount = 0;
+  log.forEach(e => {
+    const d = new Date(e.ts);
+    const dow = d.getDay();
+    const h = d.getHours();
+    const bucket = hours.findIndex((x, i) => h >= x && (i === hours.length - 1 || h < hours[i+1]));
+    const key = `${dow}_${bucket < 0 ? hours.length - 1 : bucket}`;
+    counts[key] = (counts[key] || 0) + 1;
+    if (counts[key] > maxCount) maxCount = counts[key];
+  });
+
+  const hm = document.getElementById('heatmap');
+  hm.innerHTML = '';
+  // Header row
+  hm.appendChild(Object.assign(document.createElement('div'), { className: 'hm-col-label' }));
+  DAYS.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'hm-col-label';
+    el.textContent = d;
+    hm.appendChild(el);
+  });
+  // Data rows
+  hourLabels.forEach((hl, hi) => {
+    const rowLabel = document.createElement('div');
+    rowLabel.className = 'hm-row-label';
+    rowLabel.textContent = hl;
+    hm.appendChild(rowLabel);
+    for (let day = 0; day < 7; day++) {
+      const key = `${day}_${hi}`;
+      const n = counts[key] || 0;
+      const cell = document.createElement('div');
+      cell.className = 'hm-cell';
+      if (n > 0) {
+        const intensity = maxCount > 0 ? n / maxCount : 0;
+        cell.style.background = `rgba(216,90,48,${0.15 + intensity * 0.75})`;
+        cell.title = `${DAYS[day]} ${hl}: ${n} event${n===1?'':'s'}`;
+      }
+      hm.appendChild(cell);
+    }
+  });
+
+  // Target breakdown
+  const targets = ['alcohol', 'cocaine', 'escort', 'other'];
+  const tCounts = {};
+  targets.forEach(t => tCounts[t] = log.filter(e => e.target === t).length);
+  const maxT = Math.max(...Object.values(tCounts), 1);
+  const colors = { alcohol: 'var(--red)', cocaine: 'var(--purple)', escort: 'var(--blue)', other: 'var(--text3)' };
+  const bd = document.getElementById('target-breakdown');
+  bd.innerHTML = targets.map(t => `
+    <div class="breakdown-row">
+      <div class="breakdown-label">${TARGET_LABELS[t]}</div>
+      <div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:${(tCounts[t]/maxT*100).toFixed(0)}%;background:${colors[t]}"></div></div>
+      <div class="breakdown-count">${tCounts[t]}</div>
+    </div>
+  `).join('');
+
+  // Outcomes
+  const outCounts = { redirected: 0, gave_in: 0, fighting: 0 };
+  log.forEach(e => { if (outCounts[e.action] !== undefined) outCounts[e.action]++; });
+  document.getElementById('outcome-row').innerHTML = `
+    <div class="outcome-pill"><div class="outcome-n green">${outCounts.redirected}</div><div class="outcome-l">Redirected</div></div>
+    <div class="outcome-pill"><div class="outcome-n red">${outCounts.gave_in}</div><div class="outcome-l">Gave in</div></div>
+    <div class="outcome-pill"><div class="outcome-n blue">${outCounts.fighting}</div><div class="outcome-l">Fighting</div></div>
+  `;
+}
+
+// ─── History ──────────────────────────────────────────────────────────────
+function renderHistory() {
+  const log = loadLog();
+  const list = document.getElementById('history-list');
+  if (log.length === 0) {
+    list.innerHTML = '<div class="empty-state">No entries yet.<br>Log your first event above.</div>';
+    return;
+  }
+  list.innerHTML = log.slice(0, 50).map(e => `
+    <div class="history-item">
+      <div class="history-top">
+        <div class="history-dot ${e.action}"></div>
+        <div class="history-target">${TARGET_LABELS[e.target] || e.target}</div>
+        <div class="history-time">${fmtTs(e.ts)}</div>
+        <button class="history-del" onclick="deleteEntry('${e.id}')">×</button>
+      </div>
+      <div class="history-meta">${TRIGGER_LABELS[e.trigger] || e.trigger} · ${ACTION_LABELS[e.action] || e.action}</div>
+    </div>
+  `).join('');
+}
+
+function deleteEntry(id) {
+  const log = loadLog().filter(e => e.id !== id);
+  saveLog(log);
+  renderHistory();
+  renderPatterns();
+}
+
+// Init
+renderHistory();
+</script>
+</body>
+</html>

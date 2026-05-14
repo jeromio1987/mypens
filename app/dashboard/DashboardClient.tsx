@@ -7,7 +7,7 @@ import {
   Moon, Dumbbell, Ruler, DatabaseBackup, BookOpen,
   Plane, Thermometer, Palmtree, Salad, Trophy, Tag,
   CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Map, Target, Sparkles, Image as ImageIcon,
-  FileText,
+  FileText, UtensilsCrossed,
 } from 'lucide-react'
 import type { StructuredInsight } from '@/app/api/dashboard/route'
 import GoalsPanel from '@/components/goals/GoalsPanel'
@@ -122,19 +122,21 @@ function QualityDots({ q }: { q: number }) {
 }
 
 const MODULES = [
-  { href: '/weight',       label: 'Weight',       icon: Scale,        color: 'text-blue-400' },
-  { href: '/sleep',        label: 'Sleep',        icon: Moon,         color: 'text-violet-400' },
-  { href: '/training',     label: 'Training',     icon: Dumbbell,     color: 'text-orange-400' },
-  { href: '/measurements', label: 'Measurements', icon: Ruler,        color: 'text-rose-400' },
-  { href: '/journal',      label: 'Journal',      icon: BookOpen,     color: 'text-emerald-400' },
-  { href: '/events',       label: 'Events',       icon: CalendarDays, color: 'text-sky-400' },
+  { href: '/weight',       label: 'Weight',       icon: Scale,          color: 'text-blue-400' },
+  { href: '/food',         label: 'Food',         icon: UtensilsCrossed,color: 'text-emerald-400' },
+  { href: '/sleep',        label: 'Sleep',        icon: Moon,           color: 'text-violet-400' },
+  { href: '/training',     label: 'Training',     icon: Dumbbell,       color: 'text-orange-400' },
+  { href: '/measurements', label: 'Measurements', icon: Ruler,          color: 'text-rose-400' },
+  { href: '/journal',      label: 'Journal',      icon: BookOpen,       color: 'text-emerald-400' },
+  { href: '/events',       label: 'Events',       icon: CalendarDays,   color: 'text-sky-400' },
 ]
 
 const STREAK_MODULES = [
-  { key: 'weight'      , label: 'Weight',       icon: Scale,   color: 'text-blue-400' },
-  { key: 'sleep'       , label: 'Sleep',        icon: Moon,    color: 'text-violet-400' },
-  { key: 'training'    , label: 'Training',     icon: Dumbbell,color: 'text-orange-400' },
-  { key: 'measurements', label: 'Measurements', icon: Ruler,   color: 'text-rose-400' },
+  { key: 'weight',       label: 'Weight',       icon: Scale,            color: 'text-blue-400' },
+  { key: 'food',         label: 'Food',         icon: UtensilsCrossed,  color: 'text-emerald-400' },
+  { key: 'sleep',        label: 'Sleep',        icon: Moon,           color: 'text-violet-400' },
+  { key: 'training',     label: 'Training',     icon: Dumbbell,       color: 'text-orange-400' },
+  { key: 'measurements', label: 'Measurements', icon: Ruler,          color: 'text-rose-400' },
 ]
 
 export default function DashboardClient() {
@@ -360,6 +362,37 @@ export default function DashboardClient() {
             )}
 
 
+            {/* Food card */}
+            <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <UtensilsCrossed size={16} className="text-emerald-400" />
+                  <h2 className="font-semibold text-pens-cream">Food — Today</h2>
+                </div>
+                <Link href="/food" className="text-xs text-pens-cream/40 hover:text-pens-cream/70 transition-colors">Log →</Link>
+              </div>
+              <div className="flex flex-wrap gap-4 mb-2">
+                <div>
+                  <p className="text-3xl font-bold text-pens-cream">{Math.round(data.food.today.kcal)}</p>
+                  <p className="text-xs text-pens-cream/40">kcal</p>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-pens-cream">{Math.round(data.food.today.proteinG)}</p>
+                  <p className="text-xs text-pens-cream/40">g protein</p>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-pens-cream">{data.food.today.entries}</p>
+                  <p className="text-xs text-pens-cream/40">entries</p>
+                </div>
+              </div>
+              {data.food.avgKcal7 != null && (
+                <p className="text-xs text-pens-cream/40">7-day avg intake: {Math.round(data.food.avgKcal7)} kcal/day</p>
+              )}
+              {!data.food.today.entries && (
+                <p className="text-sm text-pens-cream/40 mt-1">Nothing logged for today yet</p>
+              )}
+            </div>
+
             {/* Sleep card */}
             <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
@@ -489,7 +522,7 @@ export default function DashboardClient() {
                     Logging Streaks
                   </h2>
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
                   {STREAK_MODULES.map(({ key, label, icon: Icon, color }) => {
                     const s = streaks[key as keyof StreaksData]
                     return (

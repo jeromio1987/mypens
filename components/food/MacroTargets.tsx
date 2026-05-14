@@ -11,7 +11,7 @@ export function loadTargets(): DailyTargets {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULT_TARGETS
-    const parsed = JSON.parse(raw)
+    const parsed = JSON.parse(raw) as Record<string, unknown>
     return {
       kcal: Number(parsed.kcal) || DEFAULT_TARGETS.kcal,
       proteinG: Number(parsed.proteinG) || DEFAULT_TARGETS.proteinG,
@@ -31,12 +31,14 @@ interface Props {
   onTargetsChange: (t: DailyTargets) => void
 }
 
+const inputCls =
+  'w-full bg-pens-navy border border-pens-muted/40 rounded-lg px-3 py-2 text-sm text-pens-cream focus:outline-none focus:border-pens-cream/30'
+
 export default function MacroTargets({ onTargetsChange }: Props) {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<DailyTargets>(DEFAULT_TARGETS)
   const [saved, setSaved] = useState(false)
 
-  // Hydrate from localStorage on mount
   useEffect(() => {
     const t = loadTargets()
     setForm(t)
@@ -64,25 +66,25 @@ export default function MacroTargets({ onTargetsChange }: Props) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow overflow-hidden">
+    <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-pens-navy/30 transition-colors"
       >
-        <div className="flex items-center gap-2">
-          <Target size={16} className="text-violet-500" />
-          <span className="text-sm font-semibold text-gray-700">Daily Targets</span>
-          <span className="text-xs text-gray-400">
+        <div className="flex items-center gap-2 min-w-0">
+          <Target size={16} className="text-emerald-400 shrink-0" />
+          <span className="text-sm font-semibold text-pens-cream shrink-0">Daily targets</span>
+          <span className="text-xs text-pens-cream/40 truncate">
             {form.kcal} kcal · {form.proteinG}g P · {form.carbsG}g C · {form.fatG}g F
           </span>
         </div>
-        {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+        {open ? <ChevronUp size={16} className="text-pens-cream/40 shrink-0" /> : <ChevronDown size={16} className="text-pens-cream/40 shrink-0" />}
       </button>
 
       {open && (
-        <div className="px-5 pb-5 border-t border-gray-100">
-          <p className="text-xs text-gray-400 mt-3 mb-4">
+        <div className="px-5 pb-5 border-t border-pens-muted/20">
+          <p className="text-xs text-pens-cream/40 mt-3 mb-4">
             Saved locally — progress bars in the food log update instantly.
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -95,8 +97,8 @@ export default function MacroTargets({ onTargetsChange }: Props) {
               ] as const
             ).map(({ key, label, unit, step, min }) => (
               <div key={key}>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  {label} <span className="text-gray-400">({unit})</span>
+                <label className="block text-xs font-medium text-pens-cream/60 mb-1">
+                  {label} <span className="text-pens-cream/40">({unit})</span>
                 </label>
                 <input
                   type="number"
@@ -104,7 +106,7 @@ export default function MacroTargets({ onTargetsChange }: Props) {
                   step={step}
                   value={form[key]}
                   onChange={e => set(key, e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  className={inputCls}
                 />
               </div>
             ))}
@@ -114,14 +116,14 @@ export default function MacroTargets({ onTargetsChange }: Props) {
             <button
               type="button"
               onClick={handleSave}
-              className="flex-1 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium py-2 rounded-lg transition-colors"
             >
               {saved ? 'Saved ✓' : 'Save targets'}
             </button>
             <button
               type="button"
               onClick={handleReset}
-              className="text-xs text-gray-400 hover:text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="text-xs text-pens-cream/40 hover:text-pens-cream/70 px-3 py-2 rounded-lg hover:bg-pens-navy/40 transition-colors"
             >
               Reset to defaults
             </button>

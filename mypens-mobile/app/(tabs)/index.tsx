@@ -23,6 +23,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
+import { generateId } from '@/lib/generateId'
 import {
   calculateWeightBreakdown,
   calculateRollingBaseline,
@@ -35,7 +36,10 @@ import {
 } from '@/lib/retentionModels'
 
 const MOD = MODULE_COLORS.weight
-const today = () => new Date().toISOString().split('T')[0]
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 interface WeightEntry {
   id: string
@@ -133,6 +137,7 @@ export default function WeightScreen() {
       const bd = calculateWeightBreakdown(input)
 
       const row: Record<string, unknown> = {
+        id: generateId(),
         date: form.date,
         scaleKg,
         trueWeightKg: bd.trueWeightKg,

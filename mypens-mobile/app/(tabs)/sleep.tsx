@@ -22,9 +22,13 @@ import { Feather } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
+import { generateId } from '@/lib/generateId'
 
 const MOD = MODULE_COLORS.sleep
-const today = () => new Date().toISOString().split('T')[0]
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 interface SleepEntry {
   id: string
@@ -103,6 +107,7 @@ export default function SleepScreen() {
     mutationFn: async () => {
       if (hours <= 0) throw new Error('Enter valid bedtime and wake time')
       const { error } = await supabase.from('SleepEntry').upsert({
+        id: generateId(),
         date,
         bedtime,
         wakeTime,

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Route">
+<meta name="theme-color" content="#ffffff">
+<title>Route — Dopamine Router</title>
+<style>
+  :root {
+    --bg: #ffffff; --bg2: #f7f6f3; --bg3: #f0efe9;
+    --text: #1a1a18; --text2: #6b6b66; --text3: #9a9a95;
+    --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.2);
+    --green: #1D9E75; --green-bg: #e1f5ee; --green-text: #085041;
+    --blue: #378ADD; --blue-bg: #e6f1fb; --blue-text: #0C447C;
+    --red: #D85A30; --red-bg: #fdf0ec; --red-text: #7a2410;
+    --radius: 12px; --radius-sm: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #252522; --bg3: #2e2e2b;
+      --text: #f0efe9; --text2: #a8a89e; --text3: #6b6b66;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+      --green-bg: #0a3326; --green-text: #5DCAA5;
+      --blue-bg: #0a2440; --blue-text: #85B7EB;
+      --red-bg: #2d1508; --red-text: #e8875a;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100%; }
+
+  .topbar { position: sticky; top: 0; z-index: 100; background: var(--bg); border-bottom: 0.5px solid var(--border); padding: 14px 16px 12px; }
+  .topbar-title { font-size: 17px; font-weight: 600; }
+  .topbar-sub { font-size: 13px; color: var(--text2); margin-top: 2px; }
+
+  .screen { display: none; padding: 20px 16px 60px; }
+  .screen.active { display: block; }
+
+  .intro { font-size: 14px; color: var(--text2); line-height: 1.65; margin-bottom: 24px; padding: 14px 16px; background: var(--bg2); border-radius: var(--radius); }
+  .section-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+
+  /* Step 1 — Energy */
+  .energy-list { display: flex; flex-direction: column; gap: 10px; }
+  .energy-btn { padding: 18px 20px; border-radius: var(--radius); border: 0.5px solid var(--border); background: var(--bg2); cursor: pointer; text-align: left; -webkit-appearance: none; width: 100%; }
+  .energy-btn:active { background: var(--bg3); }
+  .energy-name { font-size: 18px; font-weight: 700; }
+  .energy-desc { font-size: 13px; color: var(--text2); margin-top: 3px; }
+  .energy-btn.low .energy-name { color: var(--text2); }
+  .energy-btn.medium .energy-name { color: var(--blue); }
+  .energy-btn.high .energy-name { color: var(--red); }
+
+  /* Step 2 — Time */
+  .time-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .time-btn { padding: 22px 16px; border-radius: var(--radius); border: 0.5px solid var(--border); background: var(--bg2); cursor: pointer; text-align: center; -webkit-appearance: none; width: 100%; }
+  .time-btn:active { background: var(--bg3); }
+  .time-duration { font-size: 26px; font-weight: 700; color: var(--text); }
+  .time-label { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+  /* Step 3 — Result */
+  .result-card { background: var(--bg2); border-radius: var(--radius); padding: 22px 20px; border-left: 3px solid var(--red); }
+  .result-title { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 12px; line-height: 1.3; }
+  .result-body { font-size: 15px; color: var(--text2); line-height: 1.7; }
+  .result-rule { font-size: 13px; color: var(--text3); margin-top: 14px; font-style: italic; }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+  .btn { flex: 1; padding: 14px; border-radius: var(--radius-sm); border: 0.5px solid var(--border); background: var(--bg2); cursor: pointer; font-size: 14px; color: var(--text2); font-weight: 500; -webkit-appearance: none; }
+  .btn:active { background: var(--bg3); }
+  .btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+  .back-link { font-size: 13px; color: var(--blue); cursor: pointer; display: inline-block; margin-bottom: 22px; }
+
+  .energy-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; margin-bottom: 16px; }
+  .energy-tag.low { background: var(--bg3); color: var(--text2); }
+  .energy-tag.medium { background: var(--blue-bg); color: var(--blue-text); }
+  .energy-tag.high { background: var(--red-bg); color: var(--red-text); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-title">Route</div>
+  <div class="topbar-sub">Pick a direction, not a plan</div>
+</div>
+
+<!-- Step 1: Energy level -->
+<div id="s-energy" class="screen active">
+  <div class="intro">Two questions, one answer. Honest about the energy — that's the only input that matters.</div>
+  <div class="section-label">How's your energy right now?</div>
+  <div class="energy-list">
+    <button class="energy-btn low" onclick="selectEnergy('low')">
+      <div class="energy-name">Low</div>
+      <div class="energy-desc">Drained, flat, don't want to do anything</div>
+    </button>
+    <button class="energy-btn medium" onclick="selectEnergy('medium')">
+      <div class="energy-name">Medium</div>
+      <div class="energy-desc">Present but restless — need direction</div>
+    </button>
+    <button class="energy-btn high" onclick="selectEnergy('high')">
+      <div class="energy-name">High</div>
+      <div class="energy-desc">Wired, buzzing, need somewhere to put it</div>
+    </button>
+  </div>
+</div>
+
+<!-- Step 2: Time available -->
+<div id="s-time" class="screen">
+  <span class="back-link" onclick="goTo('s-energy')">← Energy</span>
+  <div class="section-label">Time available</div>
+  <div class="time-grid">
+    <button class="time-btn" onclick="selectTime(15)">
+      <div class="time-duration">15</div>
+      <div class="time-label">minutes</div>
+    </button>
+    <button class="time-btn" onclick="selectTime(45)">
+      <div class="time-duration">45</div>
+      <div class="time-label">minutes</div>
+    </button>
+    <button class="time-btn" onclick="selectTime(90)">
+      <div class="time-duration">90</div>
+      <div class="time-label">minutes</div>
+    </button>
+    <button class="time-btn" onclick="selectTime(180)">
+      <div class="time-duration">3h+</div>
+      <div class="time-label">open-ended</div>
+    </button>
+  </div>
+</div>
+
+<!-- Step 3: Result -->
+<div id="s-result" class="screen">
+  <span class="back-link" onclick="goTo('s-time')">← Time</span>
+  <span class="energy-tag" id="r-tag"></span>
+  <div class="section-label">Your move</div>
+  <div class="result-card">
+    <div class="result-title" id="r-title"></div>
+    <div class="result-body" id="r-body"></div>
+    <div class="result-rule" id="r-rule"></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn" onclick="showAlternative()">Different one</button>
+    <button class="btn primary" onclick="goTo('s-energy')">Reset</button>
+  </div>
+</div>
+
+<script>
+const S = {
+  low: {
+    15: [
+      { title: 'Cold shower — right now', body: '2 minutes, door to door. Don\'t negotiate, don\'t think — just go. Fastest dopamine spike without chemicals.', rule: 'Rule: start before you close this screen.' },
+      { title: 'Step outside for 10 minutes', body: 'No goal. Around the block, end of the street — doesn\'t matter. Movement and outside air do more than sitting with the feeling.', rule: 'Rule: phone stays inside.' }
+    ],
+    45: [
+      { title: 'Walk + one full album', body: 'Pick an album you\'ve never properly listened to. Start walking. Don\'t stop until it ends. Phone in pocket, not in hand.', rule: 'Rule: no destination required.' },
+      { title: 'Short ride to anywhere', body: 'Kit on, pick any direction. 20 minutes out, 20 back. The first 15 minutes always lie about how you feel.', rule: 'Rule: don\'t look at your phone until you\'re back.' }
+    ],
+    90: [
+      { title: 'Cook something real', body: 'Pick a recipe that requires attention — not reheating, not delivery. Hands busy, brain engaged, something to show at the end.', rule: 'Rule: pick the recipe before you close this screen.' },
+      { title: 'Long walk with a podcast', body: 'One long-form episode — Lex Fridman, De Standaard, doesn\'t matter. Walk the whole thing. No sitting.', rule: 'Rule: walk, don\'t scroll.' }
+    ],
+    180: [
+      { title: 'Walk somewhere you\'ve never been', body: 'Open Maps, pick a neighbourhood you don\'t know. Walk until you get there. Nothing to prove, nowhere to be.', rule: 'Rule: outside, moving, no agenda.' },
+      { title: 'Slow day with intention', body: 'Cook a proper meal. Listen to a full album properly. Read something physical. One good thing, then the next.', rule: 'Rule: no alcohol, no delivery, no social media.' }
+    ]
+  },
+  medium: {
+    15: [
+      { title: '20 push-ups + cold shower', body: 'Back to back, no pause. Volume doesn\'t matter — the act resets the state. Done in under 5 minutes.', rule: 'Rule: don\'t wait until you feel like it.' },
+      { title: 'Sprint to the end of the street', body: 'Full effort, twice. Sounds ridiculous until you do it. Back in 4 minutes.', rule: 'Rule: full effort, not jogging.' }
+    ],
+    45: [
+      { title: 'Training session', body: 'Gym or home. Heavy compound movements — squat, press, pull. 30–40 minutes that makes you breathe hard.', rule: 'Rule: decide now — gym or home?' },
+      { title: 'Komoot route under 30km', body: 'Pick one, any one. Kit on, out the door. You don\'t have to feel like it before you start — you feel like it after.', rule: 'Rule: kit on before you second-guess it.' }
+    ],
+    90: [
+      { title: 'Short ride — pick a route now', body: 'Open Komoot. Pick anything under 40km. Kit on, out the door in 10 minutes. The first 15 minutes always lie.', rule: 'Rule: pick the route before you close this screen.' },
+      { title: 'Hard gym session + sauna', body: 'Full compound programme. Take your time between sets — no rushing, no scrolling. Sauna if possible after.', rule: 'Rule: no phone between sets.' }
+    ],
+    180: [
+      { title: 'Explore somewhere new', body: 'Different neighbourhood, different city quarter, different trail. Bike or on foot. The only rule: you haven\'t been there before.', rule: 'Rule: no route planned — just a direction.' },
+      { title: 'Gravel ride + real stop', body: 'Pick a route with a café or viewpoint at the halfway mark. Something to ride toward and something to ride back from.', rule: 'Rule: no alcohol at the stop. Coffee or food only.' }
+    ]
+  },
+  high: {
+    15: [
+      { title: 'Sprint intervals — now', body: '6 × 30 seconds all-out, 90 seconds recovery. Outside or on the bike. Use the energy before it finds somewhere worse to go.', rule: 'Rule: all-out means all-out.' },
+      { title: 'Max effort circuit', body: 'Push-ups, burpees, squats — 4 rounds, max reps each, 60 seconds rest. You have the engine. Use it.', rule: 'Rule: write down the reps. Beat it next time.' }
+    ],
+    45: [
+      { title: 'Hard training session', body: 'Max effort. Heavy weights, high intensity, no scrolling between sets. You have this energy — don\'t waste it.', rule: 'Rule: no phone between sets.' },
+      { title: 'Fasted ride with yohimbine', body: '30–40 min zone 2, HR under 135. This is the session that actually moves the needle on body composition. Do it now.', rule: 'Rule: max 10mg yohimbine.' }
+    ],
+    90: [
+      { title: 'Hard ride — go find it', body: 'Vlaamse Ardennen, Pajottenland, the hardest route on Komoot you haven\'t done. Open it now. This is what this energy is for.', rule: 'Rule: kit on before you second-guess it.' },
+      { title: 'Trail run', body: 'Find a trail you haven\'t run. Go. High energy + technical terrain = the best version of this feeling.', rule: 'Rule: stay present — no headphones on technical sections.' }
+    ],
+    180: [
+      { title: 'Full mission day', body: 'Trail run or long gravel ride with a real distance goal. This energy turns into your best days if you use it right.', rule: 'Rule: plan the route in the next 2 minutes or the energy finds somewhere worse.' },
+      { title: 'The ride you\'ve been postponing', body: 'Find it on Komoot. The one that\'s been saved for months. Today is the day — you have exactly the energy it needs.', rule: 'Rule: send a friend the route before you leave.' }
+    ]
+  }
+};
+
+let energy = null, time = null, altIdx = 0;
+
+function goTo(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function selectEnergy(lvl) {
+  energy = lvl; altIdx = 0;
+  goTo('s-time');
+}
+
+function selectTime(mins) {
+  time = mins; altIdx = 0;
+  render();
+  goTo('s-result');
+}
+
+function render() {
+  const opts = S[energy][time];
+  const s = opts[altIdx % opts.length];
+  document.getElementById('r-title').textContent = s.title;
+  document.getElementById('r-body').textContent = s.body;
+  document.getElementById('r-rule').textContent = s.rule;
+  const tag = document.getElementById('r-tag');
+  const labels = { low: 'Low energy', medium: 'Medium energy', high: 'High energy' };
+  tag.textContent = labels[energy] + ' · ' + (time < 60 ? time + ' min' : time === 180 ? '3h+' : (time/60).toFixed(1).replace('.0','') + 'h');
+  tag.className = 'energy-tag ' + energy;
+}
+
+function showAlternative() { altIdx++; render(); }
+</script>
+</body>
+</html>

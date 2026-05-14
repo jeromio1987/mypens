@@ -20,9 +20,13 @@ import { Feather } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
+import { generateId } from '@/lib/generateId'
 
 const MOD = MODULE_COLORS.journal
-const today = () => new Date().toISOString().split('T')[0]
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 interface JournalEntry {
   id: string
@@ -95,12 +99,13 @@ export default function JournalScreen() {
   const mutation = useMutation({
     mutationFn: async () => {
       if (!content.trim()) throw new Error('Write something before saving')
-      const { error } = await supabase.from('JournalEntry').insert({
+      const { error } = await supabase.from('JournalEntry').upsert({
+        id: generateId(),
         date: today(),
         title: title.trim() || null,
         content: content.trim(),
         mood: mood && mood > 0 ? mood : null,
-      })
+      }, { onConflict: 'date' })
       if (error) throw error
     },
     onSuccess: () => {

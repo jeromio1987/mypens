@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Streaks">
+<meta name="theme-color" content="#ffffff">
+<title>ADD Streaks</title>
+<style>
+  :root {
+    --bg: #ffffff; --bg2: #f7f6f3; --bg3: #f0efe9;
+    --text: #1a1a18; --text2: #6b6b66; --text3: #9a9a95;
+    --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.2);
+    --green: #1D9E75; --green-bg: #e1f5ee; --green-text: #085041;
+    --blue: #378ADD; --blue-bg: #e6f1fb; --blue-text: #0C447C;
+    --red: #D85A30; --red-bg: #fdf0ec; --red-text: #7a2410;
+    --gold: #C9A84C; --gold-bg: #fdf5e0; --gold-text: #7a5c0a;
+    --radius: 12px; --radius-sm: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #252522; --bg3: #2e2e2b;
+      --text: #f0efe9; --text2: #a8a89e; --text3: #6b6b66;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+      --green-bg: #0a3326; --green-text: #5DCAA5;
+      --blue-bg: #0a2440; --blue-text: #85B7EB;
+      --red-bg: #2d1508; --red-text: #e8875a;
+      --gold-bg: #2a1f00; --gold-text: #e8c87a;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100%; }
+
+  .topbar { position: sticky; top: 0; z-index: 100; background: var(--bg); border-bottom: 0.5px solid var(--border); padding: 14px 16px 12px; display: flex; align-items: flex-start; justify-content: space-between; }
+  .topbar-title { font-size: 17px; font-weight: 600; }
+  .topbar-sub { font-size: 13px; color: var(--text2); margin-top: 2px; }
+  .settings-btn { background: none; border: none; font-size: 13px; color: var(--blue); cursor: pointer; padding: 4px 0; }
+
+  .page { padding: 16px 16px 80px; }
+  .section-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; margin-top: 6px; }
+
+  /* Hero compound streak */
+  .hero { background: var(--bg2); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; text-align: center; }
+  .hero-n { font-size: 56px; font-weight: 800; color: var(--text); line-height: 1; }
+  .hero-n.zero { color: var(--text3); }
+  .hero-label { font-size: 12px; color: var(--text2); margin-top: 6px; }
+  .hero-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+  /* Streak card */
+  .streak-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+  .streak-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .streak-top { display: flex; align-items: center; gap: 12px; }
+  .streak-icon { font-size: 22px; width: 32px; text-align: center; flex-shrink: 0; }
+  .streak-info { flex: 1; }
+  .streak-name { font-size: 15px; font-weight: 500; color: var(--text); }
+  .streak-count { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .streak-count span { font-weight: 700; }
+  .streak-count .clean { color: var(--green); }
+  .streak-count .zero { color: var(--red); }
+  .check-btn { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--border); background: var(--bg2); cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.1s; }
+  .check-btn.done { background: var(--green); border-color: var(--green); }
+  .check-btn.miss { background: var(--red-bg); border-color: var(--red); }
+  .dots { display: flex; gap: 4px; margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--border); }
+  .dot { flex: 1; height: 6px; border-radius: 3px; background: var(--border2); }
+  .dot.clean { background: var(--green); }
+  .dot.miss { background: var(--red); opacity: 0.5; }
+  .dot.today { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+  /* Money saved */
+  .money-card { background: var(--gold-bg); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 20px; }
+  .money-label { font-size: 11px; font-weight: 600; color: var(--gold-text); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .money-amount { font-size: 36px; font-weight: 800; color: var(--gold-text); line-height: 1; }
+  .money-sub { font-size: 12px; color: var(--gold-text); opacity: 0.7; margin-top: 5px; }
+
+  /* Settings overlay */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: flex-end; }
+  .overlay.open { display: flex; }
+  .sheet { background: var(--bg); border-radius: 20px 20px 0 0; padding: 20px 16px 40px; width: 100%; }
+  .sheet-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .field { margin-bottom: 12px; }
+  .field label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; }
+  .field input { width: 100%; padding: 10px 12px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg2); color: var(--text); font-size: 15px; outline: none; }
+  .sheet-btn { width: 100%; padding: 14px; background: var(--text); color: var(--bg); border: none; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-title">Streaks</div>
+    <div class="topbar-sub" id="today-label">Loading…</div>
+  </div>
+  <button class="settings-btn" onclick="openSettings()">Settings</button>
+</div>
+
+<div class="page">
+  <!-- Hero -->
+  <div class="hero" id="hero">
+    <div class="hero-n" id="hero-n">–</div>
+    <div class="hero-label">consecutive clean days</div>
+    <div class="hero-sub" id="hero-sub"></div>
+  </div>
+
+  <!-- Streak cards -->
+  <div class="section-label">Today's check-in</div>
+  <div class="streak-list" id="streak-list"></div>
+
+  <!-- Money saved -->
+  <div class="section-label">Saved (alcohol-free days)</div>
+  <div class="money-card">
+    <div class="money-label">Estimated saved</div>
+    <div class="money-amount" id="money-amount">€0</div>
+    <div class="money-sub" id="money-sub"></div>
+  </div>
+</div>
+
+<!-- Settings overlay -->
+<div class="overlay" id="settings-overlay" onclick="closeIfBg(event)">
+  <div class="sheet">
+    <div class="sheet-title">Settings</div>
+    <div class="field"><label>Alcohol cost per drinking day (€)</label><input type="number" id="s-drink" min="0" step="1"></div>
+    <div class="field"><label>Escort cost per visit (€)</label><input type="number" id="s-escort" min="0" step="50"></div>
+    <div class="field"><label>Escort visits per month (average)</label><input type="number" id="s-escort-freq" min="0" step="0.5"></div>
+    <button class="sheet-btn" onclick="saveSettings()">Save</button>
+  </div>
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────
+const BEHAVIORS = [
+  { id: 'alcohol',   icon: '🍺', name: 'Alcohol-free',       desc: 'No drinks today' },
+  { id: 'protocol',  icon: '💊', name: 'Morning protocol',    desc: 'Supplements taken' },
+  { id: 'training',  icon: '🏋️', name: 'Training done',       desc: 'Any training session' },
+  { id: 'sleep',     icon: '😴', name: 'Sleep target',        desc: '7h+ last night' },
+  { id: 'protein',   icon: '🥩', name: 'Protein target',      desc: '145g+ today' },
+];
+
+const DEFAULT_SETTINGS = { drinkCost: 28, escortCost: 1000, escortFreq: 1.5 };
+
+// ─── Storage helpers ───────────────────────────────────────────────────────
+function loadData() {
+  try { return JSON.parse(localStorage.getItem('add_streaks') || '{}'); } catch { return {}; }
+}
+function saveData(d) { localStorage.setItem('add_streaks', JSON.stringify(d)); }
+function loadSettings() {
+  try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('add_streaks_settings') || '{}') }; } catch { return DEFAULT_SETTINGS; }
+}
+function saveSettingsData(s) { localStorage.setItem('add_streaks_settings', JSON.stringify(s)); }
+
+// ─── Date helpers ─────────────────────────────────────────────────────────
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function offsetDate(base, days) {
+  const d = new Date(base + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function formatDate(str) {
+  const d = new Date(str + 'T12:00:00');
+  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+// ─── Streak calculation ────────────────────────────────────────────────────
+function calcStreak(data, behaviorId) {
+  const today = todayStr();
+  let streak = 0;
+  let day = offsetDate(today, -1); // start from yesterday; today may not be checked yet
+  for (let i = 0; i < 365; i++) {
+    const entry = data[day];
+    if (entry && entry[behaviorId] === true) {
+      streak++;
+      day = offsetDate(day, -1);
+    } else break;
+  }
+  return streak;
+}
+
+function calcCompound(data) {
+  const today = todayStr();
+  let streak = 0;
+  let day = offsetDate(today, -1);
+  for (let i = 0; i < 365; i++) {
+    const entry = data[day];
+    if (entry && BEHAVIORS.every(b => entry[b.id] === true)) {
+      streak++;
+      day = offsetDate(day, -1);
+    } else break;
+  }
+  return streak;
+}
+
+function calcAlcoholFreeDays(data) {
+  let count = 0;
+  Object.values(data).forEach(e => { if (e && e.alcohol === true) count++; });
+  return count;
+}
+
+// ─── Render ────────────────────────────────────────────────────────────────
+function render() {
+  const data = loadData();
+  const settings = loadSettings();
+  const today = todayStr();
+  const todayEntry = data[today] || {};
+
+  document.getElementById('today-label').textContent = formatDate(today);
+
+  // Hero
+  const compound = calcCompound(data);
+  const heroN = document.getElementById('hero-n');
+  heroN.textContent = compound;
+  heroN.className = 'hero-n' + (compound === 0 ? ' zero' : '');
+  document.getElementById('hero-sub').textContent = compound > 0
+    ? `All 5 behaviors · ${compound} day${compound === 1 ? '' : 's'} in a row`
+    : 'Check in below to start your streak';
+
+  // Streak cards
+  const list = document.getElementById('streak-list');
+  list.innerHTML = '';
+  BEHAVIORS.forEach(b => {
+    const streak = calcStreak(data, b.id);
+    const todayDone = todayEntry[b.id];
+    const card = document.createElement('div');
+    card.className = 'streak-card';
+
+    // Build 7-day dots (last 6 days + today)
+    const dots = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = offsetDate(today, -i);
+      const e = data[d];
+      const isToday = i === 0;
+      const val = e ? e[b.id] : undefined;
+      dots.push({ clean: val === true, miss: val === false, isToday });
+    }
+
+    card.innerHTML = `
+      <div class="streak-top">
+        <div class="streak-icon">${b.icon}</div>
+        <div class="streak-info">
+          <div class="streak-name">${b.name}</div>
+          <div class="streak-count">
+            <span class="${streak > 0 ? 'clean' : 'zero'}">${streak}</span> day streak · ${b.desc}
+          </div>
+        </div>
+        <button class="check-btn ${todayDone === true ? 'done' : todayDone === false ? 'miss' : ''}"
+          onclick="toggle('${b.id}')">
+          ${todayDone === true ? '✓' : todayDone === false ? '✗' : '·'}
+        </button>
+      </div>
+      <div class="dots">
+        ${dots.map(d => `<div class="dot${d.clean ? ' clean' : d.miss ? ' miss' : ''}${d.isToday ? ' today' : ''}"></div>`).join('')}
+      </div>
+    `;
+    list.appendChild(card);
+  });
+
+  // Money
+  const freeDays = calcAlcoholFreeDays(data);
+  const saved = freeDays * settings.drinkCost;
+  document.getElementById('money-amount').textContent = '€' + saved.toLocaleString('en-IE');
+  document.getElementById('money-sub').textContent =
+    `${freeDays} alcohol-free day${freeDays === 1 ? '' : 's'} × €${settings.drinkCost}/day estimated`;
+}
+
+function toggle(behaviorId) {
+  const data = loadData();
+  const today = todayStr();
+  if (!data[today]) data[today] = {};
+  const current = data[today][behaviorId];
+  // Cycle: undefined → true → false → undefined
+  if (current === undefined) data[today][behaviorId] = true;
+  else if (current === true) data[today][behaviorId] = false;
+  else delete data[today][behaviorId];
+  saveData(data);
+  render();
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────
+function openSettings() {
+  const s = loadSettings();
+  document.getElementById('s-drink').value = s.drinkCost;
+  document.getElementById('s-escort').value = s.escortCost;
+  document.getElementById('s-escort-freq').value = s.escortFreq;
+  document.getElementById('settings-overlay').classList.add('open');
+}
+function closeSettings() { document.getElementById('settings-overlay').classList.remove('open'); }
+function closeIfBg(e) { if (e.target === document.getElementById('settings-overlay')) closeSettings(); }
+function saveSettings() {
+  saveSettingsData({
+    drinkCost: Number(document.getElementById('s-drink').value) || DEFAULT_SETTINGS.drinkCost,
+    escortCost: Number(document.getElementById('s-escort').value) || DEFAULT_SETTINGS.escortCost,
+    escortFreq: Number(document.getElementById('s-escort-freq').value) || DEFAULT_SETTINGS.escortFreq,
+  });
+  closeSettings();
+  render();
+}
+
+render();
+</script>
+</body>
+</html>

@@ -23,9 +23,13 @@ import { MaterialCommunityIcons, Feather } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
+import { generateId } from '@/lib/generateId'
 
 const MOD = MODULE_COLORS.measurements
-const today = () => new Date().toISOString().split('T')[0]
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 interface BodyMeasurement {
   id: string
@@ -98,7 +102,7 @@ export default function MeasurementsScreen() {
       const hasAny = QUICK_FIELDS.some((f) => form[f.key] !== '')
       if (!hasAny) throw new Error('Enter at least one measurement')
 
-      const row: Record<string, unknown> = { date: today() }
+      const row: Record<string, unknown> = { id: generateId(), date: today() }
       ;[...QUICK_FIELDS, ...DETAILED_FIELDS].forEach(({ key }) => {
         if (form[key] !== '') row[key] = parseFloat(form[key])
       })
@@ -179,7 +183,7 @@ export default function MeasurementsScreen() {
                   <Text style={[styles.statValue, { color: MOD.primary }]}>{latest[key]}</Text>
                   <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text>
                   {prev?.[key] != null && (
-                    <Text style={[styles.statDelta, { color: (latest[key] as number) < (prev[key] as number) ? colors.success : colors.foreground }]}>
+                    <Text style={[styles.statDelta, { color: (latest[key] as number) < (prev[key] as number) ? '#22c55e' : (colors.mutedForeground ?? colors.foreground) }]}>
                       {((latest[key] as number) - (prev[key] as number)).toFixed(1)} cm
                     </Text>
                   )}

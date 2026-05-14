@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText, Anchor, BookOpen } from 'lucide-react'
+import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText, Anchor, BookOpen, UtensilsCrossed } from 'lucide-react'
 import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 import NotificationsBadge from '@/components/shared/NotificationsBadge'
 
@@ -43,6 +43,7 @@ const CONTEXT_TAGS = [
 
 const MODULES = [
   { href: '/weight',       label: 'Weight',   icon: Scale },
+  { href: '/food',         label: 'Food',     icon: UtensilsCrossed },
   { href: '/sleep',        label: 'Sleep',    icon: Moon },
   { href: '/anchor',       label: 'Anchor',   icon: Anchor },
   { href: '/measurements', label: 'Body',     icon: Ruler },
@@ -126,6 +127,8 @@ export default function HomeClient() {
             <h1 className="text-xl font-[family-name:var(--font-headline)] font-black italic text-pens-cream">Auditor</h1>
           </div>
           <nav className="hidden md:flex gap-8">
+            <Link href="/morning-brief" className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Brief</Link>
+            <Link href="/investing" className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Investing</Link>
             <Link href="/landing"    className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">About</Link>
             <Link href="/dashboard" className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Dashboard</Link>
             <Link href="/context"   className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Journal</Link>

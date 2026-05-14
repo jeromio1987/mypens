@@ -454,3 +454,39 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
 }
+
+// =====================================================================
+// INVESTING — Tier 1-C / Tier 2-E,F,H (personal single-user hub)
+// Watchlist, macro regime log, calendar merge (static + optional Finnhub),
+// optional ntfy on regime change. Not financial advice — tooling only.
+// =====================================================================
+
+model InvestingWatchlistTicker {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  symbol    String // upper-case ticker, e.g. CCJ
+  sortOrder Int      @default(0)
+
+  @@unique([symbol])
+}
+
+// Regime log — each row applies from `effectiveDate` until the next row’s `effectiveDate`.
+model MacroRegimeSnapshot {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  effectiveDate String // yyyy-mm-dd (inclusive start of this regime stretch)
+  regime        String // risk_on | risk_off | neutral | mixed | (custom slug)
+  notes         String?
+
+  @@index([effectiveDate])
+}
+
+// User-typed or imported one-off calendar rows (earnings day, Fed speaker, etc.)
+model InvestingManualEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  date      String // yyyy-mm-dd
+  title     String
+  kind      String   @default("manual") // manual | earnings_note | other
+  symbol    String? // optional filter to watchlist context
+}

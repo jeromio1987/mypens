@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 
 const PUBLIC_API_PREFIXES = [
+  '/api/health',
   '/api/auth/login',
   '/api/auth/logout',
   '/api/integrations/garmin/callback',
@@ -40,6 +41,13 @@ export async function proxy(req: NextRequest) {
   if (pathname.startsWith('/api/')) {
     if (isPublicApiRoute(pathname)) {
       return NextResponse.next()
+    }
+    const mobile = process.env.MOBILE_PENS_API_TOKEN?.trim()
+    if (mobile) {
+      const auth = req.headers.get('authorization')
+      if (auth === `Bearer ${mobile}`) {
+        return NextResponse.next()
+      }
     }
     const token = req.cookies.get(SESSION_COOKIE)?.value
     const ok = await verifySessionToken(token)
