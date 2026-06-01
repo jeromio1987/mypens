@@ -1,5 +1,6 @@
 import * as Haptics from 'expo-haptics'
-import React, { useState } from 'react'
+import { Audio } from 'expo-av'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -18,9 +19,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
+import { usePensSync } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
+import { pensFetch, isPensApiConfigured, pensApiBaseUrl } from '@/lib/pensApi'
+import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 
 const MOD = MODULE_COLORS.journal
 const today = () => {
@@ -36,19 +40,21 @@ interface JournalEntry {
   content: string
   mood?: number
   notes?: string
+  voicePath?: string | null
+  voiceDurationSec?: number | null
 }
 
 const MOOD_LABELS = ['', 'Rough', 'Low', 'Okay', 'Good', 'Great']
 const MOOD_COLORS = ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6']
 
-function MoodPicker({ value, onChange }: { value: number | undefined; onChange: (v: number) => void }) {
+function MoodPicker({ value, onChange }: { value: number | undefined; onChange: (v: number | undefined) => void }) {
   const colors = useColors()
   return (
     <View style={moodStyles.row}>
       {[1, 2, 3, 4, 5].map((m) => (
         <Pressable
           key={m}
-          onPress={() => onChange(value === m ? 0 : m)}
+          onPress={() => onChange(value === m ? undefined : m)}
           style={[
             moodStyles.chip,
             {
@@ -71,12 +77,94 @@ const moodStyles = StyleSheet.create({
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
 })
 
+const pensToken = (process.env.EXPO_PUBLIC_PENS_API_TOKEN ?? '').trim()
+
+function JournalVoiceChip({ voicePath }: { voicePath: string }) {
+  const soundRef = useRef<Audio.Sound | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      void soundRef.current?.unloadAsync()
+      soundRef.current = null
+    }
+  }, [])
+
+  const toggle = useCallback(async () => {
+    const base = pensApiBaseUrl()
+    if (!base || !pensToken) {
+      Alert.alert('Voice note', 'Set EXPO_PUBLIC_PENS_API_URL and EXPO_PUBLIC_PENS_API_TOKEN to play audio.')
+      return
+    }
+    if (soundRef.current) {
+      setBusy(true)
+      try {
+        await soundRef.current.stopAsync()
+        await soundRef.current.unloadAsync()
+      } catch {
+        /* ignore */
+      }
+      soundRef.current = null
+      setBusy(false)
+      return
+    }
+    setBusy(true)
+    try {
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false })
+      const uri = `${base}/api/journal/voice-file?path=${encodeURIComponent(voicePath)}`
+      const { sound } = await Audio.Sound.createAsync(
+        { uri, headers: { Authorization: `Bearer ${pensToken}` } },
+        { shouldPlay: true },
+      )
+      soundRef.current = sound
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (!status.isLoaded || !status.didJustFinish) return
+        void (async () => {
+          try {
+            await sound.unloadAsync()
+          } catch {
+            /* ignore */
+          }
+          soundRef.current = null
+        })()
+      })
+    } catch (e) {
+      Alert.alert('Playback', e instanceof Error ? e.message : 'Could not play')
+    } finally {
+      setBusy(false)
+    }
+  }, [voicePath])
+
+  return (
+    <Pressable
+      onPress={() => void toggle()}
+      disabled={busy}
+      style={{
+        marginTop: 8,
+        alignSelf: 'flex-start',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: MOD.primary,
+        opacity: busy ? 0.6 : 1,
+      }}
+    >
+      <Text style={{ color: MOD.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+        Voice note · tap to play / stop
+      </Text>
+    </Pressable>
+  )
+}
+
 export default function JournalScreen() {
   const colors = useColors()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   const insets = useSafeAreaInsets()
   const qc = useQueryClient()
+  const useApi = isPensApiConfigured()
+  const { pending, online, refresh: refreshQueue } = usePensSync()
 
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -84,8 +172,18 @@ export default function JournalScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const { data: entries = [], isLoading, refetch, isRefetching } = useQuery<JournalEntry[]>({
-    queryKey: ['journal'],
+    queryKey: ['journal', useApi ? 'api' : 'supabase'],
     queryFn: async () => {
+      if (useApi) {
+        const r = await pensFetch('/api/journal?limit=60')
+        if (!r.ok) {
+          const t = await r.text()
+          throw new Error(t || 'Journal fetch failed')
+        }
+        const rows = (await r.json()) as JournalEntry[]
+        if (!Array.isArray(rows)) return []
+        return rows
+      }
       const { data, error } = await supabase
         .from('JournalEntry')
         .select('*')
@@ -99,6 +197,37 @@ export default function JournalScreen() {
   const mutation = useMutation({
     mutationFn: async () => {
       if (!content.trim()) throw new Error('Write something before saving')
+      const payload: Record<string, unknown> = {
+        date: today(),
+        content: content.trim(),
+      }
+      if (title.trim()) payload.title = title.trim()
+      if (mood != null && mood > 0) payload.mood = mood
+
+      if (useApi) {
+        if (!online) {
+          await enqueueOp({ type: 'journal_post', payload })
+          await refreshQueue()
+          return
+        }
+        try {
+          const r = await pensFetch('/api/journal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!r.ok) {
+            const t = await r.text()
+            throw new Error(t || 'Save failed')
+          }
+        } catch {
+          await enqueueOp({ type: 'journal_post', payload })
+          await refreshQueue()
+          return
+        }
+        return
+      }
+
       const { error } = await supabase.from('JournalEntry').upsert({
         id: generateId(),
         date: today(),
@@ -108,8 +237,12 @@ export default function JournalScreen() {
       }, { onConflict: 'date' })
       if (error) throw error
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      if (useApi) {
+        await flushOfflineQueue()
+        await refreshQueue()
+      }
       qc.invalidateQueries({ queryKey: ['journal'] })
       setTitle('')
       setContent('')
@@ -120,11 +253,33 @@ export default function JournalScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (useApi) {
+        if (!online) {
+          await enqueueOp({ type: 'journal_delete', payload: { id } })
+          await refreshQueue()
+          return
+        }
+        try {
+          const r = await pensFetch(`/api/journal?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+          if (!r.ok) {
+            const t = await r.text()
+            throw new Error(t || 'Delete failed')
+          }
+        } catch {
+          await enqueueOp({ type: 'journal_delete', payload: { id } })
+          await refreshQueue()
+        }
+        return
+      }
       const { error } = await supabase.from('JournalEntry').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      if (useApi) {
+        await flushOfflineQueue()
+        await refreshQueue()
+      }
       qc.invalidateQueries({ queryKey: ['journal'] })
     },
   })
@@ -149,6 +304,24 @@ export default function JournalScreen() {
           {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
         </Text>
       </View>
+
+      {pending > 0 ? (
+        <View
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 8,
+            padding: 10,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: colors.warning,
+            backgroundColor: isDark ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.18)',
+          }}
+        >
+          <Text style={{ color: colors.foreground, fontSize: 13 }}>
+            {pending} change{pending > 1 ? 's' : ''} queued for sync when you are back online.
+          </Text>
+        </View>
+      ) : null}
 
       {/* New entry form */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -246,9 +419,12 @@ export default function JournalScreen() {
             </View>
 
             {expandedId === e.id && (
-              <Text style={[styles.entryContent, { color: colors.foreground, borderTopColor: colors.border }]}>
-                {e.content}
-              </Text>
+              <>
+                <Text style={[styles.entryContent, { color: colors.foreground, borderTopColor: colors.border }]}>
+                  {e.content}
+                </Text>
+                {e.voicePath ? <JournalVoiceChip voicePath={e.voicePath} /> : null}
+              </>
             )}
 
             {expandedId !== e.id && (

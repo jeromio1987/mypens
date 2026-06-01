@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { scheduleCrossAppDailySnapshotRefresh } from '@/lib/crossAppWriter'
 import {
   calculateWeightBreakdown,
 } from '@/lib/retentionModels'
@@ -84,6 +85,8 @@ export async function POST(request: Request) {
       },
     })
 
+    scheduleCrossAppDailySnapshotRefresh(date)
+
     return NextResponse.json({ entry, breakdown })
   } catch (error) {
     console.error(error)
@@ -142,6 +145,7 @@ export async function PATCH(request: Request) {
         tanitaReliable:      breakdown.tanitaReliable,
       },
     })
+    scheduleCrossAppDailySnapshotRefresh(entry.date)
     return NextResponse.json({ entry, breakdown })
   } catch (error) {
     console.error(error)

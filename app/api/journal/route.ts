@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
+import { unlink } from 'node:fs/promises'
+import * as nodePath from 'node:path'
 import { prisma } from '@/lib/db'
+import { scheduleCrossAppDailySnapshotRefresh } from '@/lib/crossAppWriter'
+import { sanitiseJournalVoicePath } from '@/lib/journalVoicePath'
 
 function parseLimit(request: Request, fallback: number, cap: number): number {
   const raw = new URL(request.url).searchParams.get('limit')
@@ -7,6 +11,16 @@ function parseLimit(request: Request, fallback: number, cap: number): number {
   const n = parseInt(raw, 10)
   if (!Number.isFinite(n)) return fallback
   return Math.min(cap, Math.max(1, n))
+}
+
+async function unlinkJournalVoiceFile(rel: string | null) {
+  const safe = rel ? sanitiseJournalVoicePath(rel) : null
+  if (!safe) return
+  try {
+    await unlink(nodePath.join(process.cwd(), 'public', safe))
+  } catch {
+    // non-fatal
+  }
 }
 
 /** Last journal entries by calendar date descending (`limit` query, default 30, max 120). */
@@ -41,6 +55,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'mood must be between 1 and 5 when set' }, { status: 400 })
     }
 
+    const hasVoiceKey = Object.prototype.hasOwnProperty.call(body, 'voicePath')
+    let voicePath: string | null | undefined
+    let voiceDurationSec: number | null | undefined
+    if (hasVoiceKey) {
+      const raw = body.voicePath
+      const cleaned = sanitiseJournalVoicePath(raw)
+      if (raw != null && raw !== '' && !cleaned) {
+        return NextResponse.json({ error: 'invalid voicePath' }, { status: 400 })
+      }
+      voicePath = cleaned
+      voiceDurationSec = cleaned
+        ? typeof body.voiceDurationSec === 'number' && Number.isFinite(body.voiceDurationSec)
+          ? Math.min(3600, Math.max(1, Math.floor(body.voiceDurationSec)))
+          : null
+        : null
+    }
+
+    const existing = await prisma.journalEntry.findUnique({ where: { date } })
+
     const entry = await prisma.journalEntry.upsert({
       where: { date },
       create: {
@@ -49,14 +82,26 @@ export async function POST(request: Request) {
         content: content.trim(),
         mood: moodNum,
         notes: notes?.trim?.() ? String(notes).trim() : null,
+        voicePath: hasVoiceKey ? (voicePath ?? null) : null,
+        voiceDurationSec: hasVoiceKey ? (voiceDurationSec ?? null) : null,
       },
       update: {
         title: title?.trim?.() ? String(title).trim() : null,
         content: content.trim(),
         mood: moodNum,
         notes: notes?.trim?.() ? String(notes).trim() : null,
+        ...(hasVoiceKey
+          ? { voicePath: voicePath ?? null, voiceDurationSec: voiceDurationSec ?? null }
+          : {}),
       },
     })
+
+    const oldVoice = existing?.voicePath ?? null
+    if (hasVoiceKey && oldVoice && oldVoice !== entry.voicePath) {
+      await unlinkJournalVoiceFile(oldVoice)
+    }
+
+    scheduleCrossAppDailySnapshotRefresh(date)
 
     return NextResponse.json({ entry })
   } catch (error) {
@@ -72,7 +117,12 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: 'id query parameter required' }, { status: 400 })
     }
+    const row = await prisma.journalEntry.findUnique({ where: { id } })
+    if (row?.voicePath) {
+      await unlinkJournalVoiceFile(row.voicePath)
+    }
     await prisma.journalEntry.delete({ where: { id } })
+    if (row?.date) scheduleCrossAppDailySnapshotRefresh(row.date)
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error(error)

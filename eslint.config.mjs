@@ -6,15 +6,18 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-    // Nested tooling / sandbox app (avoid linting bundled .next churn)
-    "my-pens-mobile-test/**",
-  ]),
+    globalIgnores([
+      // Default ignores of eslint-config-next:
+      ".next/**",
+      "out/**",
+      "build/**",
+      "next-env.d.ts",
+      // Nested tooling / sandbox app (avoid linting bundled .next churn)
+      "my-pens-mobile-test/**",
+      "vitest.config.ts",
+      "**/*.test.ts",
+      "tests/**",
+    ]),
 ]);
 
 export default eslintConfig;

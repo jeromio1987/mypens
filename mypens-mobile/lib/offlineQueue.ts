@@ -11,6 +11,9 @@ export type QueuedOp =
   | { id: string; type: 'food_post'; payload: Record<string, unknown>; createdAt: string }
   | { id: string; type: 'food_patch'; payload: Record<string, unknown>; createdAt: string }
   | { id: string; type: 'food_delete'; payload: { id: string }; createdAt: string }
+  | { id: string; type: 'journal_post'; payload: Record<string, unknown>; createdAt: string }
+  | { id: string; type: 'journal_delete'; payload: { id: string }; createdAt: string }
+  | { id: string; type: 'measurements_post'; payload: Record<string, unknown>; createdAt: string }
 
 function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
@@ -121,12 +124,34 @@ export async function flushOfflineQueue(options?: { max?: number }): Promise<{
             body: JSON.stringify(op.payload),
           })
           break
+        case 'journal_post':
+          res = await pensFetch('/api/journal', {
+            method: 'POST',
+            headers: jsonHeaders,
+            body: JSON.stringify(op.payload),
+          })
+          break
+        case 'journal_delete':
+          res = await pensFetch(`/api/journal?id=${encodeURIComponent(op.payload.id)}`, {
+            method: 'DELETE',
+          })
+          break
+        case 'measurements_post':
+          res = await pensFetch('/api/measurements', {
+            method: 'POST',
+            headers: jsonHeaders,
+            body: JSON.stringify(op.payload),
+          })
+          break
         default:
           keep.push(op as QueuedOp)
           continue
       }
 
-      if (res.ok) {
+      const ok =
+        res.ok ||
+        ((op.type === 'journal_delete' || op.type === 'training_delete') && res.status === 404)
+      if (ok) {
         flushed++
       } else if (res.status >= 500) {
         keep.push(op)

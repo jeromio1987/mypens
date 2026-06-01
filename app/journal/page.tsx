@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
-  ArrowLeft, BookOpen, ChevronDown, ChevronRight, Trash2, Loader2,
+  ArrowLeft, BookOpen, ChevronDown, ChevronRight, Trash2, Loader2, Mic, Square,
 } from 'lucide-react'
 import {
   LineChart,
@@ -23,6 +23,8 @@ interface JournalEntry {
   content: string
   mood: number | null
   notes: string | null
+  voicePath: string | null
+  voiceDurationSec: number | null
 }
 
 const MOOD_OPTIONS = [
@@ -49,6 +51,13 @@ export default function JournalPage() {
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  const [recording, setRecording] = useState(false)
+  const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null)
+  const [voiceRecordedSec, setVoiceRecordedSec] = useState(0)
+  const mediaRecRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const recStartRef = useRef<number>(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -86,6 +95,66 @@ export default function JournalPage() {
     return sorted
   }, [entries])
 
+  const pickRecorderMime = () => {
+    if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return ''
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+    for (const m of candidates) {
+      if (MediaRecorder.isTypeSupported(m)) return m
+    }
+    return ''
+  }
+
+  const startRecording = async () => {
+    setFormError(null)
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setFormError('Recording is not supported in this browser.')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      chunksRef.current = []
+      const mime = pickRecorderMime()
+      const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
+      mediaRecRef.current = mr
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size) chunksRef.current.push(ev.data)
+      }
+      recStartRef.current = Date.now()
+      mr.start(400)
+      setRecording(true)
+    } catch {
+      setFormError('Microphone permission denied or unavailable.')
+    }
+  }
+
+  const stopRecording = () => {
+    const mr = mediaRecRef.current
+    const stream = streamRef.current
+    if (!mr || mr.state === 'inactive') {
+      setRecording(false)
+      stream?.getTracks().forEach((t) => t.stop())
+      return
+    }
+    mr.onstop = () => {
+      const elapsed = Math.max(1, Math.round((Date.now() - recStartRef.current) / 1000))
+      setVoiceRecordedSec(elapsed)
+      const type = mr.mimeType || 'audio/webm'
+      const blob = new Blob(chunksRef.current, { type })
+      setVoiceBlob(blob)
+      stream?.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+      mediaRecRef.current = null
+    }
+    mr.stop()
+    setRecording(false)
+  }
+
+  const clearPendingVoice = () => {
+    setVoiceBlob(null)
+    setVoiceRecordedSec(0)
+  }
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
@@ -95,6 +164,26 @@ export default function JournalPage() {
     }
     setSaving(true)
     try {
+      let voicePath: string | undefined
+      let voiceDurationSec: number | undefined
+      if (voiceBlob) {
+        const fd = new FormData()
+        const ext = voiceBlob.type.includes('webm') ? 'webm' : voiceBlob.type.includes('mp4') ? 'm4a' : 'webm'
+        fd.append('file', new File([voiceBlob], `note.${ext}`, { type: voiceBlob.type || 'audio/webm' }))
+        fd.append('date', date)
+        const ur = await fetch('/api/journal/voice', { method: 'POST', body: fd })
+        const uj = (await ur.json()) as { voicePath?: string; error?: string }
+        if (!ur.ok) {
+          setFormError(typeof uj.error === 'string' ? uj.error : 'Voice upload failed')
+          setSaving(false)
+          return
+        }
+        if (uj.voicePath) {
+          voicePath = uj.voicePath
+          voiceDurationSec = voiceRecordedSec || 1
+        }
+      }
+
       const res = await fetch('/api/journal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,6 +193,7 @@ export default function JournalPage() {
           content: content.trim(),
           mood: mood === '' ? null : mood,
           notes: notes.trim() || null,
+          ...(voicePath ? { voicePath, voiceDurationSec } : {}),
         }),
       })
       const data = await res.json()
@@ -116,11 +206,17 @@ export default function JournalPage() {
       setTitle('')
       setMood('')
       setNotes('')
+      clearPendingVoice()
     } catch {
       setFormError('Network error — try again.')
     } finally {
       setSaving(false)
     }
+  }
+
+  const removeVoiceForDate = async (dateStr: string) => {
+    await fetch(`/api/journal/voice?date=${encodeURIComponent(dateStr)}`, { method: 'DELETE' })
+    await load()
   }
 
   const remove = async (id: string) => {
@@ -246,6 +342,45 @@ export default function JournalPage() {
               className={inputCls}
             />
           </div>
+          <div>
+            <span className={labelCls}>Voice note</span>
+            <p className="text-[11px] text-pens-cream/40 mb-2">
+              Optional short clip (saved when you submit the entry). Your browser must allow microphone access.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {!recording ? (
+                <button
+                  type="button"
+                  onClick={() => void startRecording()}
+                  className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                >
+                  <Mic size={16} />
+                  Record
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium border border-red-500/40 text-red-300 hover:bg-red-500/10 transition-colors"
+                >
+                  <Square size={14} fill="currentColor" />
+                  Stop
+                </button>
+              )}
+              {voiceBlob ? (
+                <>
+                  <span className="text-xs text-pens-cream/50">Clip ready · ~{voiceRecordedSec}s</span>
+                  <button
+                    type="button"
+                    onClick={clearPendingVoice}
+                    className="text-xs text-pens-gold/80 hover:text-pens-gold underline-offset-2 hover:underline"
+                  >
+                    Discard clip
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
           {formError && (
             <p className="text-sm text-red-400 bg-pens-deep/80 rounded-xl px-3 py-2 border border-red-500/30">
               {formError}
@@ -364,6 +499,18 @@ export default function JournalPage() {
                         <p className="text-sm text-pens-cream/90 whitespace-pre-wrap leading-relaxed mt-3">
                           {e.content}
                         </p>
+                        {e.voicePath ? (
+                          <div className="mt-3 space-y-2">
+                            <audio controls src={e.voicePath} className="w-full max-w-md h-9 rounded-lg" />
+                            <button
+                              type="button"
+                              onClick={() => void removeVoiceForDate(e.date)}
+                              className="text-xs text-pens-cream/50 hover:text-pens-cream underline-offset-2 hover:underline"
+                            >
+                              Remove voice note
+                            </button>
+                          </div>
+                        ) : null}
                         {e.notes?.trim() ? (
                           <p className="text-xs text-pens-cream/50 mt-3 italic">{e.notes}</p>
                         ) : null}

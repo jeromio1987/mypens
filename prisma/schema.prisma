@@ -39,6 +39,7 @@ model WeightEntry {
   glycogenRetentionKg Float   @default(0)
   trueWeightKg        Float   @default(0)
   tanitaReliable      Boolean @default(true)
+  source              String  @default("manual") // manual | garmin | healthkit
 }
 
 // Phase 2 — Food Logging
@@ -339,13 +340,68 @@ model JournalEntry {
   content   String
   mood      Int? // 1–5
   notes     String?
+  // /uploads/journal/<file>.webm — optional voice attachment
+  voicePath        String?
+  voiceDurationSec Int?
 }
 
-// Single-user app: one row; tier gates premium features (no payment integration yet).
+// Read-only weight snapshot links (token digest + revoke)
+model ShareLink {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  tokenDigest String    @unique
+}
+
+// Single-user app: one row; tier gates premium features.
 model UserSettings {
-  id        String   @id @default("default")
-  tier      String   @default("free") // "free" | "premium"
+  id               String   @id @default("default")
+  tier             String   @default("free") // "free" | "premium"
+  stripeCustomerId String?
+  // Lab screens: sleep/training context windows (never causal claims).
+  labsWearableContextEnabled Boolean @default(true)
+  // Softer copy + educational retest-interval hints (prevention framing).
+  labsLongevityLensEnabled   Boolean @default(false)
   updatedAt DateTime @updatedAt
+}
+
+// =============================================================================
+// BLOODWORK — structured lab panels (manual entry v1; OCR/import later).
+// =============================================================================
+
+model BloodworkPanel {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // yyyy-mm-dd — calendar date of draw / report
+  drawDate  String
+  labName   String?
+  fasting   Boolean  @default(false)
+  notes     String?
+  markers   BloodworkMarker[]
+
+  @@index([drawDate])
+}
+
+model BloodworkMarker {
+  id        String         @id @default(cuid())
+  createdAt DateTime       @default(now())
+  panelId   String
+  panel     BloodworkPanel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  // Stable slug for charts (e.g. ferritin, hba1c, alt)
+  code      String
+  label     String
+  valueNum  Float?
+  // Qualitative or bounded results, e.g. "<2", "negative"
+  valueText String?
+  unit      String?
+  refLow    Float?
+  refHigh   Float?
+  sortOrder Int            @default(0)
+
+  @@index([panelId])
+  @@index([code])
 }
 
 // Singleton cache for Claude-generated weekly Verdict prose
@@ -489,4 +545,28 @@ model InvestingManualEvent {
   title     String
   kind      String   @default("manual") // manual | earnings_note | other
   symbol    String? // optional filter to watchlist context
+}
+
+// =====================================================================
+// CLUBROOM — multi-user leaderboard (Tier 2-C)
+// Privacy-first: only gamification scores shared, never raw health values.
+// =====================================================================
+
+model Club {
+  id         Int          @id @default(autoincrement())
+  name       String       @unique
+  inviteCode String       @unique @default(cuid())
+  createdAt  DateTime     @default(now())
+  members    ClubMember[]
+}
+
+model ClubMember {
+  id          Int      @id @default(autoincrement())
+  clubId      Int
+  userId      String
+  displayName String
+  joinedAt    DateTime @default(now())
+  club        Club     @relation(fields: [clubId], references: [id])
+
+  @@unique([clubId, userId])
 }

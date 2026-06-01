@@ -30,5 +30,12 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "mypens-mobile", "my-pens-mobile-test"]
+  "exclude": [
+    "node_modules",
+    "mypens-mobile",
+    "my-pens-mobile-test",
+    "**/*.test.ts",
+    "tests",
+    "vitest.config.ts"
+  ]
 }

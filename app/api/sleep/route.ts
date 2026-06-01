@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { scheduleCrossAppDailySnapshotRefresh } from '@/lib/crossAppWriter'
 
 /** Parse "HH:MM" → total minutes since midnight */
 function toMinutes(time: string): number {
@@ -34,6 +35,8 @@ export async function POST(request: Request) {
       create: { date, bedtime, wakeTime, hours, quality: Number(quality), hrv: hrv ?? null, notes },
       update: { bedtime, wakeTime, hours, quality: Number(quality), hrv: hrv ?? null, notes },
     })
+
+    scheduleCrossAppDailySnapshotRefresh(date)
 
     return NextResponse.json({ entry, hours })
   } catch (error) {
@@ -87,6 +90,7 @@ export async function PATCH(request: Request) {
         ...(notes   !== undefined && { notes }),
       },
     })
+    scheduleCrossAppDailySnapshotRefresh(entry.date)
     return NextResponse.json({ entry, hours })
   } catch (error) {
     console.error(error)
@@ -97,7 +101,9 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { id } = await request.json()
+    const row = await prisma.sleepEntry.findUnique({ where: { id }, select: { date: true } })
     await prisma.sleepEntry.delete({ where: { id } })
+    if (row?.date) scheduleCrossAppDailySnapshotRefresh(row.date)
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error(error)

@@ -22,6 +22,9 @@ android/
 # Metro
 .metro-health-check*
 
+# Next.js (accidental web build / stray tooling output inside mobile tree)
+.next/
+
 # debug
 npm-debug.*
 yarn-debug.*

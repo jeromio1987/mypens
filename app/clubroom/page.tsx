@@ -158,6 +158,141 @@ function ReportToSelf({ report }: { report: ReportCard }) {
   )
 }
 
+// ── Clubs section ─────────────────────────────────────────────────────────────
+
+interface ClubRow { id: number; name: string; inviteCode: string; displayName: string }
+interface LeaderboardRow { memberId: number; displayName: string; userId: string; weeklyScore: number; currentStreak: number; medalsEarned: number }
+
+function ClubsSection() {
+  const [clubs, setClubs] = useState<ClubRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [view, setView] = useState<'list' | 'create' | 'join' | 'leaderboard'>('list')
+  const [selectedClub, setSelectedClub] = useState<ClubRow | null>(null)
+  const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([])
+  const [form, setForm] = useState({ name: '', displayName: '', inviteCode: '' })
+  const [flash, setFlash] = useState('')
+
+  useEffect(() => {
+    fetch('/api/clubroom/clubs')
+      .then(r => r.json())
+      .then(d => setClubs(d.clubs ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function createClub() {
+    const res = await fetch('/api/clubroom/clubs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: form.name, displayName: form.displayName }),
+    })
+    const data = await res.json()
+    if (data.error) { setFlash(data.error); return }
+    setClubs(prev => [...prev, { ...data.club, inviteCode: data.inviteCode, displayName: form.displayName }])
+    setForm({ name: '', displayName: '', inviteCode: '' })
+    setView('list')
+  }
+
+  async function joinClub() {
+    const res = await fetch('/api/clubroom/clubs/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inviteCode: form.inviteCode, displayName: form.displayName }),
+    })
+    const data = await res.json()
+    if (data.error) { setFlash(data.error); return }
+    setClubs(prev => [...prev, { id: data.club.id, name: data.club.name, inviteCode: form.inviteCode, displayName: form.displayName }])
+    setForm({ name: '', displayName: '', inviteCode: '' })
+    setView('list')
+  }
+
+  async function openLeaderboard(club: ClubRow) {
+    setSelectedClub(club)
+    setView('leaderboard')
+    const res = await fetch(`/api/clubroom/leaderboard/${club.id}`)
+    const data = await res.json()
+    setLeaderboard(data.leaderboard ?? [])
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[9px] uppercase tracking-widest text-pens-gold font-semibold">Clubs</p>
+        {view === 'list' && (
+          <div className="flex gap-2">
+            <button onClick={() => { setView('join'); setFlash('') }} className="text-xs text-pens-cream/60 hover:text-pens-cream px-2 py-1 rounded-lg border border-pens-muted/30">Join</button>
+            <button onClick={() => { setView('create'); setFlash('') }} className="text-xs text-pens-cream/60 hover:text-pens-cream px-2 py-1 rounded-lg border border-pens-muted/30">Create</button>
+          </div>
+        )}
+        {view !== 'list' && (
+          <button onClick={() => setView('list')} className="text-xs text-pens-cream/60 hover:text-pens-cream">← Back</button>
+        )}
+      </div>
+
+      {flash && <p className="text-xs text-pens-crimson">{flash}</p>}
+
+      {view === 'list' && (
+        loading ? (
+          <p className="text-xs text-pens-muted">Loading clubs…</p>
+        ) : clubs.length === 0 ? (
+          <p className="text-xs text-pens-muted">No clubs yet. Create one or join with an invite code.</p>
+        ) : (
+          <div className="space-y-2">
+            {clubs.map(c => (
+              <button key={c.id} onClick={() => openLeaderboard(c)} className="w-full flex items-center justify-between bg-pens-navy rounded-xl px-4 py-3 text-left hover:border-pens-gold/40 border border-transparent transition">
+                <div>
+                  <p className="text-sm font-semibold text-pens-cream">{c.name}</p>
+                  <p className="text-[10px] text-pens-muted">You as: {c.displayName}</p>
+                </div>
+                <p className="text-[10px] text-pens-muted/60">Leaderboard →</p>
+              </button>
+            ))}
+          </div>
+        )
+      )}
+
+      {view === 'create' && (
+        <div className="space-y-3">
+          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Club name" className="w-full bg-pens-navy border border-pens-muted/30 rounded-xl px-3 py-2 text-sm text-pens-cream placeholder-pens-muted focus:outline-none focus:border-pens-gold/50" />
+          <input value={form.displayName} onChange={e => setForm(f => ({ ...f, displayName: e.target.value }))} placeholder="Your display name in this club" className="w-full bg-pens-navy border border-pens-muted/30 rounded-xl px-3 py-2 text-sm text-pens-cream placeholder-pens-muted focus:outline-none focus:border-pens-gold/50" />
+          <button onClick={createClub} className="w-full py-2 rounded-xl bg-pens-gold text-pens-deep text-sm font-bold">Create Club</button>
+        </div>
+      )}
+
+      {view === 'join' && (
+        <div className="space-y-3">
+          <input value={form.inviteCode} onChange={e => setForm(f => ({ ...f, inviteCode: e.target.value }))} placeholder="Invite code" className="w-full bg-pens-navy border border-pens-muted/30 rounded-xl px-3 py-2 text-sm text-pens-cream placeholder-pens-muted focus:outline-none focus:border-pens-gold/50" />
+          <input value={form.displayName} onChange={e => setForm(f => ({ ...f, displayName: e.target.value }))} placeholder="Your display name in this club" className="w-full bg-pens-navy border border-pens-muted/30 rounded-xl px-3 py-2 text-sm text-pens-cream placeholder-pens-muted focus:outline-none focus:border-pens-gold/50" />
+          <button onClick={joinClub} className="w-full py-2 rounded-xl bg-pens-gold text-pens-deep text-sm font-bold">Join Club</button>
+        </div>
+      )}
+
+      {view === 'leaderboard' && selectedClub && (
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-pens-cream">{selectedClub.name}</p>
+          <p className="text-[10px] text-pens-muted">Invite code: <span className="text-pens-cream font-mono">{selectedClub.inviteCode}</span></p>
+          {leaderboard.length === 0 ? (
+            <p className="text-xs text-pens-muted">Loading leaderboard…</p>
+          ) : (
+            <div className="space-y-2">
+              {leaderboard.map((row, i) => (
+                <div key={row.memberId} className="flex items-center gap-3 bg-pens-navy rounded-xl px-4 py-3">
+                  <p className="text-lg font-bold text-pens-gold w-6">#{i + 1}</p>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-pens-cream">{row.displayName}</p>
+                    <p className="text-[10px] text-pens-muted">Streak: {row.currentStreak}d · Medals: {row.medalsEarned}</p>
+                  </div>
+                  <p className="text-sm font-bold text-pens-gold">{row.weeklyScore}pts</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 interface ClubroomData {
@@ -313,9 +448,15 @@ export default function ClubroomPage() {
             {/* Report to self */}
             <ReportToSelf report={data.report} />
 
+            {/* Divider */}
+            <div className="border-t border-pens-muted/20" />
+
+            {/* Clubs */}
+            <ClubsSection />
+
             {/* Footer note */}
             <p className="text-[10px] text-pens-muted text-center pb-4">
-              The Clubroom is private · Your data never leaves this device
+              The Clubroom is private · Only scores are shared, never raw health data
             </p>
           </>
         )}

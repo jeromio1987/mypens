@@ -104,3 +104,62 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete exercise' }, { status: 500 })
   }
 }
+
+/** Body: `{ orderedExerciseIds: string[] }` — must be a permutation of this day's exercise ids. */
+export async function PATCH(
+  request: Request,
+  {
+    params,
+  }: {
+    params: Promise<{ id: string; dayId: string }>
+  },
+) {
+  try {
+    const { id, dayId } = await params
+    const day = await prisma.programmeDay.findFirst({
+      where: { id: dayId, programmeId: id },
+      select: { id: true },
+    })
+    if (!day) {
+      return NextResponse.json({ error: 'Day not found' }, { status: 404 })
+    }
+
+    const parsed = (await request.json().catch(() => null)) as { orderedExerciseIds?: unknown } | null
+    const ordered = parsed?.orderedExerciseIds
+    if (!Array.isArray(ordered) || ordered.length === 0) {
+      return NextResponse.json({ error: 'orderedExerciseIds non-empty array required' }, { status: 400 })
+    }
+    if (!ordered.every((x): x is string => typeof x === 'string' && x.length > 0)) {
+      return NextResponse.json({ error: 'orderedExerciseIds must be strings' }, { status: 400 })
+    }
+
+    const existing = await prisma.programmeExercise.findMany({
+      where: { dayId },
+      select: { id: true },
+    })
+    const idSet = new Set(existing.map(e => e.id))
+    if (ordered.length !== idSet.size) {
+      return NextResponse.json(
+        { error: 'orderedExerciseIds must list each exercise exactly once' },
+        { status: 400 },
+      )
+    }
+    for (const oid of ordered) {
+      if (!idSet.has(oid)) {
+        return NextResponse.json({ error: 'unknown exercise id in orderedExerciseIds' }, { status: 400 })
+      }
+    }
+
+    await prisma.$transaction(
+      ordered.map((exerciseId, index) =>
+        prisma.programmeExercise.update({
+          where: { id: exerciseId },
+          data: { order: index },
+        }),
+      ),
+    )
+    return NextResponse.json({ ok: true })
+  } catch {
+    return NextResponse.json({ error: 'Failed to reorder exercises' }, { status: 500 })
+  }
+}

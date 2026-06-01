@@ -3,17 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev -p 5000 -H 0.0.0.0",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start -p 5000 -H 0.0.0.0",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "bundle:context": "node scripts/bundle-context.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
-    "@react-pdf/renderer": "^4.3.0",
     "@prisma/client": "^5.22.0",
+    "@react-pdf/renderer": "^4.3.0",
     "@replit/connectors-sdk": "^0.3.0",
+    "@stripe/stripe-js": "^9.5.0",
     "heic-convert": "^2.1.0",
     "lucide-react": "^1.7.0",
     "next": "^16.2.4",
@@ -21,7 +25,8 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.8.1",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "stripe": "^22.1.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -31,7 +36,8 @@
     "eslint": "^9",
     "eslint-config-next": "^16.2.4",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   },
   "overrides": {
     "postcss": "^8.5.10",

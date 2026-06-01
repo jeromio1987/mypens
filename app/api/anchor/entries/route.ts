@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { scheduleCrossAppDailySnapshotRefresh } from '@/lib/crossAppWriter'
 import { todayStr } from '@/lib/anchor/streaks'
 
 export const runtime = 'nodejs'
@@ -49,6 +50,7 @@ export async function POST(req: Request) {
       create: { date, ...data },
       update: data,
     })
+    scheduleCrossAppDailySnapshotRefresh(date)
     return NextResponse.json(entry)
   } catch (err) {
     console.error('[anchor/entries POST]', err)
@@ -60,6 +62,7 @@ export async function DELETE(req: Request) {
   try {
     const { date } = (await req.json()) as { date: string }
     await prisma.recoveryEntry.delete({ where: { date } })
+    scheduleCrossAppDailySnapshotRefresh(date)
     return NextResponse.json({ ok: true })
   } catch (err) {
     return NextResponse.json({ error: 'failed to delete' }, { status: 500 })

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { verifyReadOnlySnapshotToken } from '@/lib/auth'
 import { enrichWeightSeriesFromDb } from '@/lib/enrichWeightSeries'
+import { shareTokenDigest } from '@/lib/shareTokenDigest'
 
 /**
  * Public, token-gated JSON snapshot (last 7 enriched weight days).
@@ -12,6 +13,20 @@ export async function GET(request: Request) {
   const { ok, exp } = await verifyReadOnlySnapshotToken(t ?? undefined)
   if (!ok) {
     return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
+  }
+
+  if (t) {
+    const digest = shareTokenDigest(t)
+    const row = await prisma.shareLink.findUnique({ where: { tokenDigest: digest } })
+    if (row) {
+      if (row.revokedAt) {
+        return NextResponse.json({ error: 'Link revoked' }, { status: 401 })
+      }
+      if (row.expiresAt.getTime() < Date.now()) {
+        return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
+      }
+    }
+    // Rows created before ShareLink existed: HMAC-only verification still passes above.
   }
 
   try {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText, Anchor, BookOpen, UtensilsCrossed } from 'lucide-react'
+import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText, Anchor, BookOpen, UtensilsCrossed, FlaskConical } from 'lucide-react'
 import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 import NotificationsBadge from '@/components/shared/NotificationsBadge'
 
@@ -47,6 +47,7 @@ const MODULES = [
   { href: '/sleep',        label: 'Sleep',    icon: Moon },
   { href: '/anchor',       label: 'Anchor',   icon: Anchor },
   { href: '/measurements', label: 'Body',     icon: Ruler },
+  { href: '/bloodwork',    label: 'Labs',     icon: FlaskConical },
   { href: '/dashboard',    label: 'Overview', icon: LayoutDashboard },
   { href: '/journal',      label: 'Journal',  icon: BookOpen, emeraldNav: true },
 ] as const
@@ -352,7 +353,7 @@ export default function HomeClient() {
 
       {/* Bottom mobile nav (preserved) */}
       <nav className="fixed bottom-0 left-0 right-0 bg-pens-deep/95 backdrop-blur border-t border-pens-muted/20 md:hidden z-40">
-        <div className="max-w-lg mx-auto grid grid-cols-3 sm:grid-cols-6">
+        <div className="max-w-lg mx-auto grid grid-cols-4 sm:grid-cols-8">
           {MODULES.map(({ href, label, icon: Icon, ...rest }) => {
             const emerald = 'emeraldNav' in rest && rest.emeraldNav
             return (

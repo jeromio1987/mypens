@@ -20,6 +20,12 @@ export default function MeasurementsClient() {
             <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">P.E.N.S.</p>
             <h1 className="text-2xl font-bold text-pens-cream mt-0.5">Body Measurements</h1>
             <p className="text-xs text-pens-cream/40 mt-0.5">Waist, chest, hips and more</p>
+            <Link
+              href="/measurements/gallery"
+              className="inline-block mt-2 text-xs text-pens-gold hover:text-pens-cream transition-colors"
+            >
+              Photo gallery →
+            </Link>
           </div>
         </div>
 

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncRecentActivities } from '@/lib/integrations/garmin/sync'
+import { syncBodyComps } from '@/lib/integrations/garmin/bodyCompSync'
+import { syncSleep } from '@/lib/integrations/garmin/sleepSync'
 
 /**
  * Daily fallback sync. Pulls the last 7 days of Garmin activities and imports
@@ -35,8 +37,18 @@ async function run(request: Request) {
   const days = Math.max(1, Math.min(30, Number(url.searchParams.get('days') || 7)))
 
   try {
-    const result = await syncRecentActivities(days)
-    return NextResponse.json({ ok: true, ...result, days })
+    const [activities, bodyComps, sleep] = await Promise.allSettled([
+      syncRecentActivities(days),
+      syncBodyComps(days),
+      syncSleep(days),
+    ])
+    return NextResponse.json({
+      ok: true,
+      days,
+      activities: activities.status === 'fulfilled' ? activities.value : { error: String(activities.reason) },
+      bodyComps:  bodyComps.status  === 'fulfilled' ? bodyComps.value  : { error: String(bodyComps.reason)  },
+      sleep:      sleep.status      === 'fulfilled' ? sleep.value      : { error: String(sleep.reason)      },
+    })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown'
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })

@@ -313,13 +313,10 @@ export default function ImportTanitaPage() {
               {importing ? (
                 <>
                   <Loader2 className="animate-spin" size={18} />
-                  Importing…
+                  Importing…{batchFiles.length > 1 ? ` (${batchFiles.length} files)` : ''}
                 </>
               ) : batchFiles.length > 1 ? (
-                <>
-                  <Loader2 className="animate-spin" size={18} />
-                  Importing… ({batchFiles.length} files)
-                </>
+                `Import ${batchFiles.length} files`
               ) : (
                 'Import to database'
               )}

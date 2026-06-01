@@ -21,6 +21,8 @@ export async function GET() {
     return NextResponse.json({
       id: row.id,
       tier: row.tier === 'premium' ? 'premium' : 'free',
+      labsWearableContextEnabled: row.labsWearableContextEnabled,
+      labsLongevityLensEnabled: row.labsLongevityLensEnabled,
       updatedAt: row.updatedAt.toISOString(),
     })
   } catch {
@@ -30,19 +32,41 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const body = (await request.json().catch(() => null)) as { tier?: string } | null
+    const body = (await request.json().catch(() => null)) as {
+      tier?: string
+      labsWearableContextEnabled?: boolean
+      labsLongevityLensEnabled?: boolean
+    } | null
+
     const tierRaw = body?.tier
-    if (tierRaw !== 'free' && tierRaw !== 'premium') {
+    const hasTier = tierRaw !== undefined
+    if (hasTier && tierRaw !== 'free' && tierRaw !== 'premium') {
       return NextResponse.json({ error: 'tier must be "free" or "premium"' }, { status: 400 })
     }
+
+    const hasCtx = body?.labsWearableContextEnabled !== undefined
+    const hasLen = body?.labsLongevityLensEnabled !== undefined
+    if (!hasTier && !hasCtx && !hasLen) {
+      return NextResponse.json(
+        { error: 'Provide tier and/or labsWearableContextEnabled and/or labsLongevityLensEnabled' },
+        { status: 400 },
+      )
+    }
+
     await getOrCreateSettings()
     const updated = await prisma.userSettings.update({
       where: { id: DEFAULT_ID },
-      data: { tier: tierRaw },
+      data: {
+        ...(hasTier && { tier: tierRaw }),
+        ...(hasCtx && { labsWearableContextEnabled: Boolean(body!.labsWearableContextEnabled) }),
+        ...(hasLen && { labsLongevityLensEnabled: Boolean(body!.labsLongevityLensEnabled) }),
+      },
     })
     return NextResponse.json({
       id: updated.id,
       tier: updated.tier === 'premium' ? 'premium' : 'free',
+      labsWearableContextEnabled: updated.labsWearableContextEnabled,
+      labsLongevityLensEnabled: updated.labsLongevityLensEnabled,
       updatedAt: updated.updatedAt.toISOString(),
     })
   } catch {

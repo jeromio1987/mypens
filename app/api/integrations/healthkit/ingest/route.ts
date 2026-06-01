@@ -4,6 +4,14 @@ import { bearerFromRequest, verifyToken } from '@/lib/integrations/healthkit/aut
 import { mapWorkoutToDraft } from '@/lib/integrations/healthkit/mapping'
 import type { HealthkitWorkout } from '@/lib/integrations/healthkit/api'
 
+interface HealthkitBodyComp {
+  date: string        // yyyy-mm-dd
+  weightKg?: number
+  bodyFatPct?: number // 0–100 (already converted from fraction)
+  muscleMassKg?: number
+  boneMassKg?: number
+}
+
 /**
  * POST { workouts: HealthkitWorkout[], clientError?: string | null }
  * Authorization: Bearer <pairingToken>
@@ -25,6 +33,7 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const workouts: HealthkitWorkout[] = Array.isArray(body?.workouts) ? body.workouts : []
+    const bodyComps: HealthkitBodyComp[] = Array.isArray(body?.bodyComps) ? body.bodyComps : []
     const clientErrorRaw = body?.clientError
     const clientError =
       clientErrorRaw === null || clientErrorRaw === undefined
@@ -116,7 +125,31 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({ ok: true, stored, skipped })
+    // Ingest body comps (Tanita via HealthKit)
+    let bodyCompsIngested = 0
+    let bodyCompsSkipped = 0
+    for (const bc of bodyComps) {
+      if (!bc.date || !bc.weightKg) { bodyCompsSkipped++; continue }
+      const existing = await prisma.weightEntry.findFirst({ where: { date: bc.date } })
+      if (existing?.source === 'manual') { bodyCompsSkipped++; continue }
+      const data = {
+        scaleKg: bc.weightKg,
+        bodyFatPct: bc.bodyFatPct ?? null,
+        muscleMassKg: bc.muscleMassKg ?? null,
+        boneMassKg: bc.boneMassKg ?? null,
+        source: 'healthkit',
+      }
+      if (existing) {
+        await prisma.weightEntry.update({ where: { id: existing.id }, data })
+      } else {
+        await prisma.weightEntry.create({
+          data: { date: bc.date, ...data, morningReading: true, tanitaReliable: true },
+        })
+      }
+      bodyCompsIngested++
+    }
+
+    return NextResponse.json({ ok: true, stored, skipped, bodyCompsIngested, bodyCompsSkipped })
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Failed to ingest' }, { status: 500 })

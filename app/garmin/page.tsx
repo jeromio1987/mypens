@@ -4,6 +4,48 @@ import { useState } from 'react'
 import Link from 'next/link'
 import GarminLog from '@/components/garmin/GarminLog'
 
+function GarminHealthSync() {
+  const [status, setStatus] = useState<Record<string, string>>({})
+
+  async function sync(endpoint: string, label: string) {
+    setStatus(s => ({ ...s, [label]: 'Syncing…' }))
+    try {
+      const res = await fetch(endpoint, { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        setStatus(s => ({ ...s, [label]: `Done — ${data.ingested ?? 0} ingested, ${data.skipped ?? 0} skipped` }))
+      } else {
+        setStatus(s => ({ ...s, [label]: `Error: ${data.error ?? 'unknown'}` }))
+      }
+    } catch {
+      setStatus(s => ({ ...s, [label]: 'Failed to reach server' }))
+    }
+  }
+
+  return (
+    <div className="bg-pens-surface rounded-2xl p-4 border border-pens-muted/30 space-y-3">
+      <p className="text-xs uppercase tracking-widest text-pens-muted font-semibold">Health Sync</p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => sync('/api/integrations/garmin/body-sync', 'body')}
+          className="px-3 py-1.5 text-sm rounded-lg bg-pens-navy border border-pens-muted/30 text-pens-cream hover:border-pens-gold/50 transition"
+        >
+          Sync body weight (30 days)
+        </button>
+        <button
+          onClick={() => sync('/api/integrations/garmin/sleep-sync', 'sleep')}
+          className="px-3 py-1.5 text-sm rounded-lg bg-pens-navy border border-pens-muted/30 text-pens-cream hover:border-pens-gold/50 transition"
+        >
+          Sync sleep (30 days)
+        </button>
+      </div>
+      {Object.entries(status).map(([k, v]) => (
+        <p key={k} className="text-xs text-pens-cream/60">{k}: {v}</p>
+      ))}
+    </div>
+  )
+}
+
 const YEARS = ['all', '2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019']
 const SPORTS = [
   { value: 'all',               label: 'All sports' },
@@ -64,6 +106,8 @@ export default function GarminPage() {
             CSV import/export →
           </Link>
         </div>
+
+        <GarminHealthSync />
 
         <GarminLog year={year} sport={sport} />
 

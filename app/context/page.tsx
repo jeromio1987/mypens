@@ -275,15 +275,14 @@ export default function ContextPage() {
 
       </div>
 
-      {/* Fixed bottom nav */}
+      {/* Fixed bottom nav — four core modules (Journal replaces legacy Body slot; overview stays in Quick Access above) */}
       <nav className="fixed bottom-0 left-0 right-0 bg-pens-deep/95 backdrop-blur border-t border-pens-muted/20">
-        <div className="max-w-sm mx-auto grid grid-cols-5">
+        <div className="max-w-sm mx-auto grid grid-cols-4">
           {[
             { href: '/weight',       label: 'Weight',   icon: Scale },
             { href: '/food',         label: 'Food',     icon: UtensilsCrossed },
             { href: '/sleep',        label: 'Sleep',    icon: Moon },
             { href: '/journal',      label: 'Journal',  icon: BookOpen },
-            { href: '/dashboard',    label: 'Overview', icon: LayoutDashboard },
           ].map(({ href, label, icon: Icon }) => (
             <Link
               key={href}

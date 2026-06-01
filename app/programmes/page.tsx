@@ -6,9 +6,11 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Plus,
   Check,
   PlusCircle,
+  GripVertical,
 } from 'lucide-react'
 
 type ProgrammeExerciseRow = {
@@ -33,6 +35,17 @@ type ProgrammeRow = {
   active: boolean
   createdAt: string
   days: ProgrammeDayRow[]
+}
+
+const DAY_DRAG_MIME = 'application/x-mypens-programme-day'
+const EX_DRAG_MIME = 'application/x-mypens-programme-ex'
+
+function reorderByIndex<T>(items: readonly T[], from: number, to: number): T[] {
+  if (from === to) return [...items]
+  const copy = [...items]
+  const [removed] = copy.splice(from, 1)
+  copy.splice(to, 0, removed)
+  return copy
 }
 
 export default function ProgrammesPage() {
