@@ -26,6 +26,9 @@
 //   ANTHROPIC_API_KEY     optional — enables the Claude deep analysis
 //   PENS_TRANSCRIPT_DIRS  optional — comma-separated dirs of .jsonl transcripts
 //                         (defaults to ~/.cursor/projects and ~/.claude/projects)
+//   PENS_ISZE_FEEDBACK_DIR optional — folder with Claude scheduled Feedback
+//                         (00_INDEX.md + Feedback_*.md). Default:
+//                         ~/Desktop/claude/ISZE/05_memory/briefs/feedback_history
 //   WEEKLY_FEEDBACK_MODEL optional — model id (default claude-sonnet-4-6)
 // =============================================================================
 
@@ -35,6 +38,7 @@ import { fileURLToPath } from 'node:url'
 
 import { weekBounds, shiftDateStr } from './lib/weekDates.mjs'
 import { findTranscriptFiles, computeWeekMetrics, defaultTranscriptDirs } from './lib/transcriptMetrics.mjs'
+import { loadIszeFeedback, defaultIszeFeedbackDir } from './lib/iszeFeedback.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(__dirname, '..')
@@ -269,7 +273,7 @@ function crossLink(health, work) {
 // ---------------------------------------------------------------------------
 // Claude deep analysis (optional). Returns the structured sections or null.
 // ---------------------------------------------------------------------------
-async function runClaude({ weekOf, weekEnd, health, work, links }) {
+async function runClaude({ weekOf, weekEnd, health, work, links, isze }) {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
   if (!apiKey) return null
 
@@ -281,12 +285,13 @@ async function runClaude({ weekOf, weekEnd, health, work, links }) {
   }
 
   const system = `You are MY PENS Weekly Feedback — a sharp, honest personal review system for a single power-user.
-You produce a weekly review with two connected halves: (1) the user's health/life data and (2) how well the user worked with Claude/Cursor this week (prompt quality, how they run projects).
+You produce a weekly review with three connected parts: (1) health/life data, (2) how well the user worked with Claude/Cursor this week (prompt quality), and (3) professional/ISZE feedback already produced by a Claude Desktop scheduled task (summarise it; do not invent ISZE facts).
 Voice: direct, analytical, a little dry. No wellness platitudes, no corporate filler, no em-dashes. Prefer concrete numbers from the data. Be specific and useful, not generic.
 For the Claude-work half: judge prompt quality on specificity, included context (files/goals/constraints), and whether short vague prompts caused rework. Give concrete, actionable prompting upgrades the user can apply next week.
+For ISZE: emphasise closing open loops that keep recurring (e.g. CLAUDE.md staleness). If no ISZE brief is available, say so briefly in iszeAnalysis.
 Respect privacy: Anchor recovery data is sensitive; refer to it only in aggregate (streaks, counts), never speculate about details.
 Return ONLY valid minified JSON, no markdown fences, with exactly these keys:
-{"combinedSummary": string (2-4 sentences, the headline read on the week), "healthAnalysis": string (1 short paragraph), "claudeWorkAnalysis": string (1 short paragraph), "wins": string[] (exactly 3), "improvements": string[] (exactly 3, about prompting/project execution), "healthActions": string[] (exactly 3, concrete next-week health actions)}`
+{"combinedSummary": string (2-4 sentences, the headline read on the week), "healthAnalysis": string (1 short paragraph), "claudeWorkAnalysis": string (1 short paragraph), "iszeAnalysis": string (1 short paragraph on professional/ISZE feedback), "wins": string[] (exactly 3), "improvements": string[] (exactly 3, about prompting/project execution), "healthActions": string[] (exactly 3, concrete next-week health actions), "iszeActions": string[] (exactly 3, concrete next-week ISZE close-the-loop actions — empty array if no ISZE data)}`
 
   const userPrompt = `Week: ${weekOf} to ${weekEnd}
 
@@ -311,6 +316,21 @@ ${JSON.stringify({
     earlyMorningPromptCount: work.earlyMorningPromptCount,
     samplePrompts: work.samplePrompts,
   })}
+
+ISZE / PROFESSIONAL SCHEDULED FEEDBACK (JSON — already written by Claude Desktop; summarise, do not invent):
+${JSON.stringify(
+    isze?.available
+      ? {
+          available: true,
+          latestName: isze.latestName,
+          latestDate: isze.latestDate,
+          runCount: isze.runCount,
+          summary: isze.summary,
+          openLoops: isze.openLoops,
+          excerpt: isze.excerpt,
+        }
+      : { available: false, reason: isze?.reason ?? 'missing' },
+  )}
 
 DETERMINISTIC CROSS-LINKS:
 ${links.length ? links.map(l => `- ${l}`).join('\n') : '- none detected'}
@@ -348,9 +368,11 @@ function parseClaudeJson(text) {
       combinedSummary: String(obj.combinedSummary || ''),
       healthAnalysis: String(obj.healthAnalysis || ''),
       claudeWorkAnalysis: String(obj.claudeWorkAnalysis || ''),
+      iszeAnalysis: String(obj.iszeAnalysis || ''),
       wins: asStringArray(obj.wins),
       improvements: asStringArray(obj.improvements),
       healthActions: asStringArray(obj.healthActions),
+      iszeActions: asStringArray(obj.iszeActions),
     }
   } catch {
     return null
@@ -366,7 +388,7 @@ function asStringArray(v) {
 // Deterministic fallback — used when there's no API key, the call fails, or
 // JSON can't be parsed. Keeps the feature fully usable offline.
 // ---------------------------------------------------------------------------
-function buildFallback({ health, work, links }) {
+function buildFallback({ health, work, links, isze }) {
   const h = []
   if (health.sleep) h.push(`Sleep averaged ${health.sleep.avgHours}h across ${health.sleep.nights} nights (quality ${health.sleep.avgQuality}/5, ${health.sleep.nightsUnder6h5} short nights).`)
   if (health.weight) h.push(`True weight trend ${health.weight.trend} ${Math.abs(health.weight.deltaKg)}kg, ending ${health.weight.lastKg}kg.`)
@@ -406,14 +428,28 @@ function buildFallback({ health, work, links }) {
   healthActions.push('Log weight + sleep every morning to keep the signal clean.')
   healthActions.push('Do one novelty activity to spend dopamine deliberately.')
 
+  let iszeAnalysis = 'No ISZE scheduled Feedback brief found for this week.'
+  const iszeActions = []
+  if (isze?.available) {
+    iszeAnalysis = isze.summary || 'ISZE Feedback brief present.'
+    if (isze.openLoops?.length) {
+      iszeAnalysis += ` Open loops: ${isze.openLoops.slice(0, 3).join('; ')}.`
+    }
+    iszeActions.push('Close one recurring CLAUDE.md stale item this week (pick the oldest).')
+    iszeActions.push('Update 00_INDEX.md only after the underlying fact is fixed.')
+    iszeActions.push('Keep personal recovery out of the ISZE Feedback run — that stays in MY PENS.')
+  }
+
   return {
     combinedSummary:
       (links[0] || (work.available ? 'A mixed week across health and how you ran Claude.' : 'Health-only review this week; no transcript data available.')),
     healthAnalysis: h.join(' '),
     claudeWorkAnalysis: w.join(' ') + (links.length ? ` Cross-link: ${links.join(' ')}` : ''),
+    iszeAnalysis,
     wins: wins.slice(0, 3),
     improvements: improvements.slice(0, 3),
     healthActions: healthActions.slice(0, 3),
+    iszeActions: iszeActions.slice(0, 3),
   }
 }
 
@@ -435,6 +471,10 @@ ${report.healthAnalysis}
 ## Working with Claude
 ${report.claudeWorkAnalysis}
 
+## Professional / ISZE (scheduled Feedback)
+${report.iszeAnalysis || '_No ISZE brief loaded._'}
+
+${report.iszeActions?.length ? `## ISZE actions (close the loop)\n${list(report.iszeActions)}\n` : ''}
 ## Wins
 ${list(report.wins)}
 
@@ -471,6 +511,15 @@ async function main() {
     `[weekly-feedback] transcripts: ${files.length} files, ${work.sessions} sessions, ${work.promptCount} prompts in window`,
   )
 
+  // ISZE scheduled Feedback archive (Claude Desktop) — local folder only.
+  const iszeDir = defaultIszeFeedbackDir()
+  const isze = loadIszeFeedback({ dir: iszeDir, weekOf, weekEnd })
+  console.log(
+    isze.available
+      ? `[weekly-feedback] ISZE Feedback: ${isze.latestName} (${isze.runCount} briefs in archive)`
+      : `[weekly-feedback] ISZE Feedback: not found (${isze.reason || 'missing'}) under ${iszeDir}`,
+  )
+
   // Health metrics (needs a DB connection).
   const hasDb = Boolean(process.env.DATABASE_URL)
   let prisma = null
@@ -498,7 +547,7 @@ async function main() {
   let model = null
   if (args.ai) {
     try {
-      report = await runClaude({ weekOf, weekEnd, health, work, links })
+      report = await runClaude({ weekOf, weekEnd, health, work, links, isze })
       if (report && report.combinedSummary) {
         model = MODEL
         console.log(`[weekly-feedback] Claude analysis ok (${MODEL})`)
@@ -511,10 +560,24 @@ async function main() {
     }
   }
   if (!report) {
-    report = buildFallback({ health, work, links })
+    report = buildFallback({ health, work, links, isze })
   }
+  // Ensure keys exist even if an older Claude response omitted them.
+  report.iszeAnalysis = report.iszeAnalysis || (isze.available ? isze.summary : 'No ISZE brief loaded.')
+  report.iszeActions = Array.isArray(report.iszeActions) ? report.iszeActions : []
 
-  const metrics = { weekOf, weekEnd, health, work: stripSamples(work), crossLinks: links }
+  const metrics = {
+    weekOf,
+    weekEnd,
+    health,
+    work: stripSamples(work),
+    crossLinks: links,
+    isze: {
+      ...stripIsze(isze),
+      analysis: report.iszeAnalysis,
+      actions: report.iszeActions,
+    },
+  }
 
   // Write markdown copy.
   try {
@@ -559,6 +622,22 @@ async function main() {
 function stripSamples(work) {
   const { samplePrompts, ...rest } = work
   return { ...rest, samplePromptCount: samplePrompts?.length ?? 0 }
+}
+
+/** Persist a lean ISZE blob (no multi-KB excerpt) plus the prose/actions. */
+function stripIsze(isze) {
+  if (!isze) return { available: false }
+  return {
+    available: Boolean(isze.available),
+    dir: isze.dir ?? null,
+    latestName: isze.latestName ?? null,
+    latestDate: isze.latestDate ?? null,
+    runCount: isze.runCount ?? 0,
+    qualityNote: isze.qualityNote ?? null,
+    summary: isze.summary ?? null,
+    openLoops: isze.openLoops ?? [],
+    reason: isze.reason ?? null,
+  }
 }
 
 function emptyHealth() {

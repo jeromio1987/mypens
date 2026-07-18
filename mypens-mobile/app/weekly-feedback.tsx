@@ -54,7 +54,20 @@ interface Report {
   wins: string[]
   improvements: string[]
   healthActions: string[]
-  metrics: { work?: WorkMetrics; health?: HealthMetrics; crossLinks?: string[] }
+  metrics: {
+    work?: WorkMetrics
+    health?: HealthMetrics
+    crossLinks?: string[]
+    isze?: {
+      available?: boolean
+      latestName?: string | null
+      runCount?: number
+      summary?: string | null
+      openLoops?: string[]
+      analysis?: string
+      actions?: string[]
+    }
+  }
   model: string | null
   generatedAt: string
 }
@@ -99,6 +112,7 @@ export default function WeeklyFeedbackScreen() {
   const report = data ?? null
   const work = report?.metrics?.work
   const health = report?.metrics?.health
+  const isze = report?.metrics?.isze
   const crossLinks = report?.metrics?.crossLinks ?? []
 
   const topPad = Platform.OS === 'web' ? 16 : insets.top + 8
@@ -185,6 +199,39 @@ export default function WeeklyFeedbackScreen() {
             items={report.healthActions}
             colors={colors}
           />
+
+          {/* ISZE / professional */}
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.eyebrow, { color: '#f59e0b' }]}>PROFESSIONAL · ISZE FEEDBACK</Text>
+            <Text style={[styles.body, { color: colors.foreground }]}>
+              {isze?.analysis ||
+                isze?.summary ||
+                'No ISZE scheduled Feedback brief loaded for this week.'}
+            </Text>
+            {(isze?.openLoops ?? []).map((loop, i) => (
+              <View key={i} style={styles.listRow}>
+                <Text style={[styles.listNum, { color: '#f59e0b' }]}>•</Text>
+                <Text style={[styles.body, { color: colors.mutedForeground, flex: 1, fontSize: 12 }]}>{loop}</Text>
+              </View>
+            ))}
+            {(isze?.actions ?? []).length > 0 && (
+              <>
+                <Text style={[styles.eyebrow, { color: '#f59e0b', marginTop: 12 }]}>CLOSE THE LOOP</Text>
+                {isze!.actions!.map((a, i) => (
+                  <View key={i} style={styles.listRow}>
+                    <Text style={[styles.listNum, { color: '#f59e0b' }]}>{i + 1}.</Text>
+                    <Text style={[styles.body, { color: colors.foreground, flex: 1 }]}>{a}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+            {isze?.latestName ? (
+              <Text style={[styles.footer, { color: colors.mutedForeground, marginTop: 8, textAlign: 'left' }]}>
+                Source: {isze.latestName}
+                {isze.runCount ? ` · ${isze.runCount} briefs` : ''}
+              </Text>
+            ) : null}
+          </View>
 
           {/* Health */}
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

@@ -11,6 +11,7 @@ import {
   Bot,
   Activity,
   MessageSquare,
+  Briefcase,
 } from 'lucide-react'
 
 interface WorkMetrics {
@@ -47,7 +48,22 @@ interface Report {
   wins: string[]
   improvements: string[]
   healthActions: string[]
-  metrics: { work?: WorkMetrics; health?: HealthMetrics; crossLinks?: string[] }
+  metrics: {
+    work?: WorkMetrics
+    health?: HealthMetrics
+    crossLinks?: string[]
+    isze?: {
+      available?: boolean
+      latestName?: string | null
+      latestDate?: string | null
+      runCount?: number
+      summary?: string | null
+      openLoops?: string[]
+      analysis?: string
+      actions?: string[]
+      reason?: string | null
+    }
+  }
   model: string | null
   generatedAt: string
 }
@@ -124,6 +140,7 @@ export default function WeeklyFeedbackPage() {
 
   const work = report?.metrics?.work
   const health = report?.metrics?.health
+  const isze = report?.metrics?.isze
   const crossLinks = report?.metrics?.crossLinks ?? []
 
   return (
@@ -245,6 +262,53 @@ export default function WeeklyFeedbackPage() {
                     <Stat label="Anchor" value={`${health.anchor.cleanStreakDays}d`} hint={`${health.anchor.alcoholDaysThisWeek} drink day(s)`} />
                   )}
                 </div>
+              )}
+            </div>
+
+            {/* ISZE / professional scheduled Feedback */}
+            <div className="bg-pens-navy/60 border border-amber-900/30 rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Briefcase size={14} className="text-amber-400" />
+                <p className="text-[10px] uppercase tracking-widest text-amber-400 font-semibold">
+                  Professional · ISZE Feedback
+                </p>
+              </div>
+              <p className="text-sm text-pens-cream/70 leading-relaxed">
+                {isze?.analysis ||
+                  (isze?.available
+                    ? isze.summary
+                    : 'No ISZE scheduled Feedback brief loaded. Set PENS_ISZE_FEEDBACK_DIR if the archive lives elsewhere.')}
+              </p>
+              {isze?.openLoops && isze.openLoops.length > 0 && (
+                <ul className="mt-3 space-y-1.5 border-t border-amber-900/30 pt-3">
+                  {isze.openLoops.map((loop, i) => (
+                    <li key={i} className="text-xs text-amber-100/70 leading-relaxed flex gap-2">
+                      <span className="text-amber-400 font-black shrink-0">•</span>
+                      <span>{loop}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {isze?.actions && isze.actions.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] uppercase tracking-widest text-amber-400/80 font-semibold mb-2">
+                    Close the loop
+                  </p>
+                  <ul className="space-y-1.5">
+                    {isze.actions.map((a, i) => (
+                      <li key={i} className="text-sm text-pens-cream/70 leading-relaxed flex gap-2">
+                        <span className="text-amber-400 font-black shrink-0">{i + 1}.</span>
+                        <span>{a}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {isze?.latestName && (
+                <p className="text-[10px] text-pens-cream/30 mt-3">
+                  Source: {isze.latestName}
+                  {isze.runCount ? ` · ${isze.runCount} briefs in archive` : ''}
+                </p>
               )}
             </div>
 
