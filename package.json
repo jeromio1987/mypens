@@ -13,7 +13,8 @@
     "bundle:context": "node scripts/bundle-context.mjs",
     "feedback:weekly": "node scripts/weekly-feedback.mjs",
     "import:garmin-dump": "python scripts/import-garmin-dump.py",
-    "analyze:garmin": "node scripts/analyze-garmin.mjs"
+    "analyze:garmin": "node scripts/analyze-garmin.mjs",
+    "analyze:periods": "node scripts/analyze-periods.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

@@ -83,15 +83,35 @@ npm run analyze:garmin -- --last
 
 Output: `docs/reports/garmin-analysis-<tag>.md`  
 Also embedded into `npm run feedback:weekly` as `metrics.health.garminEngine`
-(shown on `/weekly-feedback` as the orange **Garmin Analysis Engine** card).
+(shown on `/weekly-feedback` as the orange **Garmin Analysis Engine** card) —
+**this ISO week only**. Empty week stays empty; archive is never injected here.
 
-**Important:** Garmin Connect dumps are often a **historical archive** (years of
-JSON, filenames like `2019-06-06_…_sleepData.json`). They will not fill
-*this ISO week* unless you also have live sync or recent logging. When the
-current week has zero Garmin rows, `feedback:weekly` falls back to **all-time**
-archive analysis (`garminEngine.scope = "all-time"`) so the report is not a
-total blackout. Use `npm run analyze:garmin -- --all` or
-`node scripts/weekly-feedback.mjs --week=2019-09-01` to inspect history on purpose.
+## Period Review (multi-month advice)
+
+Longer windows get their own system so advice matches the period you discuss:
+
+| Window you mean | How to read it |
+|-----------------|----------------|
+| This week | `/weekly-feedback` only |
+| Last 3 / 6 / 12 months | `/period-review` (or `npm run analyze:periods`) |
+| A named stretch | Period Review lists good/mixed/bad stretches with dates |
+
+**Example:** 3 strong months, then 9 weak months → **12-month verdict = bad**, but
+the opening stretch is still labeled **good** when discussed alone. Advice is
+always tagged with the period it applies to.
+
+```cmd
+npm run analyze:periods
+npm run analyze:periods -- --as-of=2026-07-18
+npm run analyze:periods -- --dry
+```
+
+Output: `docs/reports/period-review-<asOf>.md` + `PeriodReviewReport` row →
+`GET /api/period-review` → `/period-review`.
+
+Garmin Connect dumps are often a **historical archive** (2019+). Use Period
+Review (or `npm run analyze:garmin -- --all`) for that history — not the weekly
+overview.
 
 ## Garmin dump folder (local)
 

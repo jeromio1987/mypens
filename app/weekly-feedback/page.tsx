@@ -169,12 +169,20 @@ export default function WeeklyFeedbackPage() {
               )}
             </div>
           </div>
-          <button
-            onClick={refresh}
-            className="text-xs text-pens-cream/30 hover:text-pens-cream/60 transition-colors px-2 py-1"
-          >
-            Refresh
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={refresh}
+              className="text-xs text-pens-cream/30 hover:text-pens-cream/60 transition-colors px-2 py-1"
+            >
+              Refresh
+            </button>
+            <Link
+              href="/period-review"
+              className="text-[10px] uppercase tracking-widest text-cyan-400/70 hover:text-cyan-300 transition-colors px-2"
+            >
+              Period review
+            </Link>
+          </div>
         </div>
 
         {loading && (
@@ -261,15 +269,7 @@ export default function WeeklyFeedbackPage() {
                     <Stat label="Weight" value={`${health.weight.lastKg}kg`} hint={`${health.weight.trend} ${Math.abs(health.weight.deltaKg)}kg`} />
                   )}
                   {health.training && (
-                    <Stat
-                      label="Training"
-                      value={`${health.training.sessions}×`}
-                      hint={
-                        health.training.totalKm
-                          ? `${health.training.totalKm}km · archive`
-                          : `${health.training.totalVolumeKg}kg vol`
-                      }
-                    />
+                    <Stat label="Training" value={`${health.training.sessions}×`} hint={`${health.training.totalVolumeKg}kg vol`} />
                   )}
                   {health.food && (
                     <Stat label="Food" value={`${health.food.avgKcalPerDay}`} hint={`${health.food.avgProteinPerDay}g protein/d`} />
@@ -291,15 +291,9 @@ export default function WeeklyFeedbackPage() {
                     Garmin Analysis Engine
                   </p>
                   <span className="text-[10px] text-pens-cream/30 ml-auto">
-                    {health.garminEngine.scope === 'all-time' ? 'archive · ' : ''}
-                    coverage {health.garminEngine.coverageScore ?? 0}/6
+                    this week · coverage {health.garminEngine.coverageScore ?? 0}/6
                   </span>
                 </div>
-                {health.garminEngine.scope === 'all-time' && (
-                  <p className="text-[11px] text-orange-300/70 mb-2 leading-relaxed">
-                    No Garmin rows for this ISO week — showing all-time analysis from your Connect dump (historical archive).
-                  </p>
-                )}
                 <p className="text-sm text-pens-cream/70 leading-relaxed mb-3">
                   {health.garminEngine.summary}
                 </p>

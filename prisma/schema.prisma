@@ -471,6 +471,22 @@ model WeeklyFeedbackReport {
   generatedAt DateTime @default(now())
 }
 
+// Multi-horizon period review (3m / 6m / 12m / all history).
+// Produced by `scripts/analyze-periods.mjs`. Weekly Feedback must not reuse
+// this as a stand-in for an empty ISO week — advice is period-scoped.
+model PeriodReviewReport {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // End date of the analysis window (yyyy-mm-dd). Unique so re-runs upsert.
+  asOf     String @unique
+  headline String
+  // Full structured report from analyzePeriods() — JSON text.
+  reportJson String @default("{}")
+
+  generatedAt DateTime @default(now())
+}
+
 // =====================================================================
 // ANCHOR — recovery & ADD self-management module.
 // All models below are ADDITIVE; no existing model is altered. Local-only,
