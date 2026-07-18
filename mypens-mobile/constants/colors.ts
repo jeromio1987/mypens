@@ -53,6 +53,7 @@ export const MODULE_COLORS = {
   training: { primary: '#f97316', bg: '#fff7ed', bgDark: '#431407', label: 'Training' },
   measurements: { primary: '#ec4899', bg: '#fdf2f8', bgDark: '#500724', label: 'Measurements' },
   journal: { primary: '#14b8a6', bg: '#f0fdfa', bgDark: '#042f2e', label: 'Journal' },
+  feedback: { primary: '#06b6d4', bg: '#ecfeff', bgDark: '#083344', label: 'Weekly Feedback' },
 }
 
 export default colors

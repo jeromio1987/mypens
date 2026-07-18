@@ -412,6 +412,46 @@ model AiVerdictCache {
 }
 
 // =====================================================================
+// WEEKLY FEEDBACK LOOP — Claude-generated deep weekly review.
+// Combines an analysis of the week's health/life data with an analysis
+// of how the user worked with Claude/Cursor (prompt quality, project
+// execution) parsed from local agent transcripts. Rows are produced by
+// `scripts/weekly-feedback.mjs` (runs locally, where the transcripts
+// live) and are read-only from the web + mobile clients.
+//
+// JSON-bearing columns are stored as TEXT (the same convention used by
+// DayEntry.tags / RecoveryEntry.supplements) to keep the model portable.
+// =====================================================================
+model WeeklyFeedbackReport {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // ISO week the report covers. `weekOf` is the Monday (yyyy-mm-dd),
+  // `weekEnd` the Sunday. `weekOf` is unique so re-runs upsert in place.
+  weekOf  String @unique
+  weekEnd String
+
+  // Prose sections produced by Claude (or a deterministic fallback when
+  // no ANTHROPIC_API_KEY is available).
+  combinedSummary    String
+  healthAnalysis     String
+  claudeWorkAnalysis String
+
+  // Short actionable lists — JSON arrays of strings.
+  wins          String @default("[]")
+  improvements  String @default("[]")
+  healthActions String @default("[]")
+
+  // Raw deterministic metrics that fed the analysis — JSON blob.
+  metrics String @default("{}")
+
+  // Which model generated the prose (null = deterministic fallback).
+  model String?
+
+  generatedAt DateTime @default(now())
+}
+
+// =====================================================================
 // ANCHOR — recovery & ADD self-management module.
 // All models below are ADDITIVE; no existing model is altered. Local-only,
 // single-user. Sensitive data — never logged to console, never serialized

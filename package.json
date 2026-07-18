@@ -10,7 +10,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "bundle:context": "node scripts/bundle-context.mjs"
+    "bundle:context": "node scripts/bundle-context.mjs",
+    "feedback:weekly": "node scripts/weekly-feedback.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
