@@ -310,6 +310,36 @@ def extract_sleep_seconds(d: dict) -> float | None:
                 return v
             except Exception:
                 continue
+
+    # Garmin Connect export shape (seen in *_sleepData.json):
+    #   deepSleepSeconds + lightSleepSeconds (+ remSleepSeconds)
+    #   optionally derive from sleepStartTimestampGMT → sleepEndTimestampGMT
+    parts = 0.0
+    found_stage = False
+    for k in ("deepSleepSeconds", "lightSleepSeconds", "remSleepSeconds"):
+        if d.get(k) is not None:
+            try:
+                parts += float(d[k])
+                found_stage = True
+            except Exception:
+                pass
+    if found_stage and parts > 0:
+        return parts
+
+    start = d.get("sleepStartTimestampGMT")
+    end = d.get("sleepEndTimestampGMT")
+    if start is not None and end is not None:
+        try:
+            s, e = float(start), float(end)
+            # ms vs seconds
+            if s > 1e12:
+                s, e = s / 1000.0, e / 1000.0
+            delta = e - s
+            if 3600 <= delta <= 16 * 3600:
+                return delta
+        except Exception:
+            pass
+
     # nested dailySleepDTO
     dto = d.get("dailySleepDTO")
     if isinstance(dto, dict):
