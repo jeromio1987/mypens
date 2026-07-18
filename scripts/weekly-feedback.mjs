@@ -656,12 +656,22 @@ async function main() {
       prisma = new PrismaClient()
       health = await collectHealthMetrics(prisma, weekOf, weekEnd)
       console.log('[weekly-feedback] health metrics collected')
-      // Garmin Analysis Engine — deep-dive over all imported Garmin tables
+      // Garmin Analysis Engine — deep-dive over all imported Garmin tables.
+      // Connect dumps are often HISTORICAL (2019–…), so if this ISO week is
+      // empty we fall back to all-time archive analysis instead of a blackout.
       try {
-        const gData = await loadGarminData(prisma, { weekOf, weekEnd })
-        const engine = analyzeGarmin(gData)
+        let gData = await loadGarminData(prisma, { weekOf, weekEnd })
+        let engine = analyzeGarmin(gData)
+        let scope = 'week'
+        if (engine.coverageScore === 0) {
+          gData = await loadGarminData(prisma, { allTime: true })
+          engine = analyzeGarmin({ ...gData, weekOf: null, weekEnd: null })
+          scope = 'all-time'
+          console.log('[weekly-feedback] Garmin engine: week empty → using ALL-TIME archive')
+        }
         health.garminEngine = {
           available: engine.coverageScore > 0,
+          scope,
           coverageScore: engine.coverageScore,
           inventory: engine.inventory,
           findings: engine.findings,
@@ -669,10 +679,45 @@ async function main() {
           wins: engine.wins,
           crossLinks: engine.crossLinks,
           domains: engine.domains,
-          summary: engine.summary,
+          summary:
+            scope === 'all-time' && engine.coverageScore > 0
+              ? `No Garmin rows in ${weekOf}–${weekEnd}. Archive analysis: ${engine.summary}`
+              : engine.summary,
+        }
+        // Surface archive sleep/training into health when week pillars are empty
+        if (scope === 'all-time' && engine.domains?.sleep && !health.sleep) {
+          health.sleep = {
+            nights: engine.domains.sleep.nights,
+            avgHours: engine.domains.sleep.avgHours,
+            avgQuality: engine.domains.sleep.avgQuality,
+            nightsUnder6h5: engine.domains.sleep.shortNights,
+            minHours: engine.domains.sleep.minHours,
+            maxHours: engine.domains.sleep.maxHours,
+            _note: 'from Garmin archive (not this ISO week)',
+          }
+        }
+        if (scope === 'all-time' && engine.domains?.activities && !health.training?.sessions) {
+          health.training = {
+            sessions: engine.domains.activities.count,
+            entries: engine.domains.activities.count,
+            totalVolumeKg: Math.round((engine.domains.activities.totalKm || 0) * 1000),
+            _note: 'Garmin activities (distance m as volume proxy); archive',
+          }
+        }
+        if (scope === 'all-time' && engine.domains) {
+          health.garmin = {
+            days: engine.inventory?.dateSpan ? 1 : 0,
+            stressAvg: engine.domains.stress?.avg ?? null,
+            hrvAvg: engine.domains.hrv?.avg ?? null,
+            restingHrAvg: engine.domains.restingHr?.avg ?? null,
+            stepsAvg: engine.domains.steps?.avg ?? null,
+            bodyBatteryMaxAvg: engine.domains.bodyBattery?.avgMax ?? null,
+            kindsPresent: engine.inventory?.wellnessKinds || [],
+            _note: 'archive',
+          }
         }
         console.log(
-          `[weekly-feedback] Garmin engine: coverage ${engine.coverageScore}/6, ${engine.findings.length} findings`,
+          `[weekly-feedback] Garmin engine (${scope}): coverage ${engine.coverageScore}/6, ${engine.findings.length} findings`,
         )
       } catch (err) {
         console.warn('[weekly-feedback] Garmin engine skipped:', err?.message || err)

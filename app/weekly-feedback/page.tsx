@@ -44,6 +44,7 @@ interface HealthMetrics {
     findings?: string[]
     risks?: string[]
     wins?: string[]
+    scope?: string
   }
 }
 
@@ -282,9 +283,15 @@ export default function WeeklyFeedbackPage() {
                     Garmin Analysis Engine
                   </p>
                   <span className="text-[10px] text-pens-cream/30 ml-auto">
+                    {health.garminEngine.scope === 'all-time' ? 'archive · ' : ''}
                     coverage {health.garminEngine.coverageScore ?? 0}/6
                   </span>
                 </div>
+                {health.garminEngine.scope === 'all-time' && (
+                  <p className="text-[11px] text-orange-300/70 mb-2 leading-relaxed">
+                    No Garmin rows for this ISO week — showing all-time analysis from your Connect dump (historical archive).
+                  </p>
+                )}
                 <p className="text-sm text-pens-cream/70 leading-relaxed mb-3">
                   {health.garminEngine.summary}
                 </p>
