@@ -29,7 +29,7 @@
 //   WEEKLY_FEEDBACK_MODEL optional — model id (default claude-sonnet-4-6)
 // =============================================================================
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -39,6 +39,35 @@ import { findTranscriptFiles, computeWeekMetrics, defaultTranscriptDirs } from '
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(__dirname, '..')
 const MODEL = process.env.WEEKLY_FEEDBACK_MODEL?.trim() || 'claude-sonnet-4-6'
+
+// ---------------------------------------------------------------------------
+// Minimal .env loader (no dependency). Next.js / Prisma read .env on their
+// own, but this standalone script does not — so load it here to keep the
+// weekly run to a single command. Existing env vars always win.
+// ---------------------------------------------------------------------------
+function loadDotEnv(root) {
+  const p = join(root, '.env')
+  if (!existsSync(p)) return
+  let txt
+  try {
+    txt = readFileSync(p, 'utf8')
+  } catch {
+    return
+  }
+  for (const line of txt.split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/)
+    if (!m) continue
+    const key = m[1]
+    let val = m[2].trim()
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1)
+    }
+    if (process.env[key] === undefined) process.env[key] = val
+  }
+}
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -429,6 +458,7 @@ ${JSON.stringify(metrics, null, 2)}
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
+  loadDotEnv(REPO_ROOT)
   const args = parseArgs(process.argv)
   const { weekOf, weekEnd } = resolveWeek(args)
   console.log(`[weekly-feedback] week ${weekOf} → ${weekEnd}`)
