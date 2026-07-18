@@ -261,7 +261,15 @@ export default function WeeklyFeedbackPage() {
                     <Stat label="Weight" value={`${health.weight.lastKg}kg`} hint={`${health.weight.trend} ${Math.abs(health.weight.deltaKg)}kg`} />
                   )}
                   {health.training && (
-                    <Stat label="Training" value={`${health.training.sessions}×`} hint={`${health.training.totalVolumeKg}kg vol`} />
+                    <Stat
+                      label="Training"
+                      value={`${health.training.sessions}×`}
+                      hint={
+                        health.training.totalKm
+                          ? `${health.training.totalKm}km · archive`
+                          : `${health.training.totalVolumeKg}kg vol`
+                      }
+                    />
                   )}
                   {health.food && (
                     <Stat label="Food" value={`${health.food.avgKcalPerDay}`} hint={`${health.food.avgProteinPerDay}g protein/d`} />

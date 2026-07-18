@@ -700,8 +700,10 @@ async function main() {
           health.training = {
             sessions: engine.domains.activities.count,
             entries: engine.domains.activities.count,
-            totalVolumeKg: Math.round((engine.domains.activities.totalKm || 0) * 1000),
-            _note: 'Garmin activities (distance m as volume proxy); archive',
+            totalVolumeKg: 0,
+            totalKm: engine.domains.activities.totalKm || 0,
+            totalHours: engine.domains.activities.totalHours || 0,
+            _note: 'Garmin activities from archive (not this ISO week)',
           }
         }
         if (scope === 'all-time' && engine.domains) {

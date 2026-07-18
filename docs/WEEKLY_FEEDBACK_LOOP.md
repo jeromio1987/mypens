@@ -85,6 +85,14 @@ Output: `docs/reports/garmin-analysis-<tag>.md`
 Also embedded into `npm run feedback:weekly` as `metrics.health.garminEngine`
 (shown on `/weekly-feedback` as the orange **Garmin Analysis Engine** card).
 
+**Important:** Garmin Connect dumps are often a **historical archive** (years of
+JSON, filenames like `2019-06-06_…_sleepData.json`). They will not fill
+*this ISO week* unless you also have live sync or recent logging. When the
+current week has zero Garmin rows, `feedback:weekly` falls back to **all-time**
+archive analysis (`garminEngine.scope = "all-time"`) so the report is not a
+total blackout. Use `npm run analyze:garmin -- --all` or
+`node scripts/weekly-feedback.mjs --week=2019-09-01` to inspect history on purpose.
+
 ## Garmin dump folder (local)
 
 If you drop a Garmin export folder into the repo (e.g. a UUID folder full of
