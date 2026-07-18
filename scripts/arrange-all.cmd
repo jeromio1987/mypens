@@ -34,14 +34,20 @@ if exist "C:\Users\jerom\Desktop\claude\ISZE\05_memory\briefs\feedback_history\"
   set "PENS_ISZE_FEEDBACK_DIR=C:\Users\jerom\Desktop\claude\ISZE\05_memory\briefs\feedback_history"
 )
 
-echo === 2/3 Generate weekly feedback ===
+echo === 2/4 Garmin Analysis Engine ===
+call npm run analyze:garmin -- --all
+if errorlevel 1 (
+  echo Garmin analyze had issues — continuing.
+)
+
+echo === 3/4 Generate weekly feedback ===
 call npm run feedback:weekly
 if errorlevel 1 (
   echo Weekly feedback failed.
   exit /b 1
 )
 
-echo === 3/3 Done ===
+echo === 4/4 Done ===
 echo Open http://localhost:5050/weekly-feedback  ^(start with: npx next dev -p 5050^)
 echo.
 endlocal

@@ -69,6 +69,22 @@ that archive.
 On Windows the default path is:
 `C:\Users\jerom\Desktop\claude\ISZE\05_memory\briefs\feedback_history`
 
+## Garmin Analysis Engine
+
+After data is in the DB, a deterministic engine deep-dives **everything** Garmin-related
+(sleep, weight, activities, stress, HRV, steps, RHR, body battery) and computes
+trends + correlations (e.g. stress↔sleep, HRV↔stress).
+
+```cmd
+npm run analyze:garmin           # current week
+npm run analyze:garmin -- --all  # entire history
+npm run analyze:garmin -- --last
+```
+
+Output: `docs/reports/garmin-analysis-<tag>.md`  
+Also embedded into `npm run feedback:weekly` as `metrics.health.garminEngine`
+(shown on `/weekly-feedback` as the orange **Garmin Analysis Engine** card).
+
 ## Garmin dump folder (local)
 
 If you drop a Garmin export folder into the repo (e.g. a UUID folder full of

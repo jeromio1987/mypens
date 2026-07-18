@@ -39,6 +39,7 @@ import { fileURLToPath } from 'node:url'
 import { weekBounds, shiftDateStr } from './lib/weekDates.mjs'
 import { findTranscriptFiles, computeWeekMetrics, defaultTranscriptDirs } from './lib/transcriptMetrics.mjs'
 import { loadIszeFeedback, defaultIszeFeedbackDir } from './lib/iszeFeedback.mjs'
+import { analyzeGarmin, loadGarminData } from './lib/garminAnalyze.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(__dirname, '..')
@@ -392,8 +393,8 @@ async function runClaude({ weekOf, weekEnd, health, work, links, isze }) {
   }
 
   const system = `You are MY PENS Weekly Feedback — a sharp, honest personal review system for a single power-user.
-You produce a weekly review with three connected parts: (1) health/life data, (2) how well the user worked with Claude/Cursor this week (prompt quality), and (3) professional/ISZE feedback already produced by a Claude Desktop scheduled task (summarise it; do not invent ISZE facts).
-Voice: direct, analytical, a little dry. No wellness platitudes, no corporate filler, no em-dashes. Prefer concrete numbers from the data. Be specific and useful, not generic.
+You produce a weekly review with three connected parts: (1) health/life data including the Garmin Analysis Engine output (sleep, stress, HRV, steps, RHR, activities, correlations), (2) how well the user worked with Claude/Cursor this week (prompt quality), and (3) professional/ISZE feedback already produced by a Claude Desktop scheduled task (summarise it; do not invent ISZE facts).
+Voice: direct, analytical, a little dry. No wellness platitudes, no corporate filler, no em-dashes. Prefer concrete numbers from the data. Be specific and useful, not generic. When garminEngine.findings/risks are present, weave the strongest 1-2 into healthAnalysis — do not ignore the engine.
 For the Claude-work half: judge prompt quality on specificity, included context (files/goals/constraints), and whether short vague prompts caused rework. Give concrete, actionable prompting upgrades the user can apply next week.
 For ISZE: emphasise closing open loops that keep recurring (e.g. CLAUDE.md staleness). If no ISZE brief is available, say so briefly in iszeAnalysis.
 Respect privacy: Anchor recovery data is sensitive; refer to it only in aggregate (streaks, counts), never speculate about details.
@@ -404,6 +405,9 @@ Return ONLY valid minified JSON, no markdown fences, with exactly these keys:
 
 HEALTH / LIFE DATA (JSON):
 ${JSON.stringify(health)}
+
+GARMIN ANALYSIS ENGINE (deterministic deep-dive — trust these findings):
+${JSON.stringify(health.garminEngine || { available: false })}
 
 CLAUDE / CURSOR WORK DATA (JSON, parsed from local transcripts):
 ${JSON.stringify({
@@ -511,6 +515,12 @@ function buildFallback({ health, work, links, isze }) {
     if (g.restingHrAvg != null) bits.push(`RHR ${g.restingHrAvg}`)
     if (g.stepsAvg != null) bits.push(`steps ~${Math.round(g.stepsAvg)}`)
     if (bits.length) h.push(`Garmin wellness (${g.days}d): ${bits.join(', ')}.`)
+  }
+  if (health.garminEngine?.available) {
+    h.push(health.garminEngine.summary)
+    for (const f of (health.garminEngine.findings || []).slice(0, 3)) {
+      if (!h.includes(f)) h.push(f)
+    }
   }
   if (h.length === 0) h.push('No health data logged this week — nothing to analyse.')
 
@@ -646,6 +656,28 @@ async function main() {
       prisma = new PrismaClient()
       health = await collectHealthMetrics(prisma, weekOf, weekEnd)
       console.log('[weekly-feedback] health metrics collected')
+      // Garmin Analysis Engine — deep-dive over all imported Garmin tables
+      try {
+        const gData = await loadGarminData(prisma, { weekOf, weekEnd })
+        const engine = analyzeGarmin(gData)
+        health.garminEngine = {
+          available: engine.coverageScore > 0,
+          coverageScore: engine.coverageScore,
+          inventory: engine.inventory,
+          findings: engine.findings,
+          risks: engine.risks,
+          wins: engine.wins,
+          crossLinks: engine.crossLinks,
+          domains: engine.domains,
+          summary: engine.summary,
+        }
+        console.log(
+          `[weekly-feedback] Garmin engine: coverage ${engine.coverageScore}/6, ${engine.findings.length} findings`,
+        )
+      } catch (err) {
+        console.warn('[weekly-feedback] Garmin engine skipped:', err?.message || err)
+        health.garminEngine = { available: false }
+      }
     } catch (err) {
       console.warn('[weekly-feedback] DB unavailable, health metrics skipped:', err?.message || err)
       health = emptyHealth()
@@ -657,6 +689,12 @@ async function main() {
   }
 
   const links = crossLink(health, work)
+  // Merge Garmin engine risks into cross-links for the report surface
+  if (health.garminEngine?.risks?.length) {
+    for (const r of health.garminEngine.risks.slice(0, 2)) {
+      if (!links.includes(r)) links.push(r)
+    }
+  }
 
   // Analysis: Claude if possible, deterministic fallback otherwise.
   let report = null
@@ -767,6 +805,7 @@ function emptyHealth() {
     anchor: null,
     milestones: [],
     garmin: null,
+    garminEngine: { available: false },
   }
 }
 

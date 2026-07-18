@@ -37,6 +37,14 @@ interface HealthMetrics {
   food?: { avgKcalPerDay: number; avgProteinPerDay: number } | null
   mood?: { avgMood: number } | null
   anchor?: { cleanStreakDays: number; alcoholDaysThisWeek: number } | null
+  garminEngine?: {
+    available?: boolean
+    coverageScore?: number
+    summary?: string
+    findings?: string[]
+    risks?: string[]
+    wins?: string[]
+  }
 }
 
 interface Report {
@@ -264,6 +272,38 @@ export default function WeeklyFeedbackPage() {
                 </div>
               )}
             </div>
+
+            {/* Garmin Analysis Engine */}
+            {health?.garminEngine?.available && (
+              <div className="bg-pens-navy/60 border border-orange-900/30 rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Activity size={14} className="text-orange-400" />
+                  <p className="text-[10px] uppercase tracking-widest text-orange-400 font-semibold">
+                    Garmin Analysis Engine
+                  </p>
+                  <span className="text-[10px] text-pens-cream/30 ml-auto">
+                    coverage {health.garminEngine.coverageScore ?? 0}/6
+                  </span>
+                </div>
+                <p className="text-sm text-pens-cream/70 leading-relaxed mb-3">
+                  {health.garminEngine.summary}
+                </p>
+                {(health.garminEngine.findings ?? []).slice(0, 6).map((f, i) => (
+                  <p key={i} className="text-xs text-pens-cream/55 leading-relaxed mb-1.5 flex gap-2">
+                    <span className="text-orange-400 shrink-0">•</span>
+                    <span>{f}</span>
+                  </p>
+                ))}
+                {(health.garminEngine.risks ?? []).length > 0 && (
+                  <div className="mt-3 border-t border-orange-900/30 pt-3">
+                    <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold mb-2">Risks</p>
+                    {(health.garminEngine.risks ?? []).map((r, i) => (
+                      <p key={i} className="text-xs text-pens-cream/60 leading-relaxed mb-1">→ {r}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ISZE / professional scheduled Feedback */}
             <div className="bg-pens-navy/60 border border-amber-900/30 rounded-2xl p-5">
