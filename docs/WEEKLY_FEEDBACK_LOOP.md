@@ -100,6 +100,11 @@ Longer windows get their own system so advice matches the period you discuss:
 the opening stretch is still labeled **good** when discussed alone. Advice is
 always tagged with the period it applies to.
 
+The engine also **cross-compares metrics** (sleep ↔ stress ↔ HRV ↔ resting HR ↔
+steps ↔ activity): correlations, pattern reads, and a long-form **Deep analysis**
+block on `/period-review`. Example pattern: resting HR ~53 with zero sessions is
+treated as a *recovery illusion* (calm because idle), not as proof of fitness.
+
 ```cmd
 npm run analyze:periods
 npm run analyze:periods -- --as-of=2026-07-18
