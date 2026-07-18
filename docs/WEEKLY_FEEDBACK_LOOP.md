@@ -69,6 +69,27 @@ that archive.
 On Windows the default path is:
 `C:\Users\jerom\Desktop\claude\ISZE\05_memory\briefs\feedback_history`
 
+## Garmin dump folder (local)
+
+If you drop a Garmin export folder into the repo (e.g. a UUID folder full of
+`.fit` / wellness JSON):
+
+```cmd
+python scripts\import-garmin-dump.py "ba80da99-886a-4f1b-989e-e41afa51d239_1"
+```
+
+Or run everything in one go:
+
+```cmd
+scripts\arrange-all.cmd "ba80da99-886a-4f1b-989e-e41afa51d239_1"
+```
+
+That imports activities into Postgres (`GarminActivity`), best-effort weight/sleep
+from wellness JSON, then runs `npm run feedback:weekly`.
+
+For live sleep/weight without a dump, use `/garmin` → Sync sleep / Sync body weight
+(needs Garmin OAuth connected under `/integrations`).
+
 ## Past weight without a Tanita CSV
 
 You do not need Health Planet. Create a tiny CSV yourself and import it:

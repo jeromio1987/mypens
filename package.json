@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "bundle:context": "node scripts/bundle-context.mjs",
-    "feedback:weekly": "node scripts/weekly-feedback.mjs"
+    "feedback:weekly": "node scripts/weekly-feedback.mjs",
+    "import:garmin-dump": "python scripts/import-garmin-dump.py"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
