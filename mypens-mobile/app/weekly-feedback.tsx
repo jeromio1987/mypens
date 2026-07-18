@@ -1,10 +1,11 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
   useColorScheme,
@@ -16,6 +17,10 @@ import { Feather } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
+import {
+  getWeeklyFeedbackNotifEnabled,
+  setWeeklyFeedbackNotifEnabled,
+} from '@/lib/weeklyFeedbackNotifications'
 
 const MOD = MODULE_COLORS.feedback
 
@@ -81,6 +86,15 @@ export default function WeeklyFeedbackScreen() {
     queryFn: fetchReport,
     enabled: configured,
   })
+
+  const [notifEnabled, setNotifEnabled] = useState(true)
+  useEffect(() => {
+    getWeeklyFeedbackNotifEnabled().then(setNotifEnabled)
+  }, [])
+  const onToggleNotif = async (v: boolean) => {
+    setNotifEnabled(v)
+    await setWeeklyFeedbackNotifEnabled(v)
+  }
 
   const report = data ?? null
   const work = report?.metrics?.work
@@ -222,6 +236,29 @@ export default function WeeklyFeedbackScreen() {
           </Text>
         </>
       )}
+
+      {/* Sunday reminder toggle — available regardless of report state */}
+      {Platform.OS !== 'web' && (
+        <View
+          style={[
+            styles.card,
+            styles.settingRow,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={[styles.cardTitle, { color: colors.foreground, fontSize: 14 }]}>Sunday reminder</Text>
+            <Text style={[styles.body, { color: colors.mutedForeground, fontSize: 12, marginTop: 2 }]}>
+              A weekly nudge at 18:00 to review this report.
+            </Text>
+          </View>
+          <Switch
+            value={notifEnabled}
+            onValueChange={onToggleNotif}
+            trackColor={{ true: MOD.primary, false: colors.border }}
+          />
+        </View>
+      )}
     </ScrollView>
   )
 }
@@ -300,6 +337,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
   },
+  settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   eyebrow: { fontFamily: 'Inter_600SemiBold', fontSize: 10, letterSpacing: 1, marginBottom: 8 },
   cardTitle: { fontFamily: 'Inter_700Bold', fontSize: 16 },
   summary: { fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 22 },
