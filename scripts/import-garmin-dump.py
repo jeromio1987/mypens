@@ -71,14 +71,28 @@ def load_dotenv(path: Path) -> None:
 
 load_dotenv(ROOT / ".env")
 
-DATABASE_URL = (os.environ.get("DATABASE_URL") or "").strip()
-if not DATABASE_URL:
-    print("ERROR: DATABASE_URL not set. Put it in .env or set the env var.")
-    sys.exit(1)
 
-# pgbouncer URLs often break DDL/long imports — strip query flags that confuse psycopg
-if "pgbouncer=true" in DATABASE_URL:
-    print("NOTE: DATABASE_URL uses pgbouncer — using it for inserts (should work for data).")
+def resolve_database_url() -> str:
+    """Prefer DIRECT_URL (port 5432). Strip pgbouncer query params psycopg rejects."""
+    direct = (os.environ.get("DIRECT_URL") or "").strip()
+    url = direct or (os.environ.get("DATABASE_URL") or "").strip()
+    if not url:
+        return ""
+    # psycopg: invalid URI query parameter: "pgbouncer"
+    if "pgbouncer=" in url or "pgbouncer" in url:
+        from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+
+        parsed = urlparse(url)
+        q = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k.lower() != "pgbouncer"]
+        url = urlunparse(parsed._replace(query=urlencode(q)))
+        print("NOTE: stripped pgbouncer= from DB URL for psycopg.")
+    return url
+
+
+DATABASE_URL = resolve_database_url()
+if not DATABASE_URL:
+    print("ERROR: DATABASE_URL (or DIRECT_URL) not set. Put it in .env.")
+    sys.exit(1)
 
 
 def cuid_like(fit_file_id: str) -> str:
