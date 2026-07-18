@@ -102,24 +102,91 @@ function resolveWeek(args) {
 // app/api/verdict/summary/route.ts but scoped to a Mon–Sun window and
 // extended with Anchor recovery signals.
 // ---------------------------------------------------------------------------
+/** Per-table query that never kills the whole report on schema drift. */
+async function safeQuery(label, fn, fallback = []) {
+  try {
+    return await fn()
+  } catch (err) {
+    console.warn(`[weekly-feedback] ${label} skipped:`, err?.message?.split('\n')[0] || err)
+    return fallback
+  }
+}
+
 async function collectHealthMetrics(prisma, weekOf, weekEnd) {
   const range = { gte: weekOf, lte: weekEnd }
 
+  // Select only columns we actually use — avoids hard-failing when the
+  // live DB is behind the Prisma schema (e.g. missing JournalEntry.voicePath).
   const [weights, foods, sleeps, trainings, journals, days, recovery, cravings, milestones] =
     await Promise.all([
-      prisma.weightEntry.findMany({ where: { date: range }, orderBy: { date: 'asc' } }),
-      prisma.foodEntry.findMany({ where: { date: range } }),
-      prisma.sleepEntry.findMany({ where: { date: range }, orderBy: { date: 'asc' } }),
-      prisma.trainingEntry.findMany({ where: { date: range } }),
-      prisma.journalEntry.findMany({ where: { date: range } }),
-      prisma.dayEntry.findMany({ where: { date: range } }),
-      // Anchor: pull enough history to compute the running clean streak as of
-      // weekEnd, plus the in-week slips. Aggregate only — never notes.
-      prisma.recoveryEntry.findMany({ orderBy: { date: 'desc' }, take: 400 }),
-      prisma.cravingEvent.findMany({
-        where: { createdAt: { gte: new Date(`${weekOf}T00:00:00`), lte: new Date(`${weekEnd}T23:59:59`) } },
-      }),
-      prisma.recoveryMilestone.findMany({ where: { date: range } }),
+      safeQuery('weight', () =>
+        prisma.weightEntry.findMany({
+          where: { date: range },
+          orderBy: { date: 'asc' },
+          select: { date: true, trueWeightKg: true, scaleKg: true },
+        }),
+      ),
+      safeQuery('food', () =>
+        prisma.foodEntry.findMany({
+          where: { date: range },
+          select: { date: true, kcal: true, proteinG: true },
+        }),
+      ),
+      safeQuery('sleep', () =>
+        prisma.sleepEntry.findMany({
+          where: { date: range },
+          orderBy: { date: 'asc' },
+          select: { date: true, hours: true, quality: true },
+        }),
+      ),
+      safeQuery('training', () =>
+        prisma.trainingEntry.findMany({
+          where: { date: range },
+          select: { date: true, volume: true },
+        }),
+      ),
+      safeQuery('journal', () =>
+        prisma.journalEntry.findMany({
+          where: { date: range },
+          select: { date: true, mood: true },
+        }),
+      ),
+      safeQuery('day', () =>
+        prisma.dayEntry.findMany({
+          where: { date: range },
+          select: { date: true, mode: true, tags: true },
+        }),
+      ),
+      // Anchor: aggregate only — never notes.
+      safeQuery('recovery', () =>
+        prisma.recoveryEntry.findMany({
+          orderBy: { date: 'desc' },
+          take: 400,
+          select: {
+            date: true,
+            alcoholDrinks: true,
+            cocaineUsed: true,
+            escortUsed: true,
+          },
+        }),
+      ),
+      safeQuery('cravings', () =>
+        prisma.cravingEvent.findMany({
+          where: {
+            createdAt: {
+              gte: new Date(`${weekOf}T00:00:00`),
+              lte: new Date(`${weekEnd}T23:59:59`),
+            },
+          },
+          select: { outcome: true },
+        }),
+      ),
+      safeQuery('milestones', () =>
+        prisma.recoveryMilestone.findMany({
+          where: { date: range },
+          select: { date: true, kind: true, label: true },
+        }),
+      ),
     ])
 
   // --- Weight ---
