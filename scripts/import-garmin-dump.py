@@ -202,8 +202,11 @@ def inventory(dump: Path) -> dict:
     weightish = [
         p
         for p in jsons + csvs
-        if re.search(r"weight|body.?comp|wellness|scale", p.name, re.I)
-        or re.search(r"weight|body.?comp", str(p), re.I)
+        if re.search(
+            r"weight|body.?comp|wellness|scale|biometric|user_metrics|bodycomp",
+            p.name + " " + str(p),
+            re.I,
+        )
     ]
     sleepish = [
         p
@@ -217,6 +220,119 @@ def inventory(dump: Path) -> dict:
         "weightish": weightish,
         "sleepish": sleepish,
     }
+
+
+def walk_dicts(node, out: list):
+    """Collect every dict in a nested JSON tree."""
+    if isinstance(node, dict):
+        out.append(node)
+        for v in node.values():
+            walk_dicts(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            walk_dicts(v, out)
+
+
+def probe_json(paths: list[Path], label: str, limit: int = 3) -> None:
+    """Print structure hints so we can see Garmin export shapes."""
+    print(f"[garmin-dump] probe {label} (first {min(limit, len(paths))} files):")
+    for path in paths[:limit]:
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        except Exception as e:
+            print(f"  {path.name}: unreadable ({e})")
+            continue
+        dicts: list = []
+        walk_dicts(raw, dicts)
+        keys = sorted({k for d in dicts[:40] for k in d.keys()})[:40]
+        print(f"  {path.name}: type={type(raw).__name__} nested_dicts={len(dicts)} keys≈{keys}")
+
+
+DATE_KEYS = ("calendarDate", "date", "calendar_date", "day", "startDate")
+SLEEP_SEC_KEYS = (
+    "sleepingSeconds",
+    "sleepTimeSeconds",
+    "durationInSeconds",
+    "totalSleepTimeInSeconds",
+    "sleepDurationInSeconds",
+    "duration",
+)
+WEIGHT_KEYS = (
+    "weightInGrams",
+    "weight",
+    "weightKg",
+    "weightInKilograms",
+    "bodyWeight",
+)
+
+
+def extract_date(d: dict) -> str | None:
+    for k in DATE_KEYS:
+        v = d.get(k)
+        if not v:
+            continue
+        s = str(v)
+        m = re.search(r"(\d{4}-\d{2}-\d{2})", s)
+        if m:
+            return m.group(1)
+        # Garmin sometimes uses ms timestamps
+        try:
+            n = float(v)
+            if n > 1e12:
+                return datetime.fromtimestamp(n / 1000, tz=timezone.utc).date().isoformat()
+            if n > 1e9:
+                return datetime.fromtimestamp(n, tz=timezone.utc).date().isoformat()
+        except Exception:
+            pass
+    # startTimeInSeconds style
+    for k in ("startTimeInSeconds", "sleepStartTimestampGMT", "startTimeGMT"):
+        v = d.get(k)
+        if v is None:
+            continue
+        try:
+            n = float(v)
+            if n > 1e12:
+                n /= 1000
+            return datetime.fromtimestamp(n, tz=timezone.utc).date().isoformat()
+        except Exception:
+            continue
+    return None
+
+
+def extract_sleep_seconds(d: dict) -> float | None:
+    for k in SLEEP_SEC_KEYS:
+        if k in d and d[k] is not None:
+            try:
+                v = float(d[k])
+                # if value looks like hours already
+                if k == "duration" and v < 24:
+                    return v * 3600
+                return v
+            except Exception:
+                continue
+    # nested dailySleepDTO
+    dto = d.get("dailySleepDTO")
+    if isinstance(dto, dict):
+        return extract_sleep_seconds(dto)
+    return None
+
+
+def extract_weight_kg(d: dict) -> float | None:
+    for k in WEIGHT_KEYS:
+        if k not in d or d[k] is None:
+            continue
+        try:
+            v = float(d[k])
+        except Exception:
+            continue
+        if k in ("weightKg", "weightInKilograms") or (k == "weight" and v < 250):
+            return v
+        # grams
+        if v > 200:
+            return v / 1000.0
+        if 30 <= v <= 250:
+            return v
+    return None
 
 
 def import_fits(conn, fits: list[Path]) -> tuple[int, int, int]:
@@ -286,38 +402,35 @@ def import_fits(conn, fits: list[Path]) -> tuple[int, int, int]:
 
 
 def try_import_weight_json(conn, paths: list[Path]) -> tuple[int, int]:
-    """Best-effort parse of Garmin Connect body-comp style JSON arrays."""
+    """Walk nested Garmin JSON and upsert any weight-looking dicts."""
+    from secrets import token_hex
+
     ingested = skipped = 0
+    seen_dates: set[str] = set()
     with conn.cursor() as cur:
         for path in paths:
             try:
                 raw = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
             except Exception:
                 continue
-            items = raw if isinstance(raw, list) else raw.get("bodyComps") or raw.get("weight") or []
-            if not isinstance(items, list):
-                continue
-            for bc in items:
-                if not isinstance(bc, dict):
-                    continue
-                date = bc.get("calendarDate") or bc.get("date")
-                grams = bc.get("weightInGrams") or bc.get("weight")
-                if not date or not grams:
-                    continue
-                try:
-                    scale = float(grams) / (1000.0 if float(grams) > 200 else 1.0)
-                except Exception:
+            dicts: list = []
+            walk_dicts(raw, dicts)
+            for bc in dicts:
+                scale = extract_weight_kg(bc)
+                date = extract_date(bc)
+                if not scale or not date or date in seen_dates:
                     continue
                 if scale < 30 or scale > 250:
                     continue
+                seen_dates.add(date)
                 cur.execute('SELECT id, source FROM "WeightEntry" WHERE date = %s LIMIT 1', (date,))
                 existing = cur.fetchone()
                 if existing and existing[1] == "manual":
                     skipped += 1
                     continue
-                bf = bc.get("bodyFatPercentage")
+                bf = bc.get("bodyFatPercentage") or bc.get("bodyFat")
                 muscle_g = bc.get("muscleMassInGrams")
-                bone_g = bc.get("boneWeightInGrams")
+                bone_g = bc.get("boneWeightInGrams") or bc.get("boneMassInGrams")
                 muscle = float(muscle_g) / 1000 if muscle_g else None
                 bone = float(bone_g) / 1000 if bone_g else None
                 if existing:
@@ -331,9 +444,6 @@ def try_import_weight_json(conn, paths: list[Path]) -> tuple[int, int]:
                         (scale, scale, bf, muscle, bone, existing[0]),
                     )
                 else:
-                    # minimal row — confounders defaulted
-                    from secrets import token_hex
-
                     wid = f"c{token_hex(12)}"
                     cur.execute(
                         """
@@ -355,42 +465,50 @@ def try_import_weight_json(conn, paths: list[Path]) -> tuple[int, int]:
 
 
 def try_import_sleep_json(conn, paths: list[Path]) -> tuple[int, int]:
+    """Walk nested Garmin sleep JSON (dailySleepDTO, sleepTimeSeconds, …)."""
+    from secrets import token_hex
+
     ingested = skipped = 0
+    seen_dates: set[str] = set()
     with conn.cursor() as cur:
         for path in paths:
             try:
                 raw = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
             except Exception:
                 continue
-            items = raw if isinstance(raw, list) else raw.get("sleep") or raw.get("dailies") or []
-            if not isinstance(items, list):
-                continue
-            for d in items:
-                if not isinstance(d, dict):
-                    continue
-                date = d.get("calendarDate") or d.get("date")
-                secs = d.get("sleepingSeconds") or d.get("durationInSeconds")
+            dicts: list = []
+            walk_dicts(raw, dicts)
+            for d in dicts:
+                # Prefer the DTO if present
+                src = d.get("dailySleepDTO") if isinstance(d.get("dailySleepDTO"), dict) else d
+                date = extract_date(src) or extract_date(d)
+                secs = extract_sleep_seconds(src) or extract_sleep_seconds(d)
                 if not date or not secs:
+                    continue
+                if date in seen_dates:
                     continue
                 hours = round(float(secs) / 3600.0, 1)
                 if hours < 1 or hours > 16:
                     continue
+                seen_dates.add(date)
                 cur.execute('SELECT 1 FROM "SleepEntry" WHERE date = %s', (date,))
                 if cur.fetchone():
                     skipped += 1
                     continue
-                from secrets import token_hex
-
                 sid = f"c{token_hex(12)}"
-                # Approximate bedtime from 7:00 wake
                 total = 7 * 60 - int(hours * 60)
                 total = (total % 1440 + 1440) % 1440
                 bed = f"{total // 60:02d}:{total % 60:02d}"
-                hrv = d.get("avgSleepingHRV") or d.get("avgHrv")
+                hrv = src.get("avgSleepingHRV") or src.get("avgHrv") or d.get("avgSleepingHRV")
                 quality = 3
-                if hrv:
-                    hrv = float(hrv)
-                    quality = 1 if hrv < 30 else 2 if hrv < 45 else 3 if hrv < 60 else 4 if hrv < 75 else 5
+                if hrv is not None:
+                    try:
+                        hv = float(hrv)
+                        quality = 1 if hv < 30 else 2 if hv < 45 else 3 if hv < 60 else 4 if hv < 75 else 5
+                    except Exception:
+                        hv = None
+                else:
+                    hv = None
                 try:
                     cur.execute(
                         """
@@ -399,7 +517,7 @@ def try_import_sleep_json(conn, paths: list[Path]) -> tuple[int, int]:
                         VALUES (%s, NOW(), %s, %s, '07:00', %s, %s, %s)
                         ON CONFLICT (date) DO NOTHING
                         """,
-                        (sid, date, bed, hours, quality, hrv),
+                        (sid, date, bed, hours, quality, hv),
                     )
                     if cur.rowcount:
                         ingested += 1
@@ -449,19 +567,31 @@ def main() -> None:
         else:
             print("[garmin-dump] no .fit activities found")
 
-        if inv["weightish"]:
-            print(f"[garmin-dump] trying weight/body-comp from {len(inv['weightish'])} files …")
-            w, ws = try_import_weight_json(conn, inv["weightish"])
+        # Sleep first — this dump has many sleep JSON files in a non-API shape.
+        sleep_paths = inv["sleepish"] or []
+        if sleep_paths:
+            probe_json(sleep_paths, "sleep")
+            print(f"[garmin-dump] importing sleep from {len(sleep_paths)} files …")
+            sl, ss = try_import_sleep_json(conn, sleep_paths)
+            print(f"  sleep: {sl} ingested, {ss} skipped")
+            if sl == 0 and ss == 0:
+                print("  (no recognisable sleep fields — probe keys above matter)")
+        else:
+            print("[garmin-dump] no sleep-looking JSON — use /garmin Sync sleep if OAuth is connected")
+
+        weight_paths = inv["weightish"] or []
+        # If nothing named weight, scan a sample of all JSON for weight keys (slow but useful).
+        if not weight_paths and inv["json"]:
+            print("[garmin-dump] no weight-named files — scanning all JSON for weight fields …")
+            weight_paths = inv["json"]
+        if weight_paths:
+            if len(weight_paths) <= 30:
+                probe_json(weight_paths, "weight")
+            print(f"[garmin-dump] importing weight from {len(weight_paths)} files …")
+            w, ws = try_import_weight_json(conn, weight_paths)
             print(f"  weight: {w} ingested, {ws} skipped")
         else:
-            print("[garmin-dump] no weight-looking JSON/CSV — use /garmin Sync body weight if OAuth is connected")
-
-        if inv["sleepish"]:
-            print(f"[garmin-dump] trying sleep from {len(inv['sleepish'])} files …")
-            sl, ss = try_import_sleep_json(conn, inv["sleepish"])
-            print(f"  sleep: {sl} ingested, {ss} skipped")
-        else:
-            print("[garmin-dump] no sleep-looking JSON/CSV — use /garmin Sync sleep if OAuth is connected")
+            print("[garmin-dump] no JSON for weight — use /garmin Sync body weight if OAuth is connected")
 
     print("[garmin-dump] done.")
     print("Next: npm run feedback:weekly   then open /weekly-feedback")
