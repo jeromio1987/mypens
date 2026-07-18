@@ -117,77 +117,95 @@ async function collectHealthMetrics(prisma, weekOf, weekEnd) {
 
   // Select only columns we actually use — avoids hard-failing when the
   // live DB is behind the Prisma schema (e.g. missing JournalEntry.voicePath).
-  const [weights, foods, sleeps, trainings, journals, days, recovery, cravings, milestones] =
-    await Promise.all([
-      safeQuery('weight', () =>
-        prisma.weightEntry.findMany({
-          where: { date: range },
-          orderBy: { date: 'asc' },
-          select: { date: true, trueWeightKg: true, scaleKg: true },
-        }),
-      ),
-      safeQuery('food', () =>
-        prisma.foodEntry.findMany({
-          where: { date: range },
-          select: { date: true, kcal: true, proteinG: true },
-        }),
-      ),
-      safeQuery('sleep', () =>
-        prisma.sleepEntry.findMany({
-          where: { date: range },
-          orderBy: { date: 'asc' },
-          select: { date: true, hours: true, quality: true },
-        }),
-      ),
-      safeQuery('training', () =>
-        prisma.trainingEntry.findMany({
-          where: { date: range },
-          select: { date: true, volume: true },
-        }),
-      ),
-      safeQuery('journal', () =>
-        prisma.journalEntry.findMany({
-          where: { date: range },
-          select: { date: true, mood: true },
-        }),
-      ),
-      safeQuery('day', () =>
-        prisma.dayEntry.findMany({
-          where: { date: range },
-          select: { date: true, mode: true, tags: true },
-        }),
-      ),
-      // Anchor: aggregate only — never notes.
-      safeQuery('recovery', () =>
-        prisma.recoveryEntry.findMany({
-          orderBy: { date: 'desc' },
-          take: 400,
-          select: {
-            date: true,
-            alcoholDrinks: true,
-            cocaineUsed: true,
-            escortUsed: true,
+  const [
+    weights,
+    foods,
+    sleeps,
+    trainings,
+    journals,
+    days,
+    recovery,
+    cravings,
+    milestones,
+    garminMetrics,
+  ] = await Promise.all([
+    safeQuery('weight', () =>
+      prisma.weightEntry.findMany({
+        where: { date: range },
+        orderBy: { date: 'asc' },
+        select: { date: true, trueWeightKg: true, scaleKg: true },
+      }),
+    ),
+    safeQuery('food', () =>
+      prisma.foodEntry.findMany({
+        where: { date: range },
+        select: { date: true, kcal: true, proteinG: true },
+      }),
+    ),
+    safeQuery('sleep', () =>
+      prisma.sleepEntry.findMany({
+        where: { date: range },
+        orderBy: { date: 'asc' },
+        select: { date: true, hours: true, quality: true },
+      }),
+    ),
+    safeQuery('training', () =>
+      prisma.trainingEntry.findMany({
+        where: { date: range },
+        select: { date: true, volume: true },
+      }),
+    ),
+    safeQuery('journal', () =>
+      prisma.journalEntry.findMany({
+        where: { date: range },
+        select: { date: true, mood: true },
+      }),
+    ),
+    safeQuery('day', () =>
+      prisma.dayEntry.findMany({
+        where: { date: range },
+        select: { date: true, mode: true, tags: true },
+      }),
+    ),
+    // Anchor: aggregate only — never notes.
+    safeQuery('recovery', () =>
+      prisma.recoveryEntry.findMany({
+        orderBy: { date: 'desc' },
+        take: 400,
+        select: {
+          date: true,
+          alcoholDrinks: true,
+          cocaineUsed: true,
+          escortUsed: true,
+        },
+      }),
+    ),
+    safeQuery('cravings', () =>
+      prisma.cravingEvent.findMany({
+        where: {
+          createdAt: {
+            gte: new Date(`${weekOf}T00:00:00`),
+            lte: new Date(`${weekEnd}T23:59:59`),
           },
-        }),
-      ),
-      safeQuery('cravings', () =>
-        prisma.cravingEvent.findMany({
-          where: {
-            createdAt: {
-              gte: new Date(`${weekOf}T00:00:00`),
-              lte: new Date(`${weekEnd}T23:59:59`),
-            },
-          },
-          select: { outcome: true },
-        }),
-      ),
-      safeQuery('milestones', () =>
-        prisma.recoveryMilestone.findMany({
-          where: { date: range },
-          select: { date: true, kind: true, label: true },
-        }),
-      ),
-    ])
+        },
+        select: { outcome: true },
+      }),
+    ),
+    safeQuery('milestones', () =>
+      prisma.recoveryMilestone.findMany({
+        where: { date: range },
+        select: { date: true, kind: true, label: true },
+      }),
+    ),
+    safeQuery('garminMetrics', () =>
+      prisma.garminDailyMetric
+        ? prisma.garminDailyMetric.findMany({
+            where: { date: range },
+            select: { date: true, kind: true, valueNum: true, unit: true },
+          })
+        : Promise.resolve([]),
+    ),
+  ])
 
   // --- Weight ---
   let weight = null
@@ -299,6 +317,27 @@ async function collectHealthMetrics(prisma, weekOf, weekEnd) {
     }
   }
 
+  // --- Garmin wellness (stress / HRV / steps / …) ---
+  let garmin = null
+  if (garminMetrics.length > 0) {
+    const byKind = {}
+    for (const m of garminMetrics) {
+      if (m.valueNum == null) continue
+      if (!byKind[m.kind]) byKind[m.kind] = []
+      byKind[m.kind].push(m.valueNum)
+    }
+    const avg = arr => (arr.length ? round(arr.reduce((a, b) => a + b, 0) / arr.length, 1) : null)
+    garmin = {
+      days: new Set(garminMetrics.map(m => m.date)).size,
+      stressAvg: byKind.stress ? avg(byKind.stress) : null,
+      hrvAvg: byKind.hrv ? avg(byKind.hrv) : null,
+      restingHrAvg: byKind.resting_hr ? avg(byKind.resting_hr) : null,
+      stepsAvg: byKind.steps ? avg(byKind.steps) : null,
+      bodyBatteryMaxAvg: byKind.body_battery_max ? avg(byKind.body_battery_max) : null,
+      kindsPresent: Object.keys(byKind),
+    }
+  }
+
   return {
     weight,
     sleep,
@@ -308,6 +347,7 @@ async function collectHealthMetrics(prisma, weekOf, weekEnd) {
     mode: { counts: modeCounts, tags: tagCounts, daysLogged: days.length },
     anchor,
     milestones: milestones.map(m => ({ date: m.date, kind: m.kind, label: m.label })),
+    garmin,
   }
 }
 
@@ -463,6 +503,15 @@ function buildFallback({ health, work, links, isze }) {
   if (health.food) h.push(`Food: ~${health.food.avgKcalPerDay} kcal/day, ${health.food.avgProteinPerDay}g protein over ${health.food.daysLogged} logged days.`)
   if (health.mood) h.push(`Mood averaged ${health.mood.avgMood}/5.`)
   if (health.anchor) h.push(`Anchor: ${health.anchor.cleanStreakDays}-day clean streak, ${health.anchor.alcoholDaysThisWeek} drinking day(s) this week.`)
+  if (health.garmin) {
+    const g = health.garmin
+    const bits = []
+    if (g.stressAvg != null) bits.push(`stress ${g.stressAvg}`)
+    if (g.hrvAvg != null) bits.push(`HRV ${g.hrvAvg}`)
+    if (g.restingHrAvg != null) bits.push(`RHR ${g.restingHrAvg}`)
+    if (g.stepsAvg != null) bits.push(`steps ~${Math.round(g.stepsAvg)}`)
+    if (bits.length) h.push(`Garmin wellness (${g.days}d): ${bits.join(', ')}.`)
+  }
   if (h.length === 0) h.push('No health data logged this week — nothing to analyse.')
 
   const w = []
@@ -717,6 +766,7 @@ function emptyHealth() {
     mode: { counts: { locked_in: 0, balanced: 0, off: 0 }, tags: {}, daysLogged: 0 },
     anchor: null,
     milestones: [],
+    garmin: null,
   }
 }
 

@@ -691,6 +691,128 @@ def try_import_sleep_json(conn, paths: list[Path]) -> tuple[int, int]:
     return ingested, skipped
 
 
+# Daily wellness fields commonly found in UDSFile_*.json and similar exports.
+WELLNESS_MAP = [
+    # (kind, unit, keys to try in order)
+    ("stress", "score", ("averageStressLevel", "awakeAverageStressLevel", "avgStressLevel", "overallStressLevel")),
+    ("stress_max", "score", ("maxStressLevel",)),
+    ("hrv", "ms", ("lastNightAvg", "hrvValue", "weeklyAvg", "rmssd", "avgHrv", "hrv")),
+    ("resting_hr", "bpm", ("restingHeartRate", "restingHR", "rhr")),
+    ("steps", "count", ("totalSteps", "steps")),
+    ("body_battery_max", "score", ("bodyBatteryHighestValue", "maxBodyBattery", "bodyBatteryChargedValue")),
+    ("body_battery_min", "score", ("bodyBatteryLowestValue", "minBodyBattery", "bodyBatteryDrainedValue")),
+    ("spo2", "pct", ("averageSpo2Value", "avgSpo2", "spo2")),
+    ("respiration", "brpm", ("avgWakingRespirationValue", "avgRespirationValue", "respiration")),
+    ("calories", "kcal", ("totalKilocalories", "activeKilocalories", "bmrKilocalories")),
+    ("floors", "count", ("floorsAscended", "floorsClimbed")),
+    ("intensity_min", "minutes", ("moderateIntensityMinutes", "vigorousIntensityMinutes")),
+]
+
+
+def extract_wellness_metrics(d: dict) -> list[tuple[str, float, str]]:
+    """Return list of (kind, value, unit) from a Garmin daily/wellness dict."""
+    out: list[tuple[str, float, str]] = []
+    for kind, unit, keys in WELLNESS_MAP:
+        for k in keys:
+            if d.get(k) is None:
+                continue
+            try:
+                v = float(d[k])
+            except Exception:
+                continue
+            # skip nonsense zeros for optional sensors sometimes
+            if kind in ("hrv", "resting_hr", "spo2", "respiration") and v <= 0:
+                continue
+            out.append((kind, v, unit))
+            break
+    # intensity minutes: sum moderate+vigorous when both present
+    try:
+        mod = d.get("moderateIntensityMinutes")
+        vig = d.get("vigorousIntensityMinutes")
+        if mod is not None or vig is not None:
+            total = float(mod or 0) + float(vig or 0)
+            # replace single intensity_min if we already added one from first key only
+            out = [x for x in out if x[0] != "intensity_min"]
+            out.append(("intensity_min", total, "minutes"))
+    except Exception:
+        pass
+    return out
+
+
+def try_import_wellness_json(conn, paths: list[Path]) -> dict[str, int]:
+    """Import stress / HRV / steps / body battery / RHR / SpO2 / … → GarminDailyMetric."""
+    from secrets import token_hex
+
+    counts: dict[str, int] = {}
+    with conn.cursor() as cur:
+        # Ensure table exists (migration may not have been applied yet)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS "GarminDailyMetric" (
+                "id" TEXT NOT NULL,
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "date" TEXT NOT NULL,
+                "kind" TEXT NOT NULL,
+                "valueNum" DOUBLE PRECISION,
+                "valueText" TEXT,
+                "unit" TEXT,
+                "sourceFile" TEXT,
+                "raw" TEXT,
+                CONSTRAINT "GarminDailyMetric_pkey" PRIMARY KEY ("id")
+            )
+            """
+        )
+        cur.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS "GarminDailyMetric_date_kind_key" ON "GarminDailyMetric"("date", "kind")'
+        )
+        conn.commit()
+
+        for i, path in enumerate(paths, 1):
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+            except Exception:
+                continue
+            dicts: list = []
+            walk_dicts(raw, dicts)
+            for d in dicts:
+                date = extract_date(d)
+                if not date:
+                    continue
+                metrics = extract_wellness_metrics(d)
+                if not metrics:
+                    continue
+                # small raw fingerprint of keys we used
+                raw_snip = json.dumps(
+                    {k: d.get(k) for k in list(d.keys())[:24]},
+                    default=str,
+                )[:1500]
+                for kind, value, unit in metrics:
+                    mid = f"c{token_hex(12)}"
+                    try:
+                        cur.execute(
+                            """
+                            INSERT INTO "GarminDailyMetric"
+                            (id, "createdAt", date, kind, "valueNum", "valueText", unit, "sourceFile", raw)
+                            VALUES (%s, NOW(), %s, %s, %s, NULL, %s, %s, %s)
+                            ON CONFLICT (date, kind) DO UPDATE SET
+                              "valueNum" = EXCLUDED."valueNum",
+                              unit = EXCLUDED.unit,
+                              "sourceFile" = EXCLUDED."sourceFile",
+                              raw = EXCLUDED.raw
+                            """,
+                            (mid, date, kind, value, unit, path.name[:240], raw_snip),
+                        )
+                        counts[kind] = counts.get(kind, 0) + 1
+                    except Exception as e:
+                        if sum(counts.values()) < 3:
+                            print(f"  wellness insert skip: {e}")
+            if i % 40 == 0:
+                conn.commit()
+                print(f"  … {i}/{len(paths)} JSON scanned for wellness")
+        conn.commit()
+    return counts
+
+
 def try_import_activity_json(conn, paths: list[Path]) -> tuple[int, int, int]:
     """Import Garmin Connect activity JSON → GarminActivity + TrainingEntry."""
     from secrets import token_hex
@@ -850,6 +972,26 @@ def main() -> None:
             print(f"  weight: {w} ingested, {ws} skipped")
             if w == 0 and ws == 0:
                 print("  (no recognisable weight fields — probe keys above matter)")
+
+        # Stress / HRV / steps / body battery / RHR / SpO2 / … (UDSFile + wellness)
+        wellness_paths = [
+            p
+            for p in inv["json"]
+            if re.search(r"UDSFile|stress|hrv|wellness|dailies|body.?battery|metrics", p.name, re.I)
+        ]
+        if not wellness_paths:
+            wellness_paths = inv["json"]
+            print("[garmin-dump] no UDS/stress-named files — scanning ALL JSON for wellness …")
+        else:
+            print(f"[garmin-dump] wellness-named JSON: {len(wellness_paths)}")
+        probe_json(wellness_paths, "wellness")
+        print(f"[garmin-dump] importing stress/HRV/steps/… from {len(wellness_paths)} files …")
+        wcounts = try_import_wellness_json(conn, wellness_paths)
+        if wcounts:
+            for kind, n in sorted(wcounts.items()):
+                print(f"  {kind}: {n} day-values upserted")
+        else:
+            print("  (no wellness metrics recognised — probe keys above matter)")
 
     print("[garmin-dump] done.")
     print("Next: npm run feedback:weekly   then open /weekly-feedback")

@@ -271,6 +271,26 @@ model GarminActivity {
   maxSpeedMs  Float?
 }
 
+// Garmin Connect dump — daily wellness metrics (stress, HRV, steps, body
+// battery, resting HR, SpO2, …). One row per (date, kind). Filled by
+// scripts/import-garmin-dump.py from DI_CONNECT JSON (e.g. UDSFile_*.json).
+model GarminDailyMetric {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  date       String // yyyy-mm-dd
+  // stress | hrv | steps | body_battery | resting_hr | spo2 | respiration | other
+  kind       String
+  valueNum   Float?
+  valueText  String?
+  unit       String?
+  sourceFile String?
+  // Optional bounded JSON of the source fields used.
+  raw        String?
+
+  @@unique([date, kind])
+  @@index([kind, date])
+}
+
 // Phase 4 — Body Measurements
 model BodyMeasurement {
   id        String   @id @default(cuid())

@@ -84,8 +84,17 @@ Or run everything in one go:
 scripts\arrange-all.cmd "ba80da99-886a-4f1b-989e-e41afa51d239_1"
 ```
 
-That imports activities into Postgres (`GarminActivity`), best-effort weight/sleep
-from wellness JSON, then runs `npm run feedback:weekly`.
+That imports from a Garmin Connect JSON dump into Postgres:
+
+- activities → `GarminActivity` + `TrainingEntry`
+- sleep → `SleepEntry` (deep+light seconds)
+- weight → `WeightEntry`
+- stress / HRV / steps / body battery / RHR / SpO2 / … → `GarminDailyMetric`
+
+Then runs `npm run feedback:weekly` (health half includes Garmin wellness averages).
+
+If `GarminDailyMetric` is missing, either apply migration
+`20260718160000_garmin_daily_metrics` or let the importer `CREATE TABLE IF NOT EXISTS`.
 
 For live sleep/weight without a dump, use `/garmin` → Sync sleep / Sync body weight
 (needs Garmin OAuth connected under `/integrations`).
