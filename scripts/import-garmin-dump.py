@@ -213,12 +213,23 @@ def inventory(dump: Path) -> dict:
         for p in jsons + csvs
         if re.search(r"sleep", p.name, re.I) or re.search(r"[\\/]sleep[\\/]", str(p), re.I)
     ]
+    activityish = [
+        p
+        for p in jsons + csvs
+        if re.search(
+            r"activit|fitness|summarized|workout|moveiq|sport",
+            p.name + " " + str(p),
+            re.I,
+        )
+        and not re.search(r"sleep", p.name, re.I)
+    ]
     return {
         "fit": fits,
         "json": jsons,
         "csv": csvs,
         "weightish": weightish,
         "sleepish": sleepish,
+        "activityish": activityish,
     }
 
 
@@ -357,12 +368,132 @@ def extract_weight_kg(d: dict) -> float | None:
             continue
         if k in ("weightKg", "weightInKilograms") or (k == "weight" and v < 250):
             return v
-        # grams
+        # grams (Garmin export often stores weight as grams, e.g. 84900)
         if v > 200:
             return v / 1000.0
         if 30 <= v <= 250:
             return v
     return None
+
+
+def is_activity_dict(d: dict) -> bool:
+    """Heuristic: Garmin summarized activity / activity detail dict."""
+    if not isinstance(d, dict):
+        return False
+    # Strong signals
+    if d.get("activityType") or d.get("activityTypeId") or d.get("sportType"):
+        if (
+            d.get("durationInSeconds") is not None
+            or d.get("elapsedDuration") is not None
+            or d.get("movingDuration") is not None
+            or d.get("distanceInMeters") is not None
+            or d.get("distance") is not None
+        ):
+            return True
+    if d.get("activityId") and (
+        d.get("durationInSeconds") is not None or d.get("startTimeInSeconds") is not None
+    ):
+        return True
+    # Nested type object: {"activityType": {"typeKey": "running"}}
+    at = d.get("activityType")
+    if isinstance(at, dict) and (at.get("typeKey") or at.get("typeId")):
+        if d.get("duration") is not None or d.get("elapsedDuration") is not None:
+            return True
+    return False
+
+
+def extract_activity(d: dict) -> dict | None:
+    if not is_activity_dict(d):
+        return None
+
+    # sport / name
+    sport = "unknown"
+    at = d.get("activityType")
+    if isinstance(at, str):
+        sport = at.lower()
+    elif isinstance(at, dict):
+        sport = str(at.get("typeKey") or at.get("typeId") or "unknown").lower()
+    elif d.get("sportType"):
+        sport = str(d.get("sportType")).lower()
+
+    name = (
+        d.get("activityName")
+        or d.get("name")
+        or sport_to_name(sport.replace(" ", "_"))
+    )
+
+    # duration
+    duration = (
+        d.get("durationInSeconds")
+        or d.get("elapsedDuration")
+        or d.get("movingDuration")
+        or d.get("duration")
+    )
+    try:
+        duration_sec = float(duration) if duration is not None else 0.0
+        # some exports store duration in ms
+        if duration_sec > 24 * 3600:
+            duration_sec = duration_sec / 1000.0
+    except Exception:
+        duration_sec = 0.0
+    if duration_sec <= 0:
+        return None
+
+    # distance
+    dist = d.get("distanceInMeters") or d.get("distance")
+    try:
+        distance_m = float(dist) if dist is not None else None
+        if distance_m is not None and distance_m < 50 and duration_sec > 600:
+            # likely km
+            distance_m *= 1000
+    except Exception:
+        distance_m = None
+
+    elev = d.get("elevationGainInMeters") or d.get("elevationGain")
+    try:
+        elevation_m = float(elev) if elev is not None else None
+    except Exception:
+        elevation_m = None
+
+    avg_hr = d.get("averageHeartRate") or d.get("avgHr") or d.get("averageHR")
+    max_hr = d.get("maxHeartRate") or d.get("maxHr") or d.get("maxHR")
+    calories = d.get("calories") or d.get("activeCalories")
+
+    # date
+    date = extract_date(d)
+    if not date:
+        for k in ("startTimeInSeconds", "beginTimestamp", "startTimeGMT", "startTimeLocal"):
+            if d.get(k) is None:
+                continue
+            try:
+                n = float(d[k])
+                if n > 1e12:
+                    n /= 1000
+                date = datetime.fromtimestamp(n, tz=timezone.utc).date().isoformat()
+                break
+            except Exception:
+                continue
+    if not date:
+        return None
+
+    # stable external id
+    ext = d.get("activityId") or d.get("activityIdStr") or d.get("activityUuid") or d.get("id")
+    if ext is None:
+        ext = f"{date}_{sport}_{int(duration_sec)}"
+    fit_file_id = f"json_{ext}"
+
+    return {
+        "fitFileId": str(fit_file_id)[:120],
+        "date": date,
+        "name": str(name)[:200],
+        "sport": sport.replace(" ", "_")[:80],
+        "durationSec": duration_sec,
+        "distanceM": distance_m,
+        "elevationM": elevation_m,
+        "avgHr": int(avg_hr) if avg_hr is not None else None,
+        "maxHr": int(max_hr) if max_hr is not None else None,
+        "calories": int(calories) if calories is not None else None,
+    }
 
 
 def import_fits(conn, fits: list[Path]) -> tuple[int, int, int]:
@@ -560,6 +691,100 @@ def try_import_sleep_json(conn, paths: list[Path]) -> tuple[int, int]:
     return ingested, skipped
 
 
+def try_import_activity_json(conn, paths: list[Path]) -> tuple[int, int, int]:
+    """Import Garmin Connect activity JSON → GarminActivity + TrainingEntry."""
+    from secrets import token_hex
+
+    imported = skipped = errors = 0
+    seen: set[str] = set()
+    with conn.cursor() as cur:
+        for i, path in enumerate(paths, 1):
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+            except Exception:
+                continue
+            dicts: list = []
+            walk_dicts(raw, dicts)
+            for d in dicts:
+                act = extract_activity(d)
+                if not act:
+                    continue
+                fid = act["fitFileId"]
+                if fid in seen:
+                    continue
+                seen.add(fid)
+
+                cur.execute('SELECT 1 FROM "GarminActivity" WHERE "fitFileId" = %s', (fid,))
+                if cur.fetchone():
+                    skipped += 1
+                    continue
+
+                row_id = cuid_like(fid)
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO "GarminActivity"
+                        ("id","createdAt","fitFileId","date","name","sport","subSport",
+                         "durationSec","distanceM","elevationM","avgHr","maxHr","calories",
+                         "avgSpeedMs","maxSpeedMs")
+                        VALUES (%s, NOW(), %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, NULL, NULL)
+                        ON CONFLICT ("fitFileId") DO NOTHING
+                        """,
+                        (
+                            row_id,
+                            fid,
+                            act["date"],
+                            act["name"],
+                            act["sport"],
+                            act["durationSec"],
+                            act["distanceM"],
+                            act["elevationM"],
+                            act["avgHr"],
+                            act["maxHr"],
+                            act["calories"],
+                        ),
+                    )
+                    if not cur.rowcount:
+                        skipped += 1
+                        continue
+                    imported += 1
+
+                    # Also TrainingEntry so weekly feedback / training module see it
+                    ext = fid
+                    cur.execute(
+                        'SELECT 1 FROM "TrainingEntry" WHERE source = %s AND "externalId" = %s',
+                        ("garmin", ext),
+                    )
+                    if not cur.fetchone():
+                        # volume proxy: distance metres (or duration seconds if no distance)
+                        vol = act["distanceM"] if act["distanceM"] else act["durationSec"]
+                        tid = f"c{token_hex(12)}"
+                        note = f"Garmin import · {act['durationSec']:.0f}s"
+                        if act["distanceM"]:
+                            note += f" · {act['distanceM']/1000:.2f}km"
+                        cur.execute(
+                            """
+                            INSERT INTO "TrainingEntry"
+                            (id, "createdAt", date, exercise, sets, reps, "weightKg", rpe, notes, volume,
+                             source, "externalId", "externalUrl", "externalRaw")
+                            VALUES (%s, NOW(), %s, %s, 1, 1, 0, NULL, %s, %s,
+                                    'garmin', %s, NULL, NULL)
+                            ON CONFLICT (source, "externalId") DO NOTHING
+                            """,
+                            (tid, act["date"], act["name"][:120], note[:500], float(vol or 0), ext),
+                        )
+                except Exception as e:
+                    errors += 1
+                    if errors <= 8:
+                        print(f"  activity error ({path.name}): {e}")
+
+            if i % 25 == 0:
+                conn.commit()
+                print(f"  … {i}/{len(paths)} JSON files scanned for activities")
+        conn.commit()
+    return imported, skipped, errors
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print('Usage: python scripts/import-garmin-dump.py "PATH\\TO\\DUMP_FOLDER"')
@@ -572,15 +797,15 @@ def main() -> None:
 
     print(f"[garmin-dump] scanning {dump}")
     inv = inventory(dump)
-    print(f"  .fit files:     {len(inv['fit'])}")
-    print(f"  JSON files:     {len(inv['json'])}")
-    print(f"  CSV files:      {len(inv['csv'])}")
-    print(f"  weight-looking: {len(inv['weightish'])}")
-    print(f"  sleep-looking:  {len(inv['sleepish'])}")
+    print(f"  .fit files:       {len(inv['fit'])}")
+    print(f"  JSON files:       {len(inv['json'])}")
+    print(f"  CSV files:        {len(inv['csv'])}")
+    print(f"  weight-looking:   {len(inv['weightish'])}")
+    print(f"  sleep-looking:    {len(inv['sleepish'])}")
+    print(f"  activity-looking: {len(inv['activityish'])}")
 
-    if not inv["fit"] and not inv["weightish"] and not inv["sleepish"]:
-        print("Nothing recognisable found. Open the folder and tell me the file names inside.")
-        # print top-level listing to help
+    if not inv["fit"] and not inv["json"]:
+        print("Nothing recognisable found.")
         try:
             for p in sorted(dump.iterdir())[:30]:
                 print(f"  - {p.name}{'/' if p.is_dir() else ''}")
@@ -593,11 +818,21 @@ def main() -> None:
         if inv["fit"]:
             print(f"[garmin-dump] importing {len(inv['fit'])} FIT activities …")
             a, s, e = import_fits(conn, inv["fit"])
-            print(f"  activities: {a} imported, {s} skipped, {e} errors")
-        else:
-            print("[garmin-dump] no .fit activities found")
+            print(f"  FIT activities: {a} imported, {s} skipped, {e} errors")
 
-        # Sleep first — this dump has many sleep JSON files in a non-API shape.
+        # Activities from JSON (Connect export — no .fit in this dump)
+        act_paths = inv["activityish"] or []
+        if not act_paths:
+            print("[garmin-dump] no activity-named files — scanning ALL JSON for activities …")
+            act_paths = inv["json"]
+        if act_paths:
+            probe_json(act_paths, "activity")
+            print(f"[garmin-dump] importing activities from {len(act_paths)} JSON files …")
+            ai, as_, ae = try_import_activity_json(conn, act_paths)
+            print(f"  JSON activities: {ai} imported, {as_} skipped, {ae} errors")
+            if ai == 0 and as_ == 0:
+                print("  (no recognisable activity fields — probe keys above matter)")
+
         sleep_paths = inv["sleepish"] or []
         if sleep_paths:
             probe_json(sleep_paths, "sleep")
@@ -606,25 +841,19 @@ def main() -> None:
             print(f"  sleep: {sl} ingested, {ss} skipped")
             if sl == 0 and ss == 0:
                 print("  (no recognisable sleep fields — probe keys above matter)")
-        else:
-            print("[garmin-dump] no sleep-looking JSON — use /garmin Sync sleep if OAuth is connected")
 
-        weight_paths = inv["weightish"] or []
-        # If nothing named weight, scan a sample of all JSON for weight keys (slow but useful).
-        if not weight_paths and inv["json"]:
-            print("[garmin-dump] no weight-named files — scanning all JSON for weight fields …")
-            weight_paths = inv["json"]
+        weight_paths = inv["weightish"] or inv["json"]
         if weight_paths:
-            if len(weight_paths) <= 30:
-                probe_json(weight_paths, "weight")
+            probe_json(weight_paths, "weight")
             print(f"[garmin-dump] importing weight from {len(weight_paths)} files …")
             w, ws = try_import_weight_json(conn, weight_paths)
             print(f"  weight: {w} ingested, {ws} skipped")
-        else:
-            print("[garmin-dump] no JSON for weight — use /garmin Sync body weight if OAuth is connected")
+            if w == 0 and ws == 0:
+                print("  (no recognisable weight fields — probe keys above matter)")
 
     print("[garmin-dump] done.")
     print("Next: npm run feedback:weekly   then open /weekly-feedback")
+    print("Also check: http://localhost:5050/garmin  and /training")
 
 
 if __name__ == "__main__":
