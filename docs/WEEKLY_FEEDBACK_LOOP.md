@@ -101,9 +101,15 @@ the opening stretch is still labeled **good** when discussed alone. Advice is
 always tagged with the period it applies to.
 
 The engine also **cross-compares metrics** (sleep ↔ stress ↔ HRV ↔ resting HR ↔
-steps ↔ activity): correlations, pattern reads, and a long-form **Deep analysis**
-block on `/period-review`. Example pattern: resting HR ~53 with zero sessions is
-treated as a *recovery illusion* (calm because idle), not as proof of fitness.
+steps ↔ activity) and runs a **causal layer** (`scripts/lib/periodCausal.mjs`)
+that ranks competing explanations using Anchor `alcoholDrinks`, DayEntry tags,
+and next-day Garmin lag after drink days.
+
+Example: resting HR ~53 + zero sessions **with a 15-drink binge logged** → leading
+cause is the **alcohol / hangover stack**, not “fitness calm.” Low RHR can still
+print overnight while next-day HRV/steps/training tell the real story. Without
+Anchor logging, the engine falls back to idle under-load — so log drinks the same
+night.
 
 ```cmd
 npm run analyze:periods
