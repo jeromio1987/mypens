@@ -31,6 +31,9 @@ prisma/*.db-wal
 prisma/*.db-shm
 prisma/backups/
 
+# Weekly Feedback Loop — generated reports contain personal health data
+docs/reports/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
