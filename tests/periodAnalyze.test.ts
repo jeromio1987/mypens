@@ -6,6 +6,9 @@ import {
   buildWeeklyScores,
   buildDailySignals,
   nestedBreakdown,
+  interpretPatterns,
+  domainStats,
+  crossMetricMatrix,
 } from '../scripts/lib/periodAnalyze.mjs'
 import { shiftDateStr } from '../scripts/lib/weekDates.mjs'
 
@@ -81,5 +84,52 @@ describe('nestedBreakdown', () => {
     expect(nested?.note).toMatch(/3-month good/)
     expect(nested?.note).toMatch(/9-month bad/)
     expect(nested?.note).toMatch(/full last 12 months/)
+  })
+})
+
+describe('deep patterns — RHR 53 + no activity', () => {
+  it('calls out recovery illusion when RHR is low and sessions are zero', () => {
+    const days = []
+    let d = '2026-06-01'
+    for (let i = 0; i < 21; i++) {
+      days.push({
+        date: d,
+        sleepHours: 7.4,
+        sleepQuality: 4,
+        stress: 28,
+        hrv: 55,
+        restingHr: 53,
+        steps: 3200,
+        bodyBatteryMax: 70,
+        activityMinutes: 0,
+        activityCount: 0,
+      })
+      d = shiftDateStr(d, 1)
+    }
+    const domains = domainStats(days)
+    const cross = crossMetricMatrix(days)
+    const patterns = interpretPatterns(domains, cross, days)
+    const hit = patterns.find(p => p.id === 'low_rhr_no_activity')
+    expect(hit).toBeTruthy()
+    expect(hit!.text).toMatch(/recovery illusion|under-loading|not being challenged/i)
+    expect(hit!.text).toMatch(/53/)
+
+    const report = analyzePeriods(
+      {
+        sleeps: days.map(x => ({ date: x.date, hours: x.sleepHours, quality: 4 })),
+        metrics: days.flatMap(x => [
+          { date: x.date, kind: 'resting_hr', valueNum: x.restingHr },
+          { date: x.date, kind: 'stress', valueNum: x.stress },
+          { date: x.date, kind: 'hrv', valueNum: x.hrv },
+          { date: x.date, kind: 'steps', valueNum: x.steps },
+        ]),
+        activities: [],
+      },
+      { asOf: '2026-06-21', horizonsMonths: [1] },
+    )
+    expect(report.deepAnalysis).toMatch(/resting HR|RHR|activity/i)
+    const h1 = report.horizons.find(h => h.months === 1)!
+    expect(h1.analysis.length).toBeGreaterThan(200)
+    expect(h1.patterns.some(p => p.id === 'low_rhr_no_activity')).toBe(true)
   })
 })

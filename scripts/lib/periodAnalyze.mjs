@@ -1,12 +1,14 @@
 // =============================================================================
-// Period Review Engine
+// Period Review Engine (deep)
 //
 // Advice is always relative to the window you are discussing.
 // Example: 3 strong months followed by 9 weak months → a 12-month read is
 // "bad" overall, while that opening 3-month stretch can still be named "good".
 //
+// Deep mode compares sleep · stress · HRV · resting HR · steps · activities
+// against each other (correlations + pattern reads + long-form narrative).
+//
 // Weekly Feedback must NOT pull this in as a substitute for an empty ISO week.
-// Use `npm run analyze:periods` (or /period-review) for multi-horizon reads.
 // =============================================================================
 
 import { mondayOf, shiftDateStr, toDateStr, fromDateStr, weekBounds } from './weekDates.mjs'
@@ -32,6 +34,23 @@ function avg(nums) {
   return Math.round((a.reduce((s, n) => s + n, 0) / a.length) * 10) / 10
 }
 
+function median(nums) {
+  const a = nums.filter(n => typeof n === 'number' && !Number.isNaN(n)).sort((x, y) => x - y)
+  if (!a.length) return null
+  const m = Math.floor(a.length / 2)
+  return a.length % 2 ? a[m] : Math.round(((a[m - 1] + a[m]) / 2) * 10) / 10
+}
+
+function min(nums) {
+  const a = nums.filter(n => typeof n === 'number' && !Number.isNaN(n))
+  return a.length ? Math.min(...a) : null
+}
+
+function max(nums) {
+  const a = nums.filter(n => typeof n === 'number' && !Number.isNaN(n))
+  return a.length ? Math.max(...a) : null
+}
+
 function daysBetween(a, b) {
   const ms = fromDateStr(b) - fromDateStr(a)
   return Math.round(ms / 86400000)
@@ -43,8 +62,44 @@ function monthsAgo(asOf, months) {
   return toDateStr(d)
 }
 
-function inRange(date, from, to) {
-  return date >= from && date <= to
+function trend(nums) {
+  if (!nums || nums.length < 4) return 'unknown'
+  const mid = Math.floor(nums.length / 2)
+  const a = avg(nums.slice(0, mid))
+  const b = avg(nums.slice(mid))
+  if (a == null || b == null) return 'unknown'
+  const delta = b - a
+  const thresh = Math.max(Math.abs(a) * 0.05, 0.5)
+  if (delta > thresh) return 'up'
+  if (delta < -thresh) return 'down'
+  return 'flat'
+}
+
+function pearson(xs, ys) {
+  const n = Math.min(xs.length, ys.length)
+  if (n < 5) return null
+  let sx = 0,
+    sy = 0,
+    sxx = 0,
+    syy = 0,
+    sxy = 0,
+    c = 0
+  for (let i = 0; i < n; i++) {
+    const x = xs[i],
+      y = ys[i]
+    if (x == null || y == null || Number.isNaN(x) || Number.isNaN(y)) continue
+    c++
+    sx += x
+    sy += y
+    sxx += x * x
+    syy += y * y
+    sxy += x * y
+  }
+  if (c < 5) return null
+  const num = c * sxy - sx * sy
+  const den = Math.sqrt((c * sxx - sx * sx) * (c * syy - sy * sy))
+  if (!den) return null
+  return Math.round((num / den) * 100) / 100
 }
 
 /**
@@ -96,14 +151,9 @@ export function buildDailySignals(data) {
   return [...byDate.values()].sort((x, y) => x.date.localeCompare(y.date))
 }
 
-/**
- * Score one day 0–100 from available signals. Missing domains are skipped
- * (score is renormalized), so sparse history still yields a usable read.
- */
 export function scoreDay(day) {
   const parts = []
   if (day.sleepHours != null) {
-    // 7.5h ideal; steep penalty below 6h
     const h = day.sleepHours
     let s = 100
     if (h >= 7 && h <= 8.5) s = 95
@@ -114,7 +164,6 @@ export function scoreDay(day) {
     parts.push(s)
   }
   if (day.stress != null) {
-    // Lower stress is better
     const st = day.stress
     let s = 90
     if (st >= 60) s = 20
@@ -125,8 +174,6 @@ export function scoreDay(day) {
     parts.push(s)
   }
   if (day.hrv != null) {
-    // Relative-friendly: treat mid values as ok; absolute scale varies by person.
-    // Use a soft curve around 40–80 ms typical consumer wearables.
     const h = day.hrv
     let s = 60
     if (h >= 70) s = 90
@@ -147,16 +194,12 @@ export function scoreDay(day) {
     parts.push(s)
   }
   if (day.activityCount > 0) {
-    // Presence of training is a mild positive; overdoing same day not scored here
     parts.push(clamp(50 + day.activityCount * 15 + Math.min(day.activityMinutes, 90) / 3, 50, 95))
   }
   if (!parts.length) return null
   return Math.round(avg(parts))
 }
 
-/**
- * Collapse daily scores into ISO weeks.
- */
 export function buildWeeklyScores(daily) {
   const byWeek = new Map()
   for (const day of daily) {
@@ -184,9 +227,6 @@ export function buildWeeklyScores(daily) {
     .sort((a, b) => a.weekOf.localeCompare(b.weekOf))
 }
 
-/**
- * Merge adjacent weeks with the same verdict into stretches.
- */
 export function findSegments(weekly) {
   const segs = []
   for (const w of weekly) {
@@ -223,6 +263,10 @@ function clipWeekly(weekly, from, to) {
   return weekly.filter(w => w.weekOf <= to && w.weekEnd >= from)
 }
 
+function clipDaily(daily, from, to) {
+  return daily.filter(d => d.date >= from && d.date <= to)
+}
+
 function clipSegments(segments, from, to) {
   const out = []
   for (const s of segments) {
@@ -256,7 +300,6 @@ function horizonVerdict(weekly) {
   const goodWeeks = weekly.filter(w => w.verdict === GOOD).length
   const badWeeks = weekly.filter(w => w.verdict === BAD).length
   const mixedWeeks = weekly.filter(w => w.verdict === MIXED).length
-  // Duration-weighted: majority bad weeks → bad even if an early stretch was good
   let verdict = classifyScore(score)
   const badShare = badWeeks / weekly.length
   const goodShare = goodWeeks / weekly.length
@@ -266,10 +309,6 @@ function horizonVerdict(weekly) {
   return { verdict, score, weeks: weekly.length, goodWeeks, badWeeks, mixedWeeks }
 }
 
-/**
- * Nested read: e.g. inside a 12m window, contrast a recent/early sub-stretch
- * against the remainder so "3m good + 9m bad" is explicit.
- */
 export function nestedBreakdown(segmentsInHorizon, horizonLabel) {
   if (!segmentsInHorizon.length) return null
   if (segmentsInHorizon.length === 1) {
@@ -280,7 +319,6 @@ export function nestedBreakdown(segmentsInHorizon, horizonLabel) {
     }
   }
 
-  // Prefer the longest bad vs longest good contrast when both exist
   const goods = segmentsInHorizon.filter(s => s.verdict === GOOD)
   const bads = segmentsInHorizon.filter(s => s.verdict === BAD)
   const longestGood = goods.sort((a, b) => b.weeks - a.weeks)[0]
@@ -313,7 +351,450 @@ export function nestedBreakdown(segmentsInHorizon, horizonLabel) {
   return { note, parts, longestGood: longestGood || null, longestBad: longestBad || null }
 }
 
-function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio }) {
+// ---------------------------------------------------------------------------
+// Deep domain + cross-metric engine
+// ---------------------------------------------------------------------------
+
+function series(daily, key) {
+  const dates = []
+  const values = []
+  for (const d of daily) {
+    const v = d[key]
+    if (v == null || Number.isNaN(v)) continue
+    dates.push(d.date)
+    values.push(v)
+  }
+  return { dates, values }
+}
+
+function paired(a, b) {
+  const mapB = new Map(b.dates.map((d, i) => [d, b.values[i]]))
+  const xs = []
+  const ys = []
+  for (let i = 0; i < a.dates.length; i++) {
+    if (!mapB.has(a.dates[i])) continue
+    xs.push(a.values[i])
+    ys.push(mapB.get(a.dates[i]))
+  }
+  return { xs, ys, n: xs.length }
+}
+
+/**
+ * Per-domain stats for a clipped daily window.
+ */
+export function domainStats(daily) {
+  const sleepH = daily.map(d => d.sleepHours).filter(v => v != null)
+  const stress = daily.map(d => d.stress).filter(v => v != null)
+  const hrv = daily.map(d => d.hrv).filter(v => v != null)
+  const rhr = daily.map(d => d.restingHr).filter(v => v != null)
+  const steps = daily.map(d => d.steps).filter(v => v != null)
+  const bb = daily.map(d => d.bodyBatteryMax).filter(v => v != null)
+  const activeDays = daily.filter(d => d.activityCount > 0)
+  const totalActMin = daily.reduce((s, d) => s + (d.activityMinutes || 0), 0)
+  const totalSessions = daily.reduce((s, d) => s + (d.activityCount || 0), 0)
+  const zeroActivityDays = daily.filter(d => (d.activityCount || 0) === 0).length
+  const latestRhr = [...daily].reverse().find(d => d.restingHr != null)?.restingHr ?? null
+  const latestSleep = [...daily].reverse().find(d => d.sleepHours != null)?.sleepHours ?? null
+
+  return {
+    sleep: sleepH.length
+      ? {
+          days: sleepH.length,
+          avgHours: avg(sleepH),
+          medianHours: median(sleepH),
+          minHours: min(sleepH),
+          maxHours: max(sleepH),
+          shortNights: sleepH.filter(h => h < 6.5).length,
+          trend: trend(sleepH),
+          latestHours: latestSleep,
+        }
+      : null,
+    stress: stress.length
+      ? {
+          days: stress.length,
+          avg: avg(stress),
+          median: median(stress),
+          max: max(stress),
+          highDays: stress.filter(v => v >= 50).length,
+          trend: trend(stress),
+        }
+      : null,
+    hrv: hrv.length
+      ? {
+          days: hrv.length,
+          avg: avg(hrv),
+          median: median(hrv),
+          min: min(hrv),
+          max: max(hrv),
+          trend: trend(hrv),
+        }
+      : null,
+    restingHr: rhr.length
+      ? {
+          days: rhr.length,
+          avg: avg(rhr),
+          median: median(rhr),
+          min: min(rhr),
+          max: max(rhr),
+          trend: trend(rhr),
+          latest: latestRhr,
+        }
+      : null,
+    steps: steps.length
+      ? {
+          days: steps.length,
+          avg: avg(steps),
+          median: median(steps),
+          lowDays: steps.filter(v => v < 5000).length,
+          trend: trend(steps),
+        }
+      : null,
+    bodyBattery: bb.length
+      ? {
+          days: bb.length,
+          avgMax: avg(bb),
+          trend: trend(bb),
+        }
+      : null,
+    activity: {
+      daysInWindow: daily.length,
+      activeDays: activeDays.length,
+      sessions: totalSessions,
+      totalMinutes: totalActMin,
+      avgMinutesPerDay: daily.length ? Math.round(totalActMin / daily.length) : 0,
+      zeroActivityDays,
+      zeroActivityShare: daily.length ? Math.round((zeroActivityDays / daily.length) * 100) / 100 : null,
+    },
+  }
+}
+
+/**
+ * Pairwise correlations across all primary metrics.
+ */
+export function crossMetricMatrix(daily) {
+  const keys = [
+    ['sleepHours', 'sleep'],
+    ['stress', 'stress'],
+    ['hrv', 'hrv'],
+    ['restingHr', 'restingHr'],
+    ['steps', 'steps'],
+    ['bodyBatteryMax', 'bodyBattery'],
+    ['activityMinutes', 'activityMinutes'],
+  ]
+  const seriesMap = {}
+  for (const [field, label] of keys) {
+    seriesMap[label] = series(daily, field)
+  }
+
+  const pairs = []
+  const labels = keys.map(k => k[1])
+  for (let i = 0; i < labels.length; i++) {
+    for (let j = i + 1; j < labels.length; j++) {
+      const a = labels[i]
+      const b = labels[j]
+      const { xs, ys, n } = paired(seriesMap[a], seriesMap[b])
+      const r = pearson(xs, ys)
+      if (r == null) continue
+      pairs.push({ a, b, r, n, strength: Math.abs(r) >= 0.4 ? 'strong' : Math.abs(r) >= 0.25 ? 'moderate' : 'weak' })
+    }
+  }
+  pairs.sort((x, y) => Math.abs(y.r) - Math.abs(x.r))
+  return pairs
+}
+
+function describeCorr(pair) {
+  const { a, b, r, strength } = pair
+  const dir = r > 0 ? 'rise together' : 'move opposite'
+  return `${a} ↔ ${b}: r=${r} (${strength}, ${dir})`
+}
+
+/**
+ * Pattern library — the “what happened?” layer.
+ * Includes the RHR≈53 + no activity case.
+ */
+export function interpretPatterns(domains, cross, daily) {
+  const patterns = []
+  const act = domains.activity
+  const rhr = domains.restingHr
+  const hrv = domains.hrv
+  const stress = domains.stress
+  const sleep = domains.sleep
+  const steps = domains.steps
+
+  const corr = (a, b) => cross.find(p => (p.a === a && p.b === b) || (p.a === b && p.b === a))
+
+  // --- Low RHR + no / low activity (user's question) ---
+  const latestRhr = rhr?.latest ?? rhr?.avg
+  const noActivity =
+    act &&
+    (act.sessions === 0 ||
+      (act.zeroActivityShare != null && act.zeroActivityShare >= 0.85) ||
+      act.activeDays === 0)
+  const lowRhr = latestRhr != null && latestRhr <= 56
+
+  if (lowRhr && noActivity) {
+    const stepsLow = steps && steps.avg != null && steps.avg < 5000
+    const stressOk = !stress || stress.avg == null || stress.avg < 40
+    const hrvOk = !hrv || hrv.avg == null || hrv.avg >= 40
+
+    patterns.push({
+      id: 'low_rhr_no_activity',
+      severity: 'high',
+      title: `Resting HR ~${Math.round(latestRhr)} with almost no logged activity`,
+      text:
+        `Night / resting HR around ${Math.round(latestRhr)} bpm looks “fit” on its own — but in this window you logged ` +
+        `${act.sessions} structured session(s) across ${act.daysInWindow} days ` +
+        `(${Math.round((act.zeroActivityShare || 0) * 100)}% zero-activity days` +
+        (steps ? `, steps ~${Math.round(steps.avg)}/day` : '') +
+        `). ` +
+        `That is not athletic adaptation from current training load. More likely: residual aerobic fitness (or a calm ` +
+        `parasympathetic baseline) while you are under-loading — a recovery illusion. Low RHR without work does not ` +
+        `mean the period was trained; it means the heart is not being challenged. ` +
+        (stepsLow
+          ? `Steps are also soft — this is sedentary calm, not performance calm. `
+          : `If steps are decent but sports are zero, you may be moving casually without ever loading. `) +
+        (stressOk && hrvOk
+          ? `Stress/HRV look unstressed, which fits “idle,” not “overreached.” `
+          : `Check stress/HRV: if stress is high or HRV is crumbling while RHR stays low, dig into sleep and illness. `) +
+        `What happened: physiology stayed quiet because demand stayed quiet. Reintroduce easy aerobic work 3×/week ` +
+        `before you trust this RHR as a fitness badge.`,
+    })
+  } else if (lowRhr && act && act.sessions > 0) {
+    patterns.push({
+      id: 'low_rhr_with_training',
+      severity: 'info',
+      title: `Resting HR ~${Math.round(latestRhr)} with training present`,
+      text:
+        `RHR around ${Math.round(latestRhr)} with ${act.sessions} sessions in-window is consistent with aerobic fitness ` +
+        `or good recovery — only trust it if HRV is stable/up and stress is not climbing.`,
+    })
+  } else if (rhr && rhr.latest != null && rhr.latest >= 65 && noActivity) {
+    patterns.push({
+      id: 'elevated_rhr_idle',
+      severity: 'high',
+      title: `Elevated resting HR (${Math.round(rhr.latest)}) while idle`,
+      text:
+        `RHR ${Math.round(rhr.latest)} without training load is a redder flag than a low RHR idle state — possible ` +
+        `poor sleep, illness, alcohol, or autonomic stress. Do not add hard sessions until RHR settles.`,
+    })
+  }
+
+  // Rising RHR vs falling HRV
+  if (rhr?.trend === 'up' && hrv?.trend === 'down') {
+    patterns.push({
+      id: 'rhr_up_hrv_down',
+      severity: 'high',
+      title: 'Resting HR rising while HRV falls',
+      text:
+        `Classic under-recovery couple: RHR trend up + HRV trend down. Cut intensity for 7–10 days; protect sleep. ` +
+        `This overrides a “good” composite score if the window is recent.`,
+    })
+  }
+
+  // Stress vs sleep
+  const stressSleep = corr('stress', 'sleep')
+  if (stressSleep && stressSleep.r <= -0.3) {
+    patterns.push({
+      id: 'stress_cuts_sleep',
+      severity: 'high',
+      title: 'Higher stress tracks with shorter sleep',
+      text:
+        `Correlation stress↔sleep hours r=${stressSleep.r} (n=${stressSleep.n}). When stress rises, nights shorten. ` +
+        `Treat evening load (work, late prompts, alcohol) as a sleep intervention, not a separate problem.`,
+    })
+  }
+
+  // HRV vs sleep
+  const hrvSleep = corr('hrv', 'sleep')
+  if (hrvSleep && hrvSleep.r >= 0.25) {
+    patterns.push({
+      id: 'sleep_lifts_hrv',
+      severity: 'info',
+      title: 'Longer sleep links to higher HRV',
+      text:
+        `HRV↔sleep r=${hrvSleep.r}. Sleep length is a lever for recovery capacity in this dataset — worth defending ` +
+        `before adding more training volume.`,
+    })
+  }
+
+  // HRV vs stress
+  const hrvStress = corr('hrv', 'stress')
+  if (hrvStress && hrvStress.r <= -0.25) {
+    patterns.push({
+      id: 'hrv_vs_stress',
+      severity: 'info',
+      title: 'HRV drops when stress rises',
+      text: `Expected inverse link (r=${hrvStress.r}). Use HRV as a brake when stress averages stay elevated.`,
+    })
+  }
+
+  // Activity vs RHR
+  const actRhr = corr('activityMinutes', 'restingHr')
+  if (actRhr && actRhr.r <= -0.25) {
+    patterns.push({
+      id: 'training_lowers_rhr',
+      severity: 'info',
+      title: 'More activity minutes track with lower resting HR',
+      text:
+        `activityMinutes↔restingHr r=${actRhr.r}. In windows where you actually train, RHR tends to sit lower — ` +
+        `another reason idle-low-RHR should not be confused with trained-low-RHR.`,
+    })
+  }
+
+  // Steps vs sleep
+  const stepsSleep = corr('steps', 'sleep')
+  if (stepsSleep && stepsSleep.r <= -0.25) {
+    patterns.push({
+      id: 'high_steps_short_sleep',
+      severity: 'moderate',
+      title: 'Higher steps track with shorter sleep',
+      text:
+        `steps↔sleep r=${stepsSleep.r}. Possible late-day load or overreaching on feet. Cap late walks / stand hours ` +
+        `when sleep is already short.`,
+    })
+  }
+
+  // High composite from sleep alone while activity dead
+  if (sleep && sleep.avgHours >= 7 && noActivity) {
+    patterns.push({
+      id: 'sleep_props_score',
+      severity: 'moderate',
+      title: 'Composite score propped up by sleep while training is absent',
+      text:
+        `Sleep averages ${sleep.avgHours}h, which can make the period look “good” even with zero sessions. ` +
+        `That is a recovery score, not a training score. Name the domain before celebrating the window.`,
+    })
+  }
+
+  // Short sleep + high stress
+  if (sleep && sleep.avgHours < 6.5 && stress && stress.avg >= 40) {
+    patterns.push({
+      id: 'short_sleep_high_stress',
+      severity: 'high',
+      title: 'Short sleep stacked with elevated stress',
+      text:
+        `Sleep avg ${sleep.avgHours}h with stress avg ${stress.avg}. This pair compounds: protect a fixed wind-down ` +
+        `before any performance goal.`,
+    })
+  }
+
+  // Body battery vs stress
+  const bbStress = corr('bodyBattery', 'stress')
+  if (bbStress && bbStress.r <= -0.25) {
+    patterns.push({
+      id: 'bb_vs_stress',
+      severity: 'info',
+      title: 'Body battery falls as stress rises',
+      text: `bodyBattery↔stress r=${bbStress.r}. Expected. Use body-battery lows as a same-day intensity veto.`,
+    })
+  }
+
+  // Recent days deep dive (last 7 with data)
+  const recent = daily.slice(-7)
+  if (recent.length >= 3) {
+    const rRecent = avg(recent.map(d => d.restingHr).filter(v => v != null))
+    const aRecent = recent.reduce((s, d) => s + d.activityCount, 0)
+    const sRecent = avg(recent.map(d => d.sleepHours).filter(v => v != null))
+    if (rRecent != null && rRecent <= 56 && aRecent === 0) {
+      patterns.push({
+        id: 'recent_rhr_idle',
+        severity: 'high',
+        title: `Last ${recent.length} days: RHR ~${Math.round(rRecent)}, zero sessions`,
+        text:
+          `Most recent slice: resting HR ~${Math.round(rRecent)}` +
+          (sRecent != null ? `, sleep ~${sRecent}h` : '') +
+          `, structured activity = 0. ` +
+          `Nothing “mysterious” happened — the watch is reporting a quiet autonomic state because you did not load. ` +
+          `If the question is “am I getting fitter?”: not from this week. If the question is “am I recovered enough to train?”: ` +
+          `yes, start easy; the low RHR is permission, not a medal.`,
+      })
+    }
+  }
+
+  // Sort: high first
+  const rank = { high: 0, moderate: 1, info: 2 }
+  patterns.sort((a, b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9))
+  return patterns
+}
+
+/**
+ * Long-form narrative for a horizon — this is the “text” the UI must show.
+ */
+export function buildDeepNarrative({ label, verdict, score, weeks, domains, cross, patterns, nested }) {
+  const paras = []
+
+  paras.push(
+    `Period under discussion: ${label}. Verdict ${verdict ?? 'n/a'}` +
+      (score != null ? ` at ${score}/100 across ${weeks} weeks` : '') +
+      `. Everything below applies only to this window.`,
+  )
+
+  // Domain paragraph
+  const bits = []
+  if (domains.sleep) {
+    bits.push(
+      `sleep ${domains.sleep.avgHours}h avg (${domains.sleep.shortNights} nights <6.5h, trend ${domains.sleep.trend})`,
+    )
+  }
+  if (domains.stress) {
+    bits.push(`stress avg ${domains.stress.avg} (${domains.stress.highDays} high days, trend ${domains.stress.trend})`)
+  }
+  if (domains.hrv) {
+    bits.push(`HRV avg ${domains.hrv.avg} (trend ${domains.hrv.trend})`)
+  }
+  if (domains.restingHr) {
+    bits.push(
+      `resting HR avg ${domains.restingHr.avg} / latest ${domains.restingHr.latest ?? '—'} (trend ${domains.restingHr.trend})`,
+    )
+  }
+  if (domains.steps) {
+    bits.push(`steps ~${Math.round(domains.steps.avg)}/d (${domains.steps.lowDays} low days)`)
+  }
+  if (domains.activity) {
+    bits.push(
+      `activities ${domains.activity.sessions} sessions / ${domains.activity.activeDays} active days` +
+        ` (${Math.round((domains.activity.zeroActivityShare || 0) * 100)}% idle days)`,
+    )
+  }
+  if (bits.length) {
+    paras.push(`Domain stack: ${bits.join('; ')}.`)
+  } else {
+    paras.push('Domain stack: almost no overlapping metrics in this window — import more Garmin rows.')
+  }
+
+  if (nested?.note) paras.push(nested.note)
+
+  // Cross-metric paragraph
+  const strong = (cross || []).filter(p => p.strength !== 'weak').slice(0, 8)
+  if (strong.length) {
+    paras.push(
+      `Cross-metric links (strongest first): ${strong.map(describeCorr).join('; ')}. ` +
+        `Weak links are omitted; they are noise at this sample size.`,
+    )
+  } else {
+    paras.push(
+      'Cross-metric links: not enough overlapping days to trust correlations yet (need ≥5 paired days per pair).',
+    )
+  }
+
+  // Pattern narratives
+  const highs = (patterns || []).filter(p => p.severity === 'high')
+  const rest = (patterns || []).filter(p => p.severity !== 'high')
+  for (const p of highs) {
+    paras.push(`${p.title}. ${p.text}`)
+  }
+  for (const p of rest.slice(0, 4)) {
+    paras.push(`${p.title}. ${p.text}`)
+  }
+
+  if (!patterns?.length) {
+    paras.push('No sharp cross-metric conflict patterns fired in this window — keep logging so contrasts can emerge.')
+  }
+
+  return paras.join('\n\n')
+}
+
+function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio, patterns, domains }) {
   const advice = []
   if (verdict == null) {
     advice.push({
@@ -338,6 +819,11 @@ function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio 
     })
   }
 
+  // Pattern-driven actions first
+  for (const p of (patterns || []).filter(x => x.severity === 'high').slice(0, 3)) {
+    advice.push({ period: label, kind: 'pattern', text: `${p.title}: ${p.text}` })
+  }
+
   if (nested?.longestGood && nested?.longestBad) {
     const g = nested.longestGood
     const b = nested.longestBad
@@ -349,16 +835,6 @@ function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio 
           `Full ${label} read is not rescued by the ${g.approxMonths}-month good stretch (${g.from} → ${g.to}). ` +
           `Protect what worked there, but plan against the ${b.approxMonths}-month weak stretch (${b.from} → ${b.to}).`,
       })
-      advice.push({
-        period: `${g.from} → ${g.to}`,
-        kind: 'stretch',
-        text: `If discussing only the good stretch: keep the sleep/load habits from that block; do not average them away into the weak months.`,
-      })
-      advice.push({
-        period: `${b.from} → ${b.to}`,
-        kind: 'stretch',
-        text: `If discussing only the weak stretch: cut late load, restore a fixed wind-down, and rebuild training consistency week by week.`,
-      })
     } else if (verdict === GOOD) {
       advice.push({
         period: label,
@@ -367,13 +843,18 @@ function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio 
           `${label} is still a good period overall despite a ${b.approxMonths}-month dip (${b.from} → ${b.to}). ` +
           `Study the dip; do not let it rewrite the whole window.`,
       })
-    } else {
-      advice.push({
-        period: label,
-        kind: 'contrast',
-        text: `${label} is mixed — name the stretch before giving advice. ${nested.note}`,
-      })
     }
+  }
+
+  // Domain-specific closer
+  if (domains?.activity?.sessions === 0 && domains?.restingHr?.latest != null && domains.restingHr.latest <= 56) {
+    advice.push({
+      period: label,
+      kind: 'action',
+      text:
+        `For ${label}: do not read RHR ${Math.round(domains.restingHr.latest)} as fitness while sessions=0. ` +
+        `Schedule 3 easy aerobic sessions next week and re-check whether RHR stays low under load.`,
+    })
   } else if (verdict === GOOD) {
     advice.push({
       period: label,
@@ -397,11 +878,46 @@ function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio 
   return advice
 }
 
+function deepenHorizon(base, dailySlice) {
+  const domains = domainStats(dailySlice)
+  const cross = crossMetricMatrix(dailySlice)
+  const patterns = interpretPatterns(domains, cross, dailySlice)
+  const analysis = buildDeepNarrative({
+    label: base.label,
+    verdict: base.verdict,
+    score: base.score,
+    weeks: base.weeks,
+    domains,
+    cross,
+    patterns,
+    nested: base.nested,
+  })
+  const advice = adviceForHorizon({
+    label: base.label,
+    verdict: base.verdict,
+    score: base.score,
+    nested: base.nested,
+    weeks: base.weeks,
+    coverageRatio: base.coverageRatio,
+    patterns,
+    domains,
+  })
+  return {
+    ...base,
+    domains,
+    crossLinks: cross,
+    patterns,
+    analysis,
+    findings: patterns.map(p => p.title),
+    advice,
+  }
+}
+
 /**
  * @param {object} data - same shape as analyzeGarmin input (all-time load)
  * @param {object} opts
- * @param {string} [opts.asOf] - yyyy-mm-dd end of analysis (default: latest data or today)
- * @param {number[]} [opts.horizonsMonths] - e.g. [1,3,6,12]
+ * @param {string} [opts.asOf]
+ * @param {number[]} [opts.horizonsMonths]
  */
 export function analyzePeriods(data, opts = {}) {
   const daily = buildDailySignals(data)
@@ -424,43 +940,25 @@ export function analyzePeriods(data, opts = {}) {
     const nested = nestedBreakdown(segments, label)
     const expectedDays = Math.max(1, daysBetween(from, to) + 1)
     const daysWithData = weekly.reduce((s, w) => s + w.days, 0)
-    const coverageRatio = daysWithData / expectedDays
-    const advice = adviceForHorizon({
-      label,
-      verdict: stats.verdict,
-      score: stats.score,
-      nested,
-      weeks: stats.weeks,
-      coverageRatio,
-    })
-
-    horizons.push({
+    const coverageRatio = Math.round((daysWithData / expectedDays) * 100) / 100
+    const base = {
       label,
       months,
       from,
       to,
       ...stats,
-      coverageRatio: Math.round(coverageRatio * 100) / 100,
+      coverageRatio,
       segments,
       nested,
-      advice,
-    })
+    }
+    horizons.push(deepenHorizon(base, clipDaily(daily, from, to)))
   }
 
-  // All-history horizon (not month-capped)
   if (dataFrom && dataTo) {
     const label = 'all available history'
     const stats = horizonVerdict(weeklyAll)
     const nested = nestedBreakdown(segmentsAll, label)
-    const advice = adviceForHorizon({
-      label,
-      verdict: stats.verdict,
-      score: stats.score,
-      nested,
-      weeks: stats.weeks,
-      coverageRatio: null,
-    })
-    horizons.push({
+    const base = {
       label,
       months: null,
       from: dataFrom,
@@ -469,8 +967,8 @@ export function analyzePeriods(data, opts = {}) {
       coverageRatio: null,
       segments: segmentsAll,
       nested,
-      advice,
-    })
+    }
+    horizons.push(deepenHorizon(base, daily))
   }
 
   const h12 = horizons.find(h => h.months === 12)
@@ -482,12 +980,17 @@ export function analyzePeriods(data, opts = {}) {
         `Inside that window: ${h12.nested.longestGood.approxMonths}mo good vs ${h12.nested.longestBad.approxMonths}mo bad — discuss the stretch, not a single blended slogan.`,
       )
     }
+    const top = h12.patterns?.[0]
+    if (top) headlineParts.push(`Top signal: ${top.title}.`)
   } else if (segmentsAll.length) {
     const last = segmentsAll[segmentsAll.length - 1]
     headlineParts.push(`Latest stretch is ${last.verdict} (${last.from} → ${last.to}, ~${last.approxMonths} mo).`)
   } else {
     headlineParts.push('Not enough Garmin/health rows to build period advice yet.')
   }
+
+  // Global deep analysis (all history) for the top of the page
+  const global = horizons.find(h => h.months == null) || h12 || horizons[0] || null
 
   return {
     asOf,
@@ -496,25 +999,27 @@ export function analyzePeriods(data, opts = {}) {
     segments: segmentsAll,
     horizons,
     headline: headlineParts.join(' '),
+    deepAnalysis: global?.analysis || headlineParts.join(' '),
+    topPatterns: global?.patterns?.slice(0, 6) || [],
   }
 }
 
-/**
- * Render a markdown report for docs/reports.
- */
 export function periodsToMarkdown(report) {
   const lines = [
-    '# Period Review',
+    '# Period Review (deep)',
     '',
     `_As of ${report.asOf} · data ${report.dataSpan.from || '—'} → ${report.dataSpan.to || '—'}_`,
     '',
     '## Headline',
     report.headline,
     '',
+    '## Deep analysis',
+    report.deepAnalysis || '_none_',
+    '',
     '## How to use this',
-    '- Weekly Feedback = this ISO week only. Do not paste archive periods into that overview.',
-    '- Period Review = multi-month advice. Always name the window (3m / 12m / a specific stretch).',
-    '- A good 3-month stretch inside a weak 12-month window stays "good" when discussed alone; the 12-month verdict can still be "bad".',
+    '- Weekly Feedback = this ISO week only.',
+    '- Period Review = multi-month advice. Always name the window.',
+    '- Low resting HR without activity is calm, not fitness — read the pattern text.',
     '',
     '## Stretches (all history)',
   ]
@@ -543,18 +1048,26 @@ export function periodsToMarkdown(report) {
         (h.coverageRatio != null ? ` · coverage ${Math.round(h.coverageRatio * 100)}%` : ''),
     )
     lines.push('')
-    if (h.nested?.note) {
-      lines.push(h.nested.note)
+    if (h.analysis) {
+      lines.push('### Analysis')
+      lines.push(h.analysis)
       lines.push('')
     }
-    if (h.segments?.length) {
-      lines.push('Stretches in window:')
-      for (const s of h.segments) {
-        lines.push(`- ${s.verdict}: ${s.from} → ${s.to} (~${s.approxMonths} mo)`)
+    if (h.crossLinks?.length) {
+      lines.push('### Cross-metric correlations')
+      for (const p of h.crossLinks.slice(0, 12)) {
+        lines.push(`- ${describeCorr(p)} (n=${p.n})`)
       }
       lines.push('')
     }
-    lines.push('Advice (scoped to this period):')
+    if (h.patterns?.length) {
+      lines.push('### Patterns')
+      for (const p of h.patterns) {
+        lines.push(`- **[${p.severity}] ${p.title}** — ${p.text}`)
+      }
+      lines.push('')
+    }
+    lines.push('### Advice')
     for (const a of h.advice || []) {
       lines.push(`- *(${a.period})* ${a.text}`)
     }
