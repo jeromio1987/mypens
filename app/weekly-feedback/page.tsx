@@ -104,10 +104,8 @@ export default function WeeklyFeedbackPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
-  const load = useCallback(() => {
-    setLoading(true)
-    setError(false)
-    fetch('/api/weekly-feedback')
+  const runFetch = useCallback(() => {
+    return fetch('/api/weekly-feedback')
       .then(r => r.json())
       .then(d => setReport(d.report ?? null))
       .catch(() => setError(true))
@@ -115,8 +113,14 @@ export default function WeeklyFeedbackPage() {
   }, [])
 
   useEffect(() => {
-    load()
-  }, [load])
+    runFetch()
+  }, [runFetch])
+
+  const refresh = useCallback(() => {
+    setLoading(true)
+    setError(false)
+    runFetch()
+  }, [runFetch])
 
   const work = report?.metrics?.work
   const health = report?.metrics?.health
@@ -140,7 +144,7 @@ export default function WeeklyFeedbackPage() {
             </div>
           </div>
           <button
-            onClick={load}
+            onClick={refresh}
             className="text-xs text-pens-cream/30 hover:text-pens-cream/60 transition-colors px-2 py-1"
           >
             Refresh
@@ -158,7 +162,7 @@ export default function WeeklyFeedbackPage() {
         {!loading && error && (
           <div className="bg-pens-navy/60 border border-pens-crimson/30 rounded-2xl p-6 text-center">
             <p className="text-sm text-pens-cream/70">Couldn&apos;t load this week&apos;s feedback.</p>
-            <button onClick={load} className="mt-3 text-xs text-cyan-400 hover:text-cyan-300 font-bold">
+            <button onClick={refresh} className="mt-3 text-xs text-cyan-400 hover:text-cyan-300 font-bold">
               Try again
             </button>
           </div>
