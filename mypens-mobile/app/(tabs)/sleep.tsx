@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LineChart } from 'react-native-gifted-charts'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 
 import { useColors } from '@/hooks/useColors'
 import { usePensSync } from '@/hooks/usePensSync'
@@ -81,6 +82,7 @@ export default function SleepScreen() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   const insets = useSafeAreaInsets()
+  const router = useRouter()
   const { width } = useWindowDimensions()
   const qc = useQueryClient()
   const useApi = isPensApiConfigured()
@@ -211,6 +213,35 @@ export default function SleepScreen() {
           </View>
         )}
       </View>
+
+      {/* Weekly Feedback entry */}
+      <Pressable
+        onPress={() => router.push('/weekly-feedback')}
+        style={({ pressed }) => ({
+          marginHorizontal: 16,
+          marginBottom: 12,
+          padding: 14,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: isDark ? '#164e63' : '#a5f3fc',
+          backgroundColor: isDark ? 'rgba(6,182,212,0.12)' : '#ecfeff',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        <Feather name="activity" size={18} color="#06b6d4" />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.foreground }}>
+            Weekly Feedback
+          </Text>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>
+            Your health + how you worked with Claude this week
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      </Pressable>
 
       {pending > 0 ? (
         <View
