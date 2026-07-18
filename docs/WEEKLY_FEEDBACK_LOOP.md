@@ -55,7 +55,38 @@ the `WeeklyFeedbackReport` row for that week.
 | `DATABASE_URL` | for DB write | Reads health data, upserts the report. Without it the script forces `--dry`. |
 | `ANTHROPIC_API_KEY` | optional | Enables the Claude deep analysis. Without it, a solid deterministic report is produced instead. |
 | `PENS_TRANSCRIPT_DIRS` | optional | Comma-separated dirs of `.jsonl` transcripts. Defaults to `~/.cursor/projects` and `~/.claude/projects`. |
+| `PENS_ISZE_FEEDBACK_DIR` | optional | Folder with Claude Desktop scheduled Feedback (`00_INDEX.md` + `Feedback_*.md`). Default: `~/Desktop/claude/ISZE/05_memory/briefs/feedback_history`. |
 | `WEEKLY_FEEDBACK_MODEL` | optional | Model id. Default `claude-sonnet-4-6`. |
+
+## Professional / ISZE Feedback (third section)
+
+The Claude Desktop **Scheduled → Feedback** task stays the source of truth for
+ISZE / professional work. The weekly generator **reads** the latest brief from
+`feedback_history/` and adds a **Professional · ISZE** section to the report
+(summary, open loops, 3 close-the-loop actions). It does not replace or rewrite
+that archive.
+
+On Windows the default path is:
+`C:\Users\jerom\Desktop\claude\ISZE\05_memory\briefs\feedback_history`
+
+## Past weight without a Tanita CSV
+
+You do not need Health Planet. Create a tiny CSV yourself and import it:
+
+1. Open Notepad and paste (one row per day — change numbers):
+
+```
+date,scaleKg,bodyFatPct,muscleMassKg,bodyWaterPct,visceralFat
+2026-07-18,84.9,19.2,65.25,52.2,7
+2026-07-17,85.1,,,
+2026-07-16,84.8,,,
+```
+
+2. Save as `weights.csv` (not `.txt`).
+3. With the app running, open `/data` → upload that CSV (weight module is
+   auto-detected from the `scaleKg` header).
+
+Or log a few days by hand on `/weight` / the phone Weight tab.
 
 ### Scheduling a true weekly run
 
@@ -108,6 +139,7 @@ Run it every Sunday evening with your OS scheduler. Examples:
 |------|------|
 | `scripts/weekly-feedback.mjs` | Generator (health + transcripts → Claude → DB + Markdown) |
 | `scripts/lib/transcriptMetrics.mjs` | Parses `.jsonl` transcripts into prompt/project metrics |
+| `scripts/lib/iszeFeedback.mjs` | Reads ISZE scheduled Feedback archive |
 | `scripts/lib/weekDates.mjs` | ISO-week date helpers |
 | `app/api/weekly-feedback/route.ts` | Read-only API (`?weekOf=`, `?list=1`) |
 | `app/weekly-feedback/page.tsx` | Web page |
