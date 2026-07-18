@@ -12,6 +12,7 @@
 // =============================================================================
 
 import { mondayOf, shiftDateStr, toDateStr, fromDateStr, weekBounds } from './weekDates.mjs'
+import { analyzeCausal } from './periodCausal.mjs'
 
 const GOOD = 'good'
 const MIXED = 'mixed'
@@ -510,9 +511,9 @@ function describeCorr(pair) {
 
 /**
  * Pattern library — the “what happened?” layer.
- * Includes the RHR≈53 + no activity case.
+ * When causal.alcohol binge evidence exists, alcohol patterns win over idle-RHR.
  */
-export function interpretPatterns(domains, cross, daily) {
+export function interpretPatterns(domains, cross, daily, causal = null) {
   const patterns = []
   const act = domains.activity
   const rhr = domains.restingHr
@@ -523,7 +524,17 @@ export function interpretPatterns(domains, cross, daily) {
 
   const corr = (a, b) => cross.find(p => (p.a === a && p.b === b) || (p.a === b && p.b === a))
 
-  // --- Low RHR + no / low activity (user's question) ---
+  const alcoholDominant =
+    causal?.topHypothesis?.id === 'alcohol_binge_stack' ||
+    (causal?.alcohol?.maxDrinks ?? 0) >= 10 ||
+    (causal?.alcohol?.bingeDays ?? 0) > 0
+
+  // Causal patterns first (alcohol, lag mismatch, …)
+  if (causal?.patterns?.length) {
+    for (const p of causal.patterns) patterns.push(p)
+  }
+
+  // --- Low RHR + no / low activity (demoted when alcohol explains it) ---
   const latestRhr = rhr?.latest ?? rhr?.avg
   const noActivity =
     act &&
@@ -532,7 +543,7 @@ export function interpretPatterns(domains, cross, daily) {
       act.activeDays === 0)
   const lowRhr = latestRhr != null && latestRhr <= 56
 
-  if (lowRhr && noActivity) {
+  if (lowRhr && noActivity && !alcoholDominant) {
     const stepsLow = steps && steps.avg != null && steps.avg < 5000
     const stressOk = !stress || stress.avg == null || stress.avg < 40
     const hrvOk = !hrv || hrv.avg == null || hrv.avg >= 40
@@ -547,17 +558,13 @@ export function interpretPatterns(domains, cross, daily) {
         `(${Math.round((act.zeroActivityShare || 0) * 100)}% zero-activity days` +
         (steps ? `, steps ~${Math.round(steps.avg)}/day` : '') +
         `). ` +
-        `That is not athletic adaptation from current training load. More likely: residual aerobic fitness (or a calm ` +
-        `parasympathetic baseline) while you are under-loading — a recovery illusion. Low RHR without work does not ` +
-        `mean the period was trained; it means the heart is not being challenged. ` +
+        `No binge-scale Anchor drinks in this window, so the default read is under-loading / recovery illusion. ` +
+        `If you actually drank heavily and did not log it, log alcoholDrinks on Anchor — 15 beers changes the diagnosis. ` +
         (stepsLow
-          ? `Steps are also soft — this is sedentary calm, not performance calm. `
-          : `If steps are decent but sports are zero, you may be moving casually without ever loading. `) +
-        (stressOk && hrvOk
-          ? `Stress/HRV look unstressed, which fits “idle,” not “overreached.” `
-          : `Check stress/HRV: if stress is high or HRV is crumbling while RHR stays low, dig into sleep and illness. `) +
-        `What happened: physiology stayed quiet because demand stayed quiet. Reintroduce easy aerobic work 3×/week ` +
-        `before you trust this RHR as a fitness badge.`,
+          ? `Steps are also soft — sedentary calm, not performance calm. `
+          : '') +
+        (stressOk && hrvOk ? `Stress/HRV look unstressed, which fits idle. ` : '') +
+        `Reintroduce easy aerobic work 3×/week before trusting this RHR as a fitness badge.`,
     })
   } else if (lowRhr && act && act.sessions > 0) {
     patterns.push({
@@ -720,7 +727,7 @@ export function interpretPatterns(domains, cross, daily) {
 /**
  * Long-form narrative for a horizon — this is the “text” the UI must show.
  */
-export function buildDeepNarrative({ label, verdict, score, weeks, domains, cross, patterns, nested }) {
+export function buildDeepNarrative({ label, verdict, score, weeks, domains, cross, patterns, nested, causal }) {
   const paras = []
 
   paras.push(
@@ -728,6 +735,10 @@ export function buildDeepNarrative({ label, verdict, score, weeks, domains, cros
       (score != null ? ` at ${score}/100 across ${weeks} weeks` : '') +
       `. Everything below applies only to this window.`,
   )
+
+  if (causal?.narrative) {
+    paras.push(causal.narrative)
+  }
 
   // Domain paragraph
   const bits = []
@@ -794,7 +805,7 @@ export function buildDeepNarrative({ label, verdict, score, weeks, domains, cros
   return paras.join('\n\n')
 }
 
-function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio, patterns, domains }) {
+function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio, patterns, domains, causal }) {
   const advice = []
   if (verdict == null) {
     advice.push({
@@ -816,6 +827,14 @@ function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio,
       period: label,
       kind: 'caveat',
       text: `Sparse coverage in ${label} (${Math.round(coverageRatio * 100)}% of days) — treat the verdict as directional, not precise.`,
+    })
+  }
+
+  if (causal?.topHypothesis) {
+    advice.push({
+      period: label,
+      kind: 'causal',
+      text: `Leading explanation (${Math.round(causal.topHypothesis.confidence * 100)}%): ${causal.topHypothesis.label}. ${causal.topHypothesis.text}`,
     })
   }
 
@@ -847,7 +866,15 @@ function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio,
   }
 
   // Domain-specific closer
-  if (domains?.activity?.sessions === 0 && domains?.restingHr?.latest != null && domains.restingHr.latest <= 56) {
+  if (causal?.alcohol?.maxDrinks >= 10) {
+    advice.push({
+      period: label,
+      kind: 'action',
+      text:
+        `For ${label}: treat max ${causal.alcohol.maxDrinks}-drink day(s) as the priority intervention — ` +
+        `stack clean Anchor days before trusting RHR/HRV as fitness. Easy aerobic only after a clean night.`,
+    })
+  } else if (domains?.activity?.sessions === 0 && domains?.restingHr?.latest != null && domains.restingHr.latest <= 56) {
     advice.push({
       period: label,
       kind: 'action',
@@ -878,10 +905,11 @@ function adviceForHorizon({ label, verdict, score, nested, weeks, coverageRatio,
   return advice
 }
 
-function deepenHorizon(base, dailySlice) {
+function deepenHorizon(base, dailySlice, confounders = {}) {
   const domains = domainStats(dailySlice)
   const cross = crossMetricMatrix(dailySlice)
-  const patterns = interpretPatterns(domains, cross, dailySlice)
+  const causal = analyzeCausal(dailySlice, { ...confounders, domains })
+  const patterns = interpretPatterns(domains, cross, causal.enrichedDaily || dailySlice, causal)
   const analysis = buildDeepNarrative({
     label: base.label,
     verdict: base.verdict,
@@ -891,6 +919,7 @@ function deepenHorizon(base, dailySlice) {
     cross,
     patterns,
     nested: base.nested,
+    causal,
   })
   const advice = adviceForHorizon({
     label: base.label,
@@ -901,20 +930,44 @@ function deepenHorizon(base, dailySlice) {
     coverageRatio: base.coverageRatio,
     patterns,
     domains,
+    causal,
   })
   return {
     ...base,
     domains,
     crossLinks: cross,
     patterns,
+    causal: {
+      alcohol: causal.alcohol,
+      lags: {
+        afterDrink: causal.lags.afterDrink,
+        afterClean: causal.lags.afterClean,
+        afterBinge: causal.lags.afterBinge,
+        deltasDrinkVsClean: causal.lags.deltasDrinkVsClean,
+        deltasBingeVsClean: causal.lags.deltasBingeVsClean,
+        examples: causal.lags.examples,
+      },
+      hypotheses: causal.hypotheses,
+      topHypothesis: causal.topHypothesis,
+      narrative: causal.narrative,
+    },
     analysis,
     findings: patterns.map(p => p.title),
     advice,
   }
 }
 
+function clipConfounders(confounders, from, to) {
+  const inRange = rows => (rows || []).filter(r => r.date >= from && r.date <= to)
+  return {
+    recoveries: inRange(confounders.recoveries),
+    dayEntries: inRange(confounders.dayEntries),
+    weights: inRange(confounders.weights),
+  }
+}
+
 /**
- * @param {object} data - same shape as analyzeGarmin input (all-time load)
+ * @param {object} data - Garmin rows + optional recoveries/dayEntries/weights
  * @param {object} opts
  * @param {string} [opts.asOf]
  * @param {number[]} [opts.horizonsMonths]
@@ -923,6 +976,11 @@ export function analyzePeriods(data, opts = {}) {
   const daily = buildDailySignals(data)
   const weeklyAll = buildWeeklyScores(daily)
   const segmentsAll = findSegments(weeklyAll)
+  const confoundersAll = {
+    recoveries: data.recoveries || [],
+    dayEntries: data.dayEntries || [],
+    weights: data.weights || data.weightAlcohol || [],
+  }
 
   const dataFrom = daily[0]?.date || null
   const dataTo = daily[daily.length - 1]?.date || null
@@ -951,7 +1009,7 @@ export function analyzePeriods(data, opts = {}) {
       segments,
       nested,
     }
-    horizons.push(deepenHorizon(base, clipDaily(daily, from, to)))
+    horizons.push(deepenHorizon(base, clipDaily(daily, from, to), clipConfounders(confoundersAll, from, to)))
   }
 
   if (dataFrom && dataTo) {
@@ -968,7 +1026,7 @@ export function analyzePeriods(data, opts = {}) {
       segments: segmentsAll,
       nested,
     }
-    horizons.push(deepenHorizon(base, daily))
+    horizons.push(deepenHorizon(base, daily, confoundersAll))
   }
 
   const h12 = horizons.find(h => h.months === 12)
@@ -980,8 +1038,9 @@ export function analyzePeriods(data, opts = {}) {
         `Inside that window: ${h12.nested.longestGood.approxMonths}mo good vs ${h12.nested.longestBad.approxMonths}mo bad — discuss the stretch, not a single blended slogan.`,
       )
     }
-    const top = h12.patterns?.[0]
-    if (top) headlineParts.push(`Top signal: ${top.title}.`)
+    const topH = h12.causal?.topHypothesis
+    if (topH) headlineParts.push(`Leading cause: ${topH.label} (${Math.round(topH.confidence * 100)}%).`)
+    else if (h12.patterns?.[0]) headlineParts.push(`Top signal: ${h12.patterns[0].title}.`)
   } else if (segmentsAll.length) {
     const last = segmentsAll[segmentsAll.length - 1]
     headlineParts.push(`Latest stretch is ${last.verdict} (${last.from} → ${last.to}, ~${last.approxMonths} mo).`)
@@ -989,7 +1048,6 @@ export function analyzePeriods(data, opts = {}) {
     headlineParts.push('Not enough Garmin/health rows to build period advice yet.')
   }
 
-  // Global deep analysis (all history) for the top of the page
   const global = horizons.find(h => h.months == null) || h12 || horizons[0] || null
 
   return {
@@ -1000,7 +1058,9 @@ export function analyzePeriods(data, opts = {}) {
     horizons,
     headline: headlineParts.join(' '),
     deepAnalysis: global?.analysis || headlineParts.join(' '),
-    topPatterns: global?.patterns?.slice(0, 6) || [],
+    causalNarrative: global?.causal?.narrative || null,
+    topPatterns: global?.patterns?.slice(0, 8) || [],
+    topHypothesis: global?.causal?.topHypothesis || null,
   }
 }
 
@@ -1016,10 +1076,14 @@ export function periodsToMarkdown(report) {
     '## Deep analysis',
     report.deepAnalysis || '_none_',
     '',
+    '## Causal engine',
+    report.causalNarrative || report.topHypothesis?.text || '_none_',
+    '',
     '## How to use this',
     '- Weekly Feedback = this ISO week only.',
     '- Period Review = multi-month advice. Always name the window.',
-    '- Low resting HR without activity is calm, not fitness — read the pattern text.',
+    '- Binge drinking (e.g. 15 beers) outranks flattering low RHR — log Anchor alcoholDrinks.',
+    '- Low resting HR without activity is calm, not fitness — unless alcohol explains the idle.',
     '',
     '## Stretches (all history)',
   ]

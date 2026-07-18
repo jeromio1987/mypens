@@ -53,12 +53,40 @@ interface Horizon {
   patterns?: Pattern[]
   crossLinks?: CrossLink[]
   domains?: Record<string, unknown>
+  causal?: CausalBlock
+}
+
+interface Hypothesis {
+  id: string
+  label: string
+  confidence: number
+  text: string
+}
+
+interface CausalBlock {
+  alcohol?: {
+    drinkDays?: number
+    bingeDays?: number
+    totalDrinks?: number
+    maxDrinks?: number
+    maxDrinkDate?: string | null
+  }
+  topHypothesis?: Hypothesis | null
+  hypotheses?: Hypothesis[]
+  narrative?: string
+  lags?: {
+    deltasDrinkVsClean?: Record<string, number | null>
+    deltasBingeVsClean?: Record<string, number | null>
+    examples?: { biggestBinges?: Array<{ date: string; drinks: number; next?: Record<string, unknown> | null }> }
+  }
 }
 
 interface Report {
   asOf: string
   headline: string
   deepAnalysis?: string
+  causalNarrative?: string | null
+  topHypothesis?: Hypothesis | null
   topPatterns?: Pattern[]
   generatedAt?: string
   dataSpan?: { from: string | null; to: string | null }
@@ -171,15 +199,25 @@ export default function PeriodReviewPage() {
               </p>
             </div>
 
-            {report.deepAnalysis && (
+            {report.topHypothesis && (
+              <div className="bg-pens-navy/70 border border-pens-crimson/30 rounded-2xl p-5 mb-4">
+                <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold mb-2">
+                  Leading cause · {Math.round(report.topHypothesis.confidence * 100)}%
+                </p>
+                <p className="text-base font-semibold text-pens-cream mb-2">{report.topHypothesis.label}</p>
+                <p className="text-[15px] text-pens-cream/85 leading-relaxed">{report.topHypothesis.text}</p>
+              </div>
+            )}
+
+            {(report.causalNarrative || report.deepAnalysis) && (
               <div className="bg-pens-navy/70 border border-cyan-800/40 rounded-2xl p-5 mb-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Radar size={14} className="text-cyan-400" />
                   <p className="text-[10px] uppercase tracking-widest text-cyan-400 font-semibold">
-                    Deep analysis
+                    Deep analysis · causal
                   </p>
                 </div>
-                <AnalysisBlock text={report.deepAnalysis} />
+                <AnalysisBlock text={report.causalNarrative || report.deepAnalysis || ''} />
               </div>
             )}
 
@@ -242,6 +280,30 @@ export default function PeriodReviewPage() {
                     {active.score != null ? ` · ${active.score}/100` : ''}
                   </span>
                 </div>
+
+                {active.causal?.topHypothesis && (
+                  <div className="border border-pens-crimson/20 rounded-xl p-3">
+                    <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold mb-1">
+                      Leading cause · {Math.round(active.causal.topHypothesis.confidence * 100)}%
+                    </p>
+                    <p className="text-sm font-semibold text-pens-cream mb-1">
+                      {active.causal.topHypothesis.label}
+                    </p>
+                    <p className="text-sm text-pens-cream/75 leading-relaxed">
+                      {active.causal.topHypothesis.text}
+                    </p>
+                    {active.causal.alcohol && (active.causal.alcohol.maxDrinks ?? 0) > 0 && (
+                      <p className="text-[11px] text-pens-cream/40 mt-2">
+                        Alcohol in window: {active.causal.alcohol.totalDrinks} drinks · max{' '}
+                        {active.causal.alcohol.maxDrinks}
+                        {active.causal.alcohol.maxDrinkDate
+                          ? ` on ${active.causal.alcohol.maxDrinkDate}`
+                          : ''}{' '}
+                        · {active.causal.alcohol.bingeDays} binge day(s)
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {active.analysis && (
                   <div>

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Period Review runner — multi-horizon advice (3m / 6m / 12m / …).
+// Period Review runner — multi-horizon advice + causal engine (alcohol lag, …).
 //
 // Usage:
 //   npm run analyze:periods
@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 
 import { loadGarminData } from './lib/garminAnalyze.mjs'
 import { analyzePeriods, periodsToMarkdown } from './lib/periodAnalyze.mjs'
+import { loadConfounders } from './lib/periodCausal.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(__dirname, '..')
@@ -54,14 +55,25 @@ async function main() {
   const prisma = new PrismaClient()
 
   try {
-    const data = await loadGarminData(prisma, { allTime: true })
+    const [garmin, confounders] = await Promise.all([
+      loadGarminData(prisma, { allTime: true }),
+      loadConfounders(prisma, {}),
+    ])
+    const data = { ...garmin, ...confounders }
     const report = analyzePeriods(data, { asOf: args.asOf || undefined })
 
     console.log(`[period-review] ${report.headline}`)
+    if (report.topHypothesis) {
+      console.log(
+        `[period-review] leading cause: ${report.topHypothesis.label} (${Math.round(report.topHypothesis.confidence * 100)}%)`,
+      )
+    }
     for (const h of report.horizons) {
       if (!h.verdict) continue
+      const cause = h.causal?.topHypothesis?.label
       console.log(
         `  · ${h.label}: ${h.verdict} (${h.score}/100, ${h.weeks} weeks)` +
+          (cause ? ` — cause: ${cause}` : '') +
           (h.nested?.longestGood && h.nested?.longestBad
             ? ` — ${h.nested.longestGood.approxMonths}mo good / ${h.nested.longestBad.approxMonths}mo bad inside`
             : ''),
