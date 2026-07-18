@@ -17,6 +17,14 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
+/** yyyy-mm-dd (local) for a Date. */
+function toDateStr(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 /**
  * Default locations Cursor and Claude Desktop write transcripts to.
  * Overridable with the PENS_TRANSCRIPT_DIRS env var (comma-separated
@@ -239,17 +247,30 @@ export function computeWeekMetrics({ files, weekStart, weekEnd, maxSamplePrompts
     }
     filesScanned++
 
+    // Fallback date for turns that carry no <timestamp>: the file's last
+    // modification time. Transcripts are effectively per-session, so this
+    // maps an undated conversation to a single week instead of counting it
+    // in EVERY week (which otherwise inflates weekly totals to all-time).
+    let fallbackDate = null
+    try {
+      fallbackDate = toDateStr(statSync(file).mtime)
+    } catch {
+      /* keep null */
+    }
+
     const { turns, toolUseCount: tu, subagentCount: su } = parseTranscript(text)
 
-    // A "session" counts only if it has at least one prompt in the window
-    // (or any prompt at all when transcripts are undated).
-    const windowTurns = turns.filter(t => (t.dateStr ? inWindow(t.dateStr) : false))
-    const datedTurns = turns.filter(t => t.dateStr)
-    const useTurns =
-      datedTurns.length > 0 ? windowTurns : turns // undated file: include all
+    // A turn belongs to the week if its own timestamp — or, when it has
+    // none, the file's mtime — falls inside the window.
+    const useTurns = turns.filter(t => {
+      const d = t.dateStr ?? fallbackDate
+      return d ? inWindow(d) : false
+    })
 
     if (useTurns.length === 0) continue
     sessions++
+    // Tool/subagent counts are file-level (assistant turns interleave), so we
+    // only attribute them to the week when the file is active this week.
     toolUseCount += tu
     subagentCount += su
 
