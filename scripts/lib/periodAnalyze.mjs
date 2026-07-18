@@ -229,8 +229,6 @@ function clipSegments(segments, from, to) {
     if (s.to < from || s.from > to) continue
     const cFrom = s.from < from ? from : s.from
     const cTo = s.to > to ? to : s.to
-    const weeks = Math.max(1, Math.round(daysBetween(cFrom, cTo) / 7) + (cFrom === s.from && cTo === s.to ? 0 : 0))
-    // Recompute weeks from Monday alignment when clipped
     let weekCount = 0
     let cursor = mondayOf(cFrom)
     while (cursor <= cTo) {
