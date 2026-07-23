@@ -53,10 +53,11 @@ Append-only. Goal: fewer repeated failures, clearer handoffs.
 6. Don’t invent paths; give 2–3 candidates from prior `dir` hits.
 7. Secrets: don’t ask to paste `.env` into chat; guide edits locally.
 
-### Expo / NetInfo
+### Expo / notifications
 | Symptom | Cause | Fix |
 |---------|--------|-----|
-| `NetInfo.default.addEventListener is not a function` | Bad default import / wrong API (`addListener` vs `addEventListener`) under Metro | Normalize `default ?? module`, use `addEventListener`, fail open (assume online) |
+| `NetInfo.default.addEventListener is not a function` | Bad default import / wrong API under Metro | Normalize `default ?? module`, use `addEventListener`, fail open |
+| `expo-notifications: Android Push … removed from Expo Go` (SDK 53+) | Importing notifications in Expo Go | Skip all `expo-notifications` imports when `Constants.appOwnership === 'expo'`; Food still works |
 
 ---
 

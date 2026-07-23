@@ -6,11 +6,12 @@
 // and the client just fetches it when the user opens the screen. Tapping
 // the notification deep-links to `/weekly-feedback` (wired in _layout.tsx).
 //
-// expo-notifications is imported dynamically and every entry point is
-// wrapped in try/catch so the app never crashes on web (where local
-// scheduling is unsupported) or if the native module is unavailable.
+// Expo Go (SDK 53+) removed remote push on Android and importing
+// expo-notifications can throw. We skip the whole module in Expo Go so
+// Food / logging still works; use a dev build later for real notifications.
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 
 const ENABLED_KEY = 'weeklyFeedback.notifications.enabled'
@@ -20,7 +21,16 @@ const ANDROID_CHANNEL = 'weekly-feedback'
 /** Route a notification tap should open. */
 export const WEEKLY_FEEDBACK_HREF = '/weekly-feedback'
 
+/** Expo Go cannot use expo-notifications push APIs on Android SDK 53+. */
+export function notificationsSupportedInThisClient(): boolean {
+  if (Platform.OS === 'web') return false
+  // appOwnership === 'expo' → Expo Go; null/standalone → dev client or store build
+  if (Constants.appOwnership === 'expo') return false
+  return true
+}
+
 async function loadNotifications() {
+  if (!notificationsSupportedInThisClient()) return null
   try {
     return await import('expo-notifications')
   } catch {
@@ -44,6 +54,7 @@ export async function setWeeklyFeedbackNotifEnabled(enabled: boolean): Promise<v
   } catch {
     /* ignore */
   }
+  if (!notificationsSupportedInThisClient()) return
   if (enabled) {
     await scheduleWeeklyFeedbackNotification()
   } else {
@@ -52,7 +63,7 @@ export async function setWeeklyFeedbackNotifEnabled(enabled: boolean): Promise<v
 }
 
 async function cancelWeeklyFeedbackNotification(): Promise<void> {
-  if (Platform.OS === 'web') return
+  if (!notificationsSupportedInThisClient()) return
   const Notifications = await loadNotifications()
   if (!Notifications) return
   try {
@@ -72,7 +83,7 @@ async function cancelWeeklyFeedbackNotification(): Promise<void> {
  * previously scheduled copy first so we never stack duplicates.
  */
 export async function scheduleWeeklyFeedbackNotification(): Promise<void> {
-  if (Platform.OS === 'web') return
+  if (!notificationsSupportedInThisClient()) return
   const Notifications = await loadNotifications()
   if (!Notifications) return
 
@@ -121,7 +132,7 @@ export async function scheduleWeeklyFeedbackNotification(): Promise<void> {
  * the user hasn't turned it off.
  */
 export async function initWeeklyFeedbackNotificationsOnLaunch(): Promise<void> {
-  if (Platform.OS === 'web') return
+  if (!notificationsSupportedInThisClient()) return
   const Notifications = await loadNotifications()
   if (!Notifications) return
 

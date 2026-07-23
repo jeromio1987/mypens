@@ -13,7 +13,10 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { initWeeklyFeedbackNotificationsOnLaunch } from "@/lib/weeklyFeedbackNotifications";
+import {
+  initWeeklyFeedbackNotificationsOnLaunch,
+  notificationsSupportedInThisClient,
+} from "@/lib/weeklyFeedbackNotifications";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -24,8 +27,11 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
+    // Skip entirely in Expo Go (SDK 53+ Android push removed — import can throw).
+    if (!notificationsSupportedInThisClient()) return;
+
     // Configure presentation + (re)schedule the Sunday reminder.
-    initWeeklyFeedbackNotificationsOnLaunch();
+    void initWeeklyFeedbackNotificationsOnLaunch();
 
     // Deep-link when the user taps a notification. Dynamically imported so
     // the app never hard-crashes on web / if the native module is absent.
