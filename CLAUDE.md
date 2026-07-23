@@ -102,11 +102,12 @@ Weight · Food · Sleep · Training · Body Measurements · Journal / Mood · Ev
 
 ## Not built yet (Phase 2+)
 
-- Workout programme builder (Phase 2-C)
-- Weekly PDF report (Phase 2-D)
 - Per-pillar AI breakdown in Verdict (summary is live; per-pillar is not)
 - Multi-user / social features — intentionally excluded from v1
+- **Phase 5 — Engine Report Cockpit** — The Read, tabbed `/period-review`, zoomable Form score + pillar graphs, RHR drinking ladder (≥50 / ≥55), offline HTML snapshot
+- **Phase 6 — Adaptive Sports Planner** — goal-driven week plan (VO₂max / ~13% BF without muscle loss / marathon / custom) from sleep + sport load + food context; sports: running · cycling · core · gym; long session Sat **or** Sun only
 
+Programme builder (2-C) and weekly PDF (2-D) are **built** — do not rebuild; extend only.
 ---
 
 ## Mobile bridge (Expo ↔ Next)
