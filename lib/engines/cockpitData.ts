@@ -121,13 +121,26 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    loadNotes.push(`Could not count ledger tables: ${msg}`)
+    if (/must start with the protocol|DATABASE_URL|datasource `db`/i.test(msg)) {
+      loadNotes.push(
+        'DATABASE_URL is missing or invalid in this app’s .env (must start with postgresql:// or postgres://). Fix .env, then fully restart npm run dev — Supabase SQL working does not mean local Next can connect.',
+      )
+    } else {
+      loadNotes.push(`Could not count ledger tables: ${msg}`)
+    }
   }
 
-  if (ledger.totalRows === 0 && (!rawCounts || Object.values(rawCounts).every(n => n === 0))) {
+  if (
+    ledger.totalRows === 0 &&
+    rawCounts &&
+    Object.values(rawCounts).every(n => n === 0) &&
+    !loadNotes.some(n => /DATABASE_URL is missing/i.test(n))
+  ) {
     loadNotes.push(
       'Supabase ledger is empty for SleepEntry / GarminActivity / TrainingEntry / WeightEntry / GarminDailyMetric. Re-run the Garmin dump import against this same DATABASE_URL.',
     )
+  } else if (ledger.totalRows === 0 && rawCounts == null) {
+    // Count failed (e.g. bad URL) — do not claim the ledger is empty.
   }
 
   const data = {
