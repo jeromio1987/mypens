@@ -24,7 +24,14 @@ import { Feather, Ionicons } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
-import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
+import {
+  pensFetch,
+  isPensApiConfigured,
+  pensApiBaseUrl,
+  probePensApi,
+  describePensError,
+  type PensApiProbe,
+} from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { usePensSync } from '@/hooks/usePensSync'
 import { defaultEatenGrams, scalePortion } from '@/lib/foodPortion'
@@ -126,6 +133,8 @@ export default function FoodScreen() {
   >([])
   const [catalogPick, setCatalogPick] = useState<(typeof productHits)[0] | null>(null)
   const [catalogEatenG, setCatalogEatenG] = useState(100)
+  const [apiProbe, setApiProbe] = useState<PensApiProbe | null>(null)
+  const [productSearchError, setProductSearchError] = useState<string | null>(null)
 
   useEffect(() => {
     AsyncStorage.getItem(TARGETS_KEY).then((raw) => {
@@ -141,19 +150,48 @@ export default function FoodScreen() {
   }, [])
 
   useEffect(() => {
+    if (!isPensApiConfigured()) {
+      setApiProbe({ status: 'unconfigured' })
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const result = await probePensApi()
+      if (!cancelled) setApiProbe(result)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!isPensApiConfigured() || name.trim().length < 2) {
       setProductHits([])
+      setProductSearchError(null)
       return
     }
     const t = setTimeout(() => {
       void (async () => {
         try {
           const res = await pensFetch(`/api/food/products?q=${encodeURIComponent(name.trim())}`)
-          if (!res.ok) return
+          if (!res.ok) {
+            setProductHits([])
+            if (res.status === 401) {
+              setProductSearchError(
+                'Unauthorized — set MOBILE_PENS_API_TOKEN in Next .env to match EXPO_PUBLIC_PENS_API_TOKEN, then restart Next.',
+              )
+            } else {
+              const j = (await res.json().catch(() => ({}))) as { error?: string }
+              setProductSearchError(j.error ?? `Product search failed (${res.status})`)
+            }
+            return
+          }
           const j = (await res.json()) as { products?: typeof productHits }
           setProductHits(Array.isArray(j.products) ? j.products.slice(0, 8) : [])
-        } catch {
-          /* ignore */
+          setProductSearchError(null)
+        } catch (e: unknown) {
+          setProductHits([])
+          setProductSearchError(describePensError(e))
         }
       })()
     }, 300)
@@ -348,7 +386,7 @@ export default function FoodScreen() {
       }))
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     } catch (e: unknown) {
-      Alert.alert('Photo scan', e instanceof Error ? e.message : 'Failed')
+      Alert.alert('Photo scan', describePensError(e))
     } finally {
       setAiBusy(false)
     }
@@ -390,7 +428,7 @@ export default function FoodScreen() {
       }))
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     } catch (e: unknown) {
-      Alert.alert('Refine', e instanceof Error ? e.message : 'Failed')
+      Alert.alert('Refine', describePensError(e))
     } finally {
       setAiBusy(false)
     }
@@ -548,11 +586,27 @@ export default function FoodScreen() {
         </Pressable>
       </View>
 
-      {!isPensApiConfigured() && (
-        <View style={[styles.warnCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <Text style={[styles.warnTitle, { color: colors.foreground }]}>Connect to MY PENS</Text>
+      {(!isPensApiConfigured() || (apiProbe && apiProbe.status !== 'ok')) && (
+        <View style={[styles.warnCard, { borderColor: '#f59e0b', backgroundColor: colors.card }]}>
+          <Text style={[styles.warnTitle, { color: colors.foreground }]}>
+            {!isPensApiConfigured() || apiProbe?.status === 'unconfigured'
+              ? 'Connect to MY PENS'
+              : apiProbe?.status === 'server_token_missing'
+                ? 'Next server token missing'
+                : apiProbe?.status === 'unauthorized'
+                  ? 'API token mismatch'
+                  : 'Cannot reach MY PENS API'}
+          </Text>
           <Text style={[styles.warnBody, { color: colors.mutedForeground }]}>
-            Add EXPO_PUBLIC_PENS_API_URL and EXPO_PUBLIC_PENS_API_TOKEN to .env (token must match MOBILE_PENS_API_TOKEN on the Next server). Restart Expo after changing env.
+            {!isPensApiConfigured() || apiProbe?.status === 'unconfigured'
+              ? 'Add EXPO_PUBLIC_PENS_API_URL and EXPO_PUBLIC_PENS_API_TOKEN to mypens-mobile/.env (token must match MOBILE_PENS_API_TOKEN on the Next server). Restart Expo after changing env.'
+              : apiProbe?.status === 'server_token_missing'
+                ? `Phone reaches ${apiProbe.baseUrl}, but Next reports hasMobileToken:false. Add MOBILE_PENS_API_TOKEN to C:\\Users\\jerom\\Desktop\\claude\\Projects\\mypens\\.env (same value as mobile EXPO_PUBLIC_PENS_API_TOKEN), then restart npm run dev.`
+                : apiProbe?.status === 'unauthorized'
+                  ? `Bearer rejected by ${apiProbe.baseUrl}. Make MOBILE_PENS_API_TOKEN (Next) identical to EXPO_PUBLIC_PENS_API_TOKEN (mobile), restart both.`
+                  : apiProbe?.status === 'unreachable'
+                    ? apiProbe.detail
+                    : `Check ${pensApiBaseUrl() || 'EXPO_PUBLIC_PENS_API_URL'}/api/health on the phone browser.`}
           </Text>
         </View>
       )}
@@ -765,6 +819,9 @@ export default function FoodScreen() {
           placeholderTextColor={colors.mutedForeground}
           style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
         />
+        {productSearchError && name.trim().length >= 2 && (
+          <Text style={[styles.warnBody, { color: '#f59e0b', marginBottom: 8 }]}>{productSearchError}</Text>
+        )}
         {productHits.length > 0 && !catalogPick && (
           <View style={{ marginTop: 8, gap: 6 }}>
             {productHits.map((p) => (

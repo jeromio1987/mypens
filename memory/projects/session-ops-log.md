@@ -59,6 +59,15 @@ Append-only. Goal: fewer repeated failures, clearer handoffs.
 | `NetInfo.default.addEventListener is not a function` | Bad default import / wrong API under Metro | Normalize `default ?? module`, use `addEventListener`, fail open |
 | `expo-notifications: Android Push … removed from Expo Go` (SDK 53+) | Importing notifications in Expo Go | Skip all `expo-notifications` imports when `Constants.appOwnership === 'expo'`; Food still works |
 
+### Food mobile API (2026-07-23)
+| Symptom | Cause | Fix |
+|---------|--------|-----|
+| Photo: Alert "Network request failed" | Phone cannot reach Next, or opaque RN fetch error | Phone browser → `http://<LAN-IP>:5000/api/health`; fix LAN IP / firewall; Food banner now explains |
+| Type "Sala" → no OFF/history hits | Silent catch + `!res.ok` return; often **401** because `MOBILE_PENS_API_TOKEN` missing on Next | Add token to `mypens\.env` matching mobile; restart Next; typeahead now shows error text |
+| `/api/health` → `hasMobileToken:false` | Key absent from Next `.env` (mobile token alone is not enough) | Copy same secret into both `.env` files |
+
+**Rule:** Mobile Food needs **both** env files: Next `MOBILE_PENS_API_TOKEN` + mobile `EXPO_PUBLIC_PENS_API_*`. Health must show `hasMobileToken:true`. Products API lives on branch with OFF typeahead (not on `main` yet) — stay on `cursor/fix-netinfo-mobile-d4c7` (includes typeahead) or merge `cursor/food-off-typeahead-d4c7`.
+
 ---
 
 ## Next append
