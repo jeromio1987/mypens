@@ -1,6 +1,6 @@
 import { MEAL_ORDER, type MealType } from '@/lib/foodModels'
 
-export type FoodAnalysisMode = 'meal_estimate' | 'nutrition_label'
+export type FoodAnalysisMode = 'meal_estimate' | 'nutrition_label' | 'packaged_product'
 
 export interface FoodAnalyzeItem {
   name: string
@@ -10,6 +10,12 @@ export interface FoodAnalyzeItem {
   carbsG: number
   fatG: number
   fiberG: number
+  brand: string | null
+  packGrams: number | null
+  /** Grams the macros describe. */
+  assumedGrams: number | null
+  /** AI default portion to log (often = pack or serving). */
+  portionGrams: number | null
 }
 
 export function parseJsonFromAssistant(text: string): unknown {
@@ -26,8 +32,21 @@ function isMeal(s: unknown): s is MealType {
   return typeof s === 'string' && (MEAL_ORDER as readonly string[]).includes(s)
 }
 
+function optPositive(n: unknown): number | null {
+  const v = Number(n)
+  if (!Number.isFinite(v) || v <= 0) return null
+  return Math.round(v * 10) / 10
+}
+
+function optBrand(n: unknown): string | null {
+  if (typeof n !== 'string') return null
+  const t = n.trim()
+  return t.length ? t.slice(0, 80) : null
+}
+
 export function normalizeAnalysisMode(raw: unknown): FoodAnalysisMode {
   if (raw === 'nutrition_label') return 'nutrition_label'
+  if (raw === 'packaged_product') return 'packaged_product'
   return 'meal_estimate'
 }
 
@@ -42,6 +61,12 @@ export function normalizeItems(raw: unknown, defaultMeal: MealType): FoodAnalyze
     const name = typeof r.name === 'string' ? r.name.trim() : ''
     if (!name) continue
     const meal = isMeal(r.meal) ? r.meal : defaultMeal
+    const packGrams = optPositive(r.packGrams)
+    let assumedGrams = optPositive(r.assumedGrams)
+    let portionGrams = optPositive(r.portionGrams)
+    if (!assumedGrams && portionGrams) assumedGrams = portionGrams
+    if (!assumedGrams && packGrams) assumedGrams = packGrams
+    if (!portionGrams && assumedGrams) portionGrams = assumedGrams
     out.push({
       name,
       meal,
@@ -50,6 +75,10 @@ export function normalizeItems(raw: unknown, defaultMeal: MealType): FoodAnalyze
       carbsG: Math.max(0, Number(r.carbsG) || 0),
       fatG: Math.max(0, Number(r.fatG) || 0),
       fiberG: Math.max(0, Number(r.fiberG) || 0),
+      brand: optBrand(r.brand),
+      packGrams,
+      assumedGrams,
+      portionGrams,
     })
     if (out.length >= 12) break
   }

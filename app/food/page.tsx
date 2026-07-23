@@ -27,7 +27,9 @@ export default function FoodPage() {
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">P.E.N.S.</p>
               <h1 className="text-2xl font-bold text-pens-cream mt-0.5">Food</h1>
-              <p className="text-xs text-pens-cream/40 mt-0.5">Manual log · AI from a photo</p>
+              <p className="text-xs text-pens-cream/40 mt-0.5">
+                Manual · AI photo (brand + pack) · adjust grams before log
+              </p>
             </div>
           </div>
           <input

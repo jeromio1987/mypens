@@ -27,6 +27,7 @@ import { MODULE_COLORS } from '@/constants/colors'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { usePensSync } from '@/hooks/usePensSync'
+import { defaultEatenGrams, scalePortion } from '@/lib/foodPortion'
 
 const MOD = MODULE_COLORS.food
 const TARGETS_KEY = '@mypens/food_targets'
@@ -56,6 +57,10 @@ interface ScanItem {
   carbsG: number
   fatG: number
   fiberG: number
+  brand?: string | null
+  packGrams?: number | null
+  assumedGrams?: number | null
+  portionGrams?: number | null
 }
 
 interface Targets { kcal: number; proteinG: number; carbsG: number; fatG: number }
@@ -98,6 +103,7 @@ export default function FoodScreen() {
 
   const [aiBusy, setAiBusy] = useState(false)
   const [scanItems, setScanItems] = useState<ScanItem[]>([])
+  const [eatenGrams, setEatenGrams] = useState<number[]>([])
   const [dishSummary, setDishSummary] = useState<string | null>(null)
   const [analysisMode, setAnalysisMode] = useState<string | null>(null)
   const [anthropicFileId, setAnthropicFileId] = useState<string | null>(null)
@@ -266,6 +272,7 @@ export default function FoodScreen() {
     const asset = result.assets[0]
     setAiBusy(true)
     setScanItems([])
+    setEatenGrams([])
     setDishSummary(null)
     setAnalysisMode(null)
     setAnthropicFileId(null)
@@ -292,6 +299,7 @@ export default function FoodScreen() {
       if (!res.ok) throw new Error(j.error ?? `Scan failed (${res.status})`)
       const items = Array.isArray(j.items) ? j.items : []
       setScanItems(items)
+      setEatenGrams(items.map(defaultEatenGrams))
       setDishSummary(typeof j.dishSummary === 'string' ? j.dishSummary : null)
       setAnalysisMode(typeof j.analysisMode === 'string' ? j.analysisMode : null)
       const fid = j.anthropicFileId != null ? String(j.anthropicFileId) : null
@@ -334,6 +342,7 @@ export default function FoodScreen() {
       if (!res.ok) throw new Error(j.error ?? `Refine failed (${res.status})`)
       const items = Array.isArray(j.items) ? j.items : []
       setScanItems(items)
+      setEatenGrams(items.map(defaultEatenGrams))
       setDishSummary(typeof j.dishSummary === 'string' ? j.dishSummary : null)
       setAnalysisMode(typeof j.analysisMode === 'string' ? j.analysisMode : null)
       setRefineText('')
@@ -350,14 +359,30 @@ export default function FoodScreen() {
     }
   }
 
-  const applyScanRow = (item: ScanItem) => {
+  const applyScanRow = (index: number) => {
+    const item = scanItems[index]
+    if (!item) return
+    const scaled = scalePortion(
+      {
+        ...item,
+        assumedGrams: item.assumedGrams ?? null,
+        packGrams: item.packGrams ?? null,
+      },
+      eatenGrams[index] ?? defaultEatenGrams(item),
+    )
+    const g = scaled.eatenGrams
     setSelectedMeal(item.meal)
-    setName(item.name)
-    setKcal(item.kcal ? String(Math.round(item.kcal)) : '')
-    setProteinG(item.proteinG ? String(item.proteinG) : '')
-    setCarbsG(item.carbsG ? String(item.carbsG) : '')
-    setFatG(item.fatG ? String(item.fatG) : '')
-    setFiberG(item.fiberG ? String(item.fiberG) : '')
+    setName(
+      g > 0
+        ? `${item.brand ? `${item.brand} · ` : ''}${item.name} (${Math.round(g)}g)`
+        : item.name,
+    )
+    setKcal(scaled.kcal ? String(Math.round(scaled.kcal)) : '')
+    setProteinG(scaled.proteinG ? String(scaled.proteinG) : '')
+    setCarbsG(scaled.carbsG ? String(scaled.carbsG) : '')
+    setFatG(scaled.fatG ? String(scaled.fatG) : '')
+    setFiberG(scaled.fiberG ? String(scaled.fiberG) : '')
+    setNotes(item.packGrams ? `Pack ${item.packGrams}g · ate ${Math.round(g)}g` : notes)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
   }
 
@@ -367,19 +392,37 @@ export default function FoodScreen() {
     try {
       for (let i = 0; i < scanItems.length; i++) {
         const item = scanItems[i]
+        const scaled = scalePortion(
+          {
+            ...item,
+            assumedGrams: item.assumedGrams ?? null,
+            packGrams: item.packGrams ?? null,
+          },
+          eatenGrams[i] ?? defaultEatenGrams(item),
+        )
+        const g = scaled.eatenGrams
+        const name =
+          g > 0
+            ? `${item.brand ? `${item.brand} · ` : ''}${item.name} (${Math.round(g)}g)`
+            : item.name
         const res = await pensFetch('/api/food', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             date: selectedDate,
             meal: item.meal,
-            name: item.name,
-            kcal: item.kcal,
-            proteinG: item.proteinG,
-            carbsG: item.carbsG,
-            fatG: item.fatG,
-            fiberG: item.fiberG,
-            notes: i === 0 && dishSummary ? `AI: ${dishSummary.slice(0, 200)}` : undefined,
+            name,
+            kcal: scaled.kcal,
+            proteinG: scaled.proteinG,
+            carbsG: scaled.carbsG,
+            fatG: scaled.fatG,
+            fiberG: scaled.fiberG,
+            notes:
+              i === 0 && dishSummary
+                ? `AI: ${dishSummary.slice(0, 160)}${item.packGrams ? ` · pack ${item.packGrams}g / ate ${Math.round(g)}g` : ''}`
+                : item.packGrams
+                  ? `Pack ${item.packGrams}g · ate ${Math.round(g)}g`
+                  : undefined,
           }),
         })
         const j = await res.json().catch(() => ({}))
@@ -388,6 +431,7 @@ export default function FoodScreen() {
       qc.invalidateQueries({ queryKey: ['food'] })
       qc.invalidateQueries({ queryKey: ['food-chart'] })
       setScanItems([])
+      setEatenGrams([])
       setDishSummary(null)
       setAnalysisMode(null)
       setAnthropicFileId(null)
@@ -553,21 +597,80 @@ export default function FoodScreen() {
         ) : null}
         {scanItems.length > 0 && (
           <>
-            {scanItems.map((item, idx) => (
-              <View key={`${item.name}-${idx}`} style={[styles.scanRow, { borderColor: colors.border }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.entryName, { color: colors.foreground }]}>{item.name}</Text>
-                  <Text style={[styles.entrySub, { color: colors.mutedForeground }]}>
-                    {Math.round(item.kcal)} kcal · P {item.proteinG}g
-                  </Text>
+            {scanItems.map((item, idx) => {
+              const scaled = scalePortion(
+                {
+                  ...item,
+                  assumedGrams: item.assumedGrams ?? null,
+                  packGrams: item.packGrams ?? null,
+                },
+                eatenGrams[idx] ?? defaultEatenGrams(item),
+              )
+              const eaten = eatenGrams[idx] ?? defaultEatenGrams(item)
+              return (
+                <View key={`${item.name}-${idx}`} style={[styles.scanRow, { borderColor: colors.border, flexDirection: 'column', alignItems: 'stretch', gap: 8 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.entryName, { color: colors.foreground }]}>
+                        {item.brand ? `${item.brand} · ` : ''}
+                        {item.name}
+                      </Text>
+                      <Text style={[styles.entrySub, { color: colors.mutedForeground }]}>
+                        {Math.round(scaled.kcal)} kcal · P {scaled.proteinG}g
+                        {item.packGrams ? ` · pack ${item.packGrams}g` : ''}
+                      </Text>
+                    </View>
+                    <Pressable onPress={() => applyScanRow(idx)} style={styles.scanApply}>
+                      <Text style={{ color: MOD.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Fill</Text>
+                    </Pressable>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={[styles.macroInputLabel, { color: colors.mutedForeground }]}>Grams</Text>
+                    <TextInput
+                      value={String(Math.round(eaten))}
+                      onChangeText={(t) => {
+                        const v = Math.max(0, Number(t) || 0)
+                        setEatenGrams((prev) => {
+                          const next = [...prev]
+                          next[idx] = v
+                          return next
+                        })
+                      }}
+                      keyboardType="number-pad"
+                      style={[styles.macroInputField, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary, width: 72 }]}
+                    />
+                    {item.packGrams != null && (
+                      <Pressable
+                        onPress={() =>
+                          setEatenGrams((prev) => {
+                            const next = [...prev]
+                            next[idx] = item.packGrams!
+                            return next
+                          })
+                        }
+                      >
+                        <Text style={{ color: MOD.primary, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Whole</Text>
+                      </Pressable>
+                    )}
+                    {item.packGrams != null && (
+                      <Pressable
+                        onPress={() =>
+                          setEatenGrams((prev) => {
+                            const next = [...prev]
+                            next[idx] = Math.round(item.packGrams! / 2)
+                            return next
+                          })
+                        }
+                      >
+                        <Text style={{ color: MOD.primary, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Half</Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
-                <Pressable onPress={() => applyScanRow(item)} style={styles.scanApply}>
-                  <Text style={{ color: MOD.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Fill</Text>
-                </Pressable>
-              </View>
-            ))}
+              )
+            })}
             <Pressable onPress={() => void logAllScan()} disabled={aiBusy} style={[styles.submitBtn, { backgroundColor: '#7c3aed', marginTop: 8 }]}>
-              <Text style={styles.submitText}>Log all {scanItems.length}</Text>
+              <Text style={styles.submitText}>Log all at chosen grams</Text>
             </Pressable>
           </>
         )}
@@ -577,7 +680,7 @@ export default function FoodScreen() {
             <TextInput
               value={refineText}
               onChangeText={setRefineText}
-              placeholder="e.g. That was salmon, not tuna"
+              placeholder="e.g. I ate 200g of the 1kg yoghurt"
               placeholderTextColor={colors.mutedForeground}
               style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
             />

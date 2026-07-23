@@ -5,6 +5,7 @@ import { Camera } from 'lucide-react'
 import { MEAL_LABELS, MEAL_ORDER, type MealType } from '@/lib/foodModels'
 import QuickToggle from '@/components/shared/QuickToggle'
 import PresetPicker from '@/components/shared/PresetPicker'
+import { defaultEatenGrams, scalePortion } from '@/lib/foodPortion'
 
 interface Props {
   date: string
@@ -19,6 +20,29 @@ interface ScanItem {
   carbsG: number
   fatG: number
   fiberG: number
+  brand: string | null
+  packGrams: number | null
+  assumedGrams: number | null
+  portionGrams: number | null
+}
+
+function mapScanItems(items: unknown[], fallbackMeal: MealType): ScanItem[] {
+  return items
+    .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === 'object')
+    .map(x => ({
+      name: String(x.name ?? ''),
+      meal: MEAL_ORDER.includes(x.meal as MealType) ? (x.meal as MealType) : fallbackMeal,
+      kcal: Math.max(0, Number(x.kcal) || 0),
+      proteinG: Math.max(0, Number(x.proteinG) || 0),
+      carbsG: Math.max(0, Number(x.carbsG) || 0),
+      fatG: Math.max(0, Number(x.fatG) || 0),
+      fiberG: Math.max(0, Number(x.fiberG) || 0),
+      brand: typeof x.brand === 'string' && x.brand.trim() ? x.brand.trim() : null,
+      packGrams: Number(x.packGrams) > 0 ? Number(x.packGrams) : null,
+      assumedGrams: Number(x.assumedGrams) > 0 ? Number(x.assumedGrams) : null,
+      portionGrams: Number(x.portionGrams) > 0 ? Number(x.portionGrams) : null,
+    }))
+    .filter(x => x.name.trim().length > 0)
 }
 
 interface FoodSuggestion {
@@ -70,12 +94,27 @@ export default function FoodEntry({ date, onSaved }: Props) {
   const [dishSummary, setDishSummary] = useState<string | null>(null)
   const [analysisMode, setAnalysisMode] = useState<string | null>(null)
   const [scanItems, setScanItems] = useState<ScanItem[]>([])
+  /** Grams the user intends to eat for each scan row (parallel to scanItems). */
+  const [eatenGrams, setEatenGrams] = useState<number[]>([])
   const [loggingBatch, setLoggingBatch] = useState(false)
   const [anthropicFileId, setAnthropicFileId] = useState<string | null>(null)
   const [priorJson, setPriorJson] = useState<string | null>(null)
   const [refineText, setRefineText] = useState('')
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const commitScan = (cleaned: ScanItem[], meta?: { dishSummary?: string | null; analysisMode?: string | null }) => {
+    setScanItems(cleaned)
+    setEatenGrams(cleaned.map(defaultEatenGrams))
+    if (meta?.dishSummary !== undefined) setDishSummary(meta.dishSummary)
+    if (meta?.analysisMode !== undefined) setAnalysisMode(meta.analysisMode)
+  }
+
+  const scaledAt = (i: number) => {
+    const item = scanItems[i]
+    if (!item) return null
+    return scalePortion(item, eatenGrams[i] ?? defaultEatenGrams(item))
+  }
 
   useEffect(() => {
     fetch('/api/presets?module=food')
@@ -172,6 +211,7 @@ export default function FoodEntry({ date, onSaved }: Props) {
     setDishSummary(null)
     setAnalysisMode(null)
     setScanItems([])
+    setEatenGrams([])
     setAnthropicFileId(null)
     setPriorJson(null)
     setRefineText('')
@@ -183,21 +223,10 @@ export default function FoodEntry({ date, onSaved }: Props) {
       const res = await fetch('/api/food/photo-analyze', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Photo scan failed')
-      const items = Array.isArray(data.items) ? data.items : []
-      const cleaned: ScanItem[] = items
-        .filter((x: unknown) => x && typeof x === 'object')
-        .map((x: Record<string, unknown>) => ({
-          name: String(x.name ?? ''),
-          meal: MEAL_ORDER.includes(x.meal as MealType) ? (x.meal as MealType) : form.meal,
-          kcal: Math.max(0, Number(x.kcal) || 0),
-          proteinG: Math.max(0, Number(x.proteinG) || 0),
-          carbsG: Math.max(0, Number(x.carbsG) || 0),
-          fatG: Math.max(0, Number(x.fatG) || 0),
-          fiberG: Math.max(0, Number(x.fiberG) || 0),
-        }))
-        .filter((x: ScanItem) => x.name.trim().length > 0)
-      setDishSummary(typeof data.dishSummary === 'string' ? data.dishSummary : null)
-      setAnalysisMode(typeof data.analysisMode === 'string' ? data.analysisMode : null)
+      const cleaned = mapScanItems(Array.isArray(data.items) ? data.items : [], form.meal)
+      const dish = typeof data.dishSummary === 'string' ? data.dishSummary : null
+      const mode = typeof data.analysisMode === 'string' ? data.analysisMode : null
+      commitScan(cleaned, { dishSummary: dish, analysisMode: mode })
       const fid = data.anthropicFileId != null ? String(data.anthropicFileId) : ''
       setAnthropicFileId(fid.length > 0 ? fid : null)
       setPriorJson(JSON.stringify({
@@ -205,7 +234,6 @@ export default function FoodEntry({ date, onSaved }: Props) {
         dishSummary: data.dishSummary ?? '',
         items: cleaned,
       }))
-      setScanItems(cleaned)
       if (cleaned.length === 0 && !data.dishSummary) {
         setPhotoError('No food detected. Try a clearer photo or log manually.')
       }
@@ -234,22 +262,11 @@ export default function FoodEntry({ date, onSaved }: Props) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Refine failed')
-      const items = Array.isArray(data.items) ? data.items : []
-      const cleaned: ScanItem[] = items
-        .filter((x: unknown) => x && typeof x === 'object')
-        .map((x: Record<string, unknown>) => ({
-          name: String(x.name ?? ''),
-          meal: MEAL_ORDER.includes(x.meal as MealType) ? (x.meal as MealType) : form.meal,
-          kcal: Math.max(0, Number(x.kcal) || 0),
-          proteinG: Math.max(0, Number(x.proteinG) || 0),
-          carbsG: Math.max(0, Number(x.carbsG) || 0),
-          fatG: Math.max(0, Number(x.fatG) || 0),
-          fiberG: Math.max(0, Number(x.fiberG) || 0),
-        }))
-        .filter((x: ScanItem) => x.name.trim().length > 0)
-      setScanItems(cleaned)
-      setDishSummary(typeof data.dishSummary === 'string' ? data.dishSummary : null)
-      setAnalysisMode(typeof data.analysisMode === 'string' ? data.analysisMode : null)
+      const cleaned = mapScanItems(Array.isArray(data.items) ? data.items : [], form.meal)
+      commitScan(cleaned, {
+        dishSummary: typeof data.dishSummary === 'string' ? data.dishSummary : null,
+        analysisMode: typeof data.analysisMode === 'string' ? data.analysisMode : null,
+      })
       setRefineText('')
       setPriorJson(JSON.stringify({
         analysisMode: data.analysisMode ?? 'meal_estimate',
@@ -263,16 +280,26 @@ export default function FoodEntry({ date, onSaved }: Props) {
     }
   }
 
-  const applyScanToForm = (item: ScanItem) => {
+  const applyScanToForm = (index: number) => {
+    const scaled = scaledAt(index)
+    if (!scaled) return
+    const g = scaled.eatenGrams
+    const label =
+      g > 0
+        ? `${scaled.brand ? `${scaled.brand} · ` : ''}${scaled.name} (${Math.round(g)}g)`
+        : scaled.name
     setForm(f => ({
       ...f,
-      meal: item.meal,
-      name: item.name,
-      kcal: item.kcal ? String(Math.round(item.kcal)) : '',
-      proteinG: item.proteinG ? String(item.proteinG) : '',
-      carbsG: item.carbsG ? String(item.carbsG) : '',
-      fatG: item.fatG ? String(item.fatG) : '',
-      fiberG: item.fiberG ? String(item.fiberG) : '',
+      meal: scaled.meal,
+      name: label,
+      kcal: scaled.kcal ? String(Math.round(scaled.kcal)) : '',
+      proteinG: scaled.proteinG ? String(scaled.proteinG) : '',
+      carbsG: scaled.carbsG ? String(scaled.carbsG) : '',
+      fatG: scaled.fatG ? String(scaled.fatG) : '',
+      fiberG: scaled.fiberG ? String(scaled.fiberG) : '',
+      notes: scaled.packGrams
+        ? `Pack ${scaled.packGrams}g · ate ${Math.round(g)}g`
+        : f.notes,
     }))
     setPhotoError(null)
   }
@@ -283,26 +310,38 @@ export default function FoodEntry({ date, onSaved }: Props) {
     setPhotoError(null)
     try {
       for (let i = 0; i < scanItems.length; i++) {
-        const item = scanItems[i]
+        const scaled = scaledAt(i)
+        if (!scaled) continue
+        const g = scaled.eatenGrams
+        const name =
+          g > 0
+            ? `${scaled.brand ? `${scaled.brand} · ` : ''}${scaled.name} (${Math.round(g)}g)`
+            : scaled.name
         const res = await fetch('/api/food', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             date,
-            meal: item.meal,
-            name: item.name,
-            kcal: item.kcal,
-            proteinG: item.proteinG,
-            carbsG: item.carbsG,
-            fatG: item.fatG,
-            fiberG: item.fiberG,
-            notes: i === 0 && dishSummary ? `AI: ${dishSummary.slice(0, 200)}` : undefined,
+            meal: scaled.meal,
+            name,
+            kcal: scaled.kcal,
+            proteinG: scaled.proteinG,
+            carbsG: scaled.carbsG,
+            fatG: scaled.fatG,
+            fiberG: scaled.fiberG,
+            notes:
+              i === 0 && dishSummary
+                ? `AI: ${dishSummary.slice(0, 160)}${scaled.packGrams ? ` · pack ${scaled.packGrams}g / ate ${Math.round(g)}g` : ''}`
+                : scaled.packGrams
+                  ? `Pack ${scaled.packGrams}g · ate ${Math.round(g)}g`
+                  : undefined,
           }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Save failed')
       }
       setScanItems([])
+      setEatenGrams([])
       setDishSummary(null)
       setAnalysisMode(null)
       setAnthropicFileId(null)
@@ -389,27 +428,131 @@ export default function FoodEntry({ date, onSaved }: Props) {
           )}
           {scanItems.length > 0 && (
             <>
-              <ul className="space-y-2">
-                {scanItems.map((item, i) => (
-                  <li
-                    key={`${item.name}-${i}`}
-                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm border border-pens-muted/20 rounded-lg px-3 py-2 bg-pens-deep/40"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-pens-cream truncate">{item.name}</p>
-                      <p className="text-xs text-pens-cream/45">
-                        {MEAL_LABELS[item.meal]} · {Math.round(item.kcal)} kcal · P {item.proteinG}g · C {item.carbsG}g · F {item.fatG}g
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => applyScanToForm(item)}
-                      className="text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600/90 text-white hover:bg-emerald-600 shrink-0"
+              <ul className="space-y-3">
+                {scanItems.map((item, i) => {
+                  const scaled = scaledAt(i)!
+                  const eaten = eatenGrams[i] ?? defaultEatenGrams(item)
+                  const maxG = Math.max(item.packGrams || 0, item.assumedGrams || 0, eaten, 100)
+                  return (
+                    <li
+                      key={`${item.name}-${i}`}
+                      className="space-y-2 border border-pens-muted/20 rounded-lg px-3 py-3 bg-pens-deep/40"
                     >
-                      Fill form
-                    </button>
-                  </li>
-                ))}
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-pens-cream truncate">
+                            {item.brand ? `${item.brand} · ` : ''}
+                            {item.name}
+                          </p>
+                          <p className="text-xs text-pens-cream/45">
+                            {MEAL_LABELS[item.meal]}
+                            {item.packGrams ? ` · pack ${item.packGrams}g` : ''}
+                            {item.assumedGrams ? ` · macros for ${item.assumedGrams}g` : ''}
+                          </p>
+                          <p className="text-xs text-emerald-300/80 mt-0.5">
+                            {Math.round(scaled.kcal)} kcal · P {scaled.proteinG}g · C {scaled.carbsG}g · F{' '}
+                            {scaled.fatG}g
+                            {scaled.scale !== 1 ? ` · ×${scaled.scale}` : ''}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => applyScanToForm(i)}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600/90 text-white hover:bg-emerald-600 shrink-0"
+                        >
+                          Fill form
+                        </button>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="text-xs text-pens-cream/55">How much are you eating?</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={1}
+                              max={Math.max(maxG * 2, 5000)}
+                              step={1}
+                              value={Math.round(eaten)}
+                              onChange={e => {
+                                const v = Math.max(0, Number(e.target.value) || 0)
+                                setEatenGrams(prev => {
+                                  const next = [...prev]
+                                  next[i] = v
+                                  return next
+                                })
+                              }}
+                              className="w-20 bg-pens-navy border border-pens-muted/40 rounded-md px-2 py-1 text-sm text-pens-cream text-right"
+                            />
+                            <span className="text-xs text-pens-cream/45">g</span>
+                          </div>
+                        </div>
+                        <input
+                          type="range"
+                          min={1}
+                          max={Math.max(item.packGrams || maxG, 1)}
+                          step={1}
+                          value={Math.min(eaten, Math.max(item.packGrams || maxG, 1))}
+                          onChange={e => {
+                            const v = Number(e.target.value)
+                            setEatenGrams(prev => {
+                              const next = [...prev]
+                              next[i] = v
+                              return next
+                            })
+                          }}
+                          className="w-full accent-emerald-500"
+                        />
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.packGrams != null && (
+                            <>
+                              <button
+                                type="button"
+                                className="text-[10px] px-2 py-0.5 rounded-full border border-pens-muted/40 text-pens-cream/70 hover:border-emerald-500/50"
+                                onClick={() =>
+                                  setEatenGrams(prev => {
+                                    const next = [...prev]
+                                    next[i] = item.packGrams!
+                                    return next
+                                  })
+                                }
+                              >
+                                Whole pack ({item.packGrams}g)
+                              </button>
+                              <button
+                                type="button"
+                                className="text-[10px] px-2 py-0.5 rounded-full border border-pens-muted/40 text-pens-cream/70 hover:border-emerald-500/50"
+                                onClick={() =>
+                                  setEatenGrams(prev => {
+                                    const next = [...prev]
+                                    next[i] = Math.round(item.packGrams! / 2)
+                                    return next
+                                  })
+                                }
+                              >
+                                Half
+                              </button>
+                            </>
+                          )}
+                          {item.assumedGrams != null && item.assumedGrams !== item.packGrams && (
+                            <button
+                              type="button"
+                              className="text-[10px] px-2 py-0.5 rounded-full border border-pens-muted/40 text-pens-cream/70 hover:border-emerald-500/50"
+                              onClick={() =>
+                                setEatenGrams(prev => {
+                                  const next = [...prev]
+                                  next[i] = item.assumedGrams!
+                                  return next
+                                })
+                              }
+                            >
+                              Label serving ({item.assumedGrams}g)
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
               <button
                 type="button"
@@ -417,7 +560,9 @@ export default function FoodEntry({ date, onSaved }: Props) {
                 onClick={() => void logAllScan()}
                 className="w-full text-sm font-medium py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50"
               >
-                {loggingBatch ? 'Logging…' : `Log all ${scanItems.length} item${scanItems.length === 1 ? '' : 's'}`}
+                {loggingBatch
+                  ? 'Logging…'
+                  : `Log all ${scanItems.length} item${scanItems.length === 1 ? '' : 's'} at chosen grams`}
               </button>
               {anthropicFileId && priorJson && (
                 <div className="pt-3 mt-2 border-t border-pens-muted/25 space-y-2">
@@ -427,7 +572,7 @@ export default function FoodEntry({ date, onSaved }: Props) {
                     value={refineText}
                     onChange={e => setRefineText(e.target.value)}
                     className={inputCls}
-                    placeholder="e.g. That was salmon, not tuna"
+                    placeholder="e.g. Delhaize yoghurt — I ate 200g of the 1kg tub"
                   />
                   <button
                     type="button"
