@@ -109,6 +109,23 @@ export default function FoodScreen() {
   const [anthropicFileId, setAnthropicFileId] = useState<string | null>(null)
   const [priorJson, setPriorJson] = useState<string | null>(null)
   const [refineText, setRefineText] = useState('')
+  const [productHits, setProductHits] = useState<
+    Array<{
+      id: string
+      source: 'history' | 'openfoodfacts'
+      name: string
+      brand: string | null
+      packGrams: number | null
+      assumedGrams: number | null
+      kcal: number
+      proteinG: number
+      carbsG: number
+      fatG: number
+      fiberG: number
+    }>
+  >([])
+  const [catalogPick, setCatalogPick] = useState<(typeof productHits)[0] | null>(null)
+  const [catalogEatenG, setCatalogEatenG] = useState(100)
 
   useEffect(() => {
     AsyncStorage.getItem(TARGETS_KEY).then((raw) => {
@@ -122,6 +139,26 @@ export default function FoodScreen() {
       }
     })
   }, [])
+
+  useEffect(() => {
+    if (!isPensApiConfigured() || name.trim().length < 2) {
+      setProductHits([])
+      return
+    }
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await pensFetch(`/api/food/products?q=${encodeURIComponent(name.trim())}`)
+          if (!res.ok) return
+          const j = (await res.json()) as { products?: typeof productHits }
+          setProductHits(Array.isArray(j.products) ? j.products.slice(0, 8) : [])
+        } catch {
+          /* ignore */
+        }
+      })()
+    }, 300)
+    return () => clearTimeout(t)
+  }, [name])
 
   const saveTargets = async () => {
     const t: Targets = {
@@ -724,10 +761,116 @@ export default function FoodScreen() {
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="Food name"
+          placeholder="Brand or product (e.g. Delhaize yoghurt)"
           placeholderTextColor={colors.mutedForeground}
           style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
         />
+        {productHits.length > 0 && !catalogPick && (
+          <View style={{ marginTop: 8, gap: 6 }}>
+            {productHits.map((p) => (
+              <Pressable
+                key={p.id}
+                onPress={() => {
+                  if (p.source === 'history' || p.assumedGrams == null) {
+                    setName(p.name)
+                    setKcal(p.kcal ? String(Math.round(p.kcal)) : '')
+                    setProteinG(p.proteinG ? String(p.proteinG) : '')
+                    setCarbsG(p.carbsG ? String(p.carbsG) : '')
+                    setFatG(p.fatG ? String(p.fatG) : '')
+                    setFiberG(p.fiberG ? String(p.fiberG) : '')
+                    setProductHits([])
+                  } else {
+                    setCatalogPick(p)
+                    setCatalogEatenG(p.packGrams && p.packGrams > 0 ? p.packGrams : p.assumedGrams || 100)
+                    setName(p.name)
+                    setProductHits([])
+                  }
+                }}
+                style={[styles.scanRow, { borderColor: colors.border }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.entryName, { color: colors.foreground }]} numberOfLines={1}>
+                    {p.name}
+                  </Text>
+                  <Text style={[styles.entrySub, { color: colors.mutedForeground }]}>
+                    {p.source === 'history' ? 'Yours' : 'Open Food Facts'}
+                    {p.source === 'openfoodfacts' ? ` · ${Math.round(p.kcal)} kcal/100g` : ` · ${Math.round(p.kcal)} kcal`}
+                    {p.packGrams ? ` · pack ${p.packGrams}g` : ''}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        {catalogPick && (
+          <View style={[styles.scanRow, { borderColor: MOD.primary, flexDirection: 'column', alignItems: 'stretch', gap: 8, marginTop: 8 }]}>
+            <Text style={[styles.entryName, { color: colors.foreground }]}>Adjust grams</Text>
+            <Text style={[styles.entrySub, { color: colors.mutedForeground }]}>
+              {Math.round(
+                scalePortion(
+                  {
+                    kcal: catalogPick.kcal,
+                    proteinG: catalogPick.proteinG,
+                    carbsG: catalogPick.carbsG,
+                    fatG: catalogPick.fatG,
+                    fiberG: catalogPick.fiberG,
+                    assumedGrams: catalogPick.assumedGrams,
+                    packGrams: catalogPick.packGrams,
+                  },
+                  catalogEatenG,
+                ).kcal,
+              )}{' '}
+              kcal for {Math.round(catalogEatenG)}g
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TextInput
+                value={String(Math.round(catalogEatenG))}
+                onChangeText={(t) => setCatalogEatenG(Math.max(0, Number(t) || 0))}
+                keyboardType="number-pad"
+                style={[styles.macroInputField, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary, width: 72 }]}
+              />
+              {catalogPick.packGrams != null && (
+                <Pressable onPress={() => setCatalogEatenG(catalogPick.packGrams!)}>
+                  <Text style={{ color: MOD.primary, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Whole</Text>
+                </Pressable>
+              )}
+              <Pressable onPress={() => setCatalogEatenG(100)}>
+                <Text style={{ color: MOD.primary, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>100g</Text>
+              </Pressable>
+            </View>
+            <Pressable
+              onPress={() => {
+                const scaled = scalePortion(
+                  {
+                    kcal: catalogPick.kcal,
+                    proteinG: catalogPick.proteinG,
+                    carbsG: catalogPick.carbsG,
+                    fatG: catalogPick.fatG,
+                    fiberG: catalogPick.fiberG,
+                    assumedGrams: catalogPick.assumedGrams,
+                    packGrams: catalogPick.packGrams,
+                  },
+                  catalogEatenG,
+                )
+                setName(`${catalogPick.name} (${Math.round(catalogEatenG)}g)`)
+                setKcal(String(Math.round(scaled.kcal)))
+                setProteinG(String(scaled.proteinG))
+                setCarbsG(String(scaled.carbsG))
+                setFatG(String(scaled.fatG))
+                setFiberG(String(scaled.fiberG))
+                setNotes(
+                  catalogPick.packGrams
+                    ? `OFF pack ${catalogPick.packGrams}g · ate ${Math.round(catalogEatenG)}g`
+                    : `OFF · ate ${Math.round(catalogEatenG)}g`,
+                )
+                setCatalogPick(null)
+              }}
+              style={[styles.submitBtn, { backgroundColor: MOD.primary }]}
+            >
+              <Text style={styles.submitText}>Use {Math.round(catalogEatenG)}g</Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.macroInputRow}>
           <View style={styles.macroInput}>

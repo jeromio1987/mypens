@@ -6,6 +6,7 @@ import { MEAL_LABELS, MEAL_ORDER, type MealType } from '@/lib/foodModels'
 import QuickToggle from '@/components/shared/QuickToggle'
 import PresetPicker from '@/components/shared/PresetPicker'
 import { defaultEatenGrams, scalePortion } from '@/lib/foodPortion'
+import type { FoodProductHit } from '@/lib/openFoodFacts'
 
 interface Props {
   date: string
@@ -45,17 +46,6 @@ function mapScanItems(items: unknown[], fallbackMeal: MealType): ScanItem[] {
     .filter(x => x.name.trim().length > 0)
 }
 
-interface FoodSuggestion {
-  id: string
-  name: string
-  meal: string
-  kcal: number
-  proteinG: number
-  carbsG: number
-  fatG: number
-  fiberG: number
-}
-
 interface RotationPreset {
   id: string
   name: string
@@ -85,8 +75,12 @@ export default function FoodEntry({ date, onSaved }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState(DEFAULTS)
   const [rotationPresets, setRotationPresets] = useState<RotationPreset[]>([])
-  const [suggestions, setSuggestions] = useState<FoodSuggestion[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [products, setProducts] = useState<FoodProductHit[]>([])
+  const [showProducts, setShowProducts] = useState(false)
+  const [productsLoading, setProductsLoading] = useState(false)
+  /** Catalog/history pick waiting for grams confirm. */
+  const [catalogPick, setCatalogPick] = useState<FoodProductHit | null>(null)
+  const [catalogEatenG, setCatalogEatenG] = useState(100)
 
   const [analyzing, setAnalyzing] = useState(false)
   const [refining, setRefining] = useState(false)
@@ -124,14 +118,29 @@ export default function FoodEntry({ date, onSaved }: Props) {
   }, [])
 
   useEffect(() => {
-    if (form.name.length < 2) { setSuggestions([]); return }
+    if (form.name.length < 2) {
+      setProducts([])
+      return
+    }
+    const ac = new AbortController()
     const timer = setTimeout(() => {
-      fetch(`/api/food?search=${encodeURIComponent(form.name)}`)
-        .then(r => r.ok ? r.json() : [])
-        .then((data: FoodSuggestion[]) => setSuggestions(data))
-        .catch(() => {})
-    }, 300)
-    return () => clearTimeout(timer)
+      setProductsLoading(true)
+      fetch(`/api/food/products?q=${encodeURIComponent(form.name)}`, { signal: ac.signal })
+        .then(r => (r.ok ? r.json() : { products: [] }))
+        .then((data: { products?: FoodProductHit[] }) => {
+          setProducts(Array.isArray(data.products) ? data.products : [])
+          setShowProducts(true)
+        })
+        .catch(err => {
+          if (err?.name === 'AbortError') return
+          setProducts([])
+        })
+        .finally(() => setProductsLoading(false))
+    }, 280)
+    return () => {
+      clearTimeout(timer)
+      ac.abort()
+    }
   }, [form.name])
 
   const applyPreset = (data: Record<string, unknown>) => {
@@ -156,18 +165,59 @@ export default function FoodEntry({ date, onSaved }: Props) {
     } catch {}
   }
 
-  const applySuggestion = (s: FoodSuggestion) => {
+  const applyProductHit = (hit: FoodProductHit) => {
+    setShowProducts(false)
+    setProducts([])
+    if (hit.source === 'history' || hit.assumedGrams == null) {
+      setCatalogPick(null)
+      setForm(f => ({
+        ...f,
+        name: hit.name,
+        kcal: hit.kcal ? String(Math.round(hit.kcal)) : '',
+        proteinG: hit.proteinG ? String(hit.proteinG) : '',
+        carbsG: hit.carbsG ? String(hit.carbsG) : '',
+        fatG: hit.fatG ? String(hit.fatG) : '',
+        fiberG: hit.fiberG ? String(hit.fiberG) : '',
+      }))
+      return
+    }
+    setCatalogPick(hit)
+    setCatalogEatenG(hit.packGrams && hit.packGrams > 0 ? hit.packGrams : hit.assumedGrams || 100)
+    setForm(f => ({ ...f, name: hit.name }))
+  }
+
+  const catalogScaled = catalogPick
+    ? scalePortion(
+        {
+          kcal: catalogPick.kcal,
+          proteinG: catalogPick.proteinG,
+          carbsG: catalogPick.carbsG,
+          fatG: catalogPick.fatG,
+          fiberG: catalogPick.fiberG,
+          assumedGrams: catalogPick.assumedGrams,
+          packGrams: catalogPick.packGrams,
+          brand: catalogPick.brand,
+        },
+        catalogEatenG,
+      )
+    : null
+
+  const applyCatalogToForm = () => {
+    if (!catalogPick || !catalogScaled) return
+    const g = catalogScaled.eatenGrams
     setForm(f => ({
       ...f,
-      name: s.name,
-      kcal: s.kcal ? String(Math.round(s.kcal)) : '',
-      proteinG: s.proteinG ? String(s.proteinG) : '',
-      carbsG: s.carbsG ? String(s.carbsG) : '',
-      fatG: s.fatG ? String(s.fatG) : '',
-      fiberG: s.fiberG ? String(s.fiberG) : '',
+      name: `${catalogPick.name} (${Math.round(g)}g)`,
+      kcal: String(Math.round(catalogScaled.kcal)),
+      proteinG: String(catalogScaled.proteinG),
+      carbsG: String(catalogScaled.carbsG),
+      fatG: String(catalogScaled.fatG),
+      fiberG: String(catalogScaled.fiberG),
+      notes: catalogPick.packGrams
+        ? `OFF pack ${catalogPick.packGrams}g · ate ${Math.round(g)}g`
+        : `OFF per ${catalogPick.assumedGrams}g · ate ${Math.round(g)}g`,
     }))
-    setSuggestions([])
-    setShowSuggestions(false)
+    setCatalogPick(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -612,34 +662,126 @@ export default function FoodEntry({ date, onSaved }: Props) {
 
         <div className="relative">
           <label className={labelCls}>
-            Food / item <span className="text-red-400">*</span>
+            Food / brand <span className="text-red-400">*</span>
           </label>
           <input
             type="text"
             value={form.name}
-            onChange={e => { set('name', e.target.value); setShowSuggestions(true) }}
-            onFocus={() => setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            onChange={e => {
+              set('name', e.target.value)
+              setShowProducts(true)
+            }}
+            onFocus={() => setShowProducts(true)}
+            onBlur={() => setTimeout(() => setShowProducts(false), 180)}
             className={inputCls}
-            placeholder="e.g. Chicken breast 150g"
+            placeholder="e.g. Delhaize Greek yoghurt"
             required
           />
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-30 top-full left-0 right-0 mt-1 rounded-xl border border-pens-muted/40 bg-pens-surface shadow-lg overflow-hidden">
-              {suggestions.map(s => (
+          <p className="mt-1 text-[11px] text-pens-cream/35">
+            Type a brand or product — suggestions from your history + Open Food Facts (worldwide, not BE-only).
+            {productsLoading ? ' Searching…' : ''}
+          </p>
+          {showProducts && products.length > 0 && (
+            <div className="absolute z-30 top-full left-0 right-0 mt-1 rounded-xl border border-pens-muted/40 bg-pens-surface shadow-lg overflow-hidden max-h-72 overflow-y-auto">
+              {products.map(p => (
                 <button
-                  key={s.id}
+                  key={p.id}
                   type="button"
-                  onMouseDown={() => applySuggestion(s)}
+                  onMouseDown={() => applyProductHit(p)}
                   className="w-full text-left px-3 py-2 hover:bg-pens-deep/60 transition-colors border-b border-pens-muted/20 last:border-0"
                 >
-                  <p className="text-sm text-pens-cream truncate">{s.name}</p>
-                  <p className="text-xs text-pens-cream/45">{Math.round(s.kcal)} kcal · P {s.proteinG}g · C {s.carbsG}g · F {s.fatG}g</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm text-pens-cream truncate">{p.name}</p>
+                    <span className="text-[10px] uppercase tracking-wide text-pens-cream/40 shrink-0">
+                      {p.source === 'history' ? 'Yours' : 'OFF'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-pens-cream/45">
+                    {p.source === 'openfoodfacts'
+                      ? `${Math.round(p.kcal)} kcal / 100g`
+                      : `${Math.round(p.kcal)} kcal (as logged)`}
+                    {p.packGrams ? ` · pack ${p.packGrams}g` : ''}
+                    {p.brand ? ` · ${p.brand}` : ''}
+                  </p>
                 </button>
               ))}
             </div>
           )}
         </div>
+
+        {catalogPick && catalogScaled && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3 space-y-2">
+            <p className="text-sm font-medium text-emerald-200">
+              {catalogPick.brand ? `${catalogPick.brand} · ` : ''}
+              Adjust grams
+            </p>
+            <p className="text-xs text-pens-cream/50">
+              Macros shown per {catalogPick.assumedGrams}g from Open Food Facts
+              {catalogPick.packGrams ? ` · pack ${catalogPick.packGrams}g` : ''}.
+            </p>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs text-pens-cream/55">Eating</label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={Math.round(catalogEatenG)}
+                  onChange={e => setCatalogEatenG(Math.max(0, Number(e.target.value) || 0))}
+                  className="w-20 bg-pens-navy border border-pens-muted/40 rounded-md px-2 py-1 text-sm text-pens-cream text-right"
+                />
+                <span className="text-xs text-pens-cream/45">g</span>
+              </div>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={Math.max(catalogPick.packGrams || 500, catalogEatenG, 100)}
+              step={1}
+              value={Math.min(catalogEatenG, Math.max(catalogPick.packGrams || 500, 100))}
+              onChange={e => setCatalogEatenG(Number(e.target.value))}
+              className="w-full accent-emerald-500"
+            />
+            <p className="text-xs text-emerald-300/90">
+              {Math.round(catalogScaled.kcal)} kcal · P {catalogScaled.proteinG}g · C {catalogScaled.carbsG}g · F{' '}
+              {catalogScaled.fatG}g
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {catalogPick.packGrams != null && (
+                <>
+                  <button
+                    type="button"
+                    className="text-[10px] px-2 py-0.5 rounded-full border border-pens-muted/40 text-pens-cream/70"
+                    onClick={() => setCatalogEatenG(catalogPick.packGrams!)}
+                  >
+                    Whole pack
+                  </button>
+                  <button
+                    type="button"
+                    className="text-[10px] px-2 py-0.5 rounded-full border border-pens-muted/40 text-pens-cream/70"
+                    onClick={() => setCatalogEatenG(Math.round(catalogPick.packGrams! / 2))}
+                  >
+                    Half
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className="text-[10px] px-2 py-0.5 rounded-full border border-pens-muted/40 text-pens-cream/70"
+                onClick={() => setCatalogEatenG(catalogPick.assumedGrams || 100)}
+              >
+                100g
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={applyCatalogToForm}
+              className="w-full text-sm font-medium py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              Use {Math.round(catalogEatenG)}g in form
+            </button>
+          </div>
+        )}
 
         {quick ? (
           <div className="grid grid-cols-2 gap-3">
