@@ -28,6 +28,7 @@ import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
+import { PlannerWeekCard } from '@/components/PlannerWeekCard'
 
 const MOD = MODULE_COLORS.training
 const EXERCISES_KEY = '@mypens/recent_exercises'
@@ -312,6 +313,8 @@ export default function TrainingScreen() {
           </View>
         )}
       </View>
+
+      <PlannerWeekCard />
 
       {pending > 0 ? (
         <View

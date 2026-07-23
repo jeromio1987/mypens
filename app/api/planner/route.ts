@@ -56,7 +56,7 @@ async function recentContext(before: string) {
       () =>
         prisma.foodEntry.findMany({
           where: { date: { gte: from, lte: before } },
-          select: { proteinG: true, kcal: true },
+          select: { date: true, proteinG: true, kcal: true },
         }),
       [],
     ),
@@ -111,12 +111,32 @@ async function recentContext(before: string) {
   const binge = recoveries.some(r => (r.alcoholDrinks || 0) >= 10)
   const highRhr = metrics.some(m => m.valueNum != null && m.valueNum >= 55)
 
+  // Daily totals (not per-row averages) — one day with 3 snacks must not look like 3 low days.
+  const foodByDate = new Map<string, { protein: number; kcal: number }>()
+  for (const f of foods) {
+    const cur = foodByDate.get(f.date) ?? { protein: 0, kcal: 0 }
+    cur.protein += f.proteinG || 0
+    cur.kcal += f.kcal || 0
+    foodByDate.set(f.date, cur)
+  }
+  const dailyProteins = [...foodByDate.values()].map(v => v.protein)
+  const dailyKcals = [...foodByDate.values()].map(v => v.kcal)
+  const foodWindowDays = Math.max(
+    1,
+    Math.round(
+      (new Date(`${before}T12:00:00Z`).getTime() - new Date(`${from}T12:00:00Z`).getTime()) /
+        86_400_000,
+    ) + 1,
+  )
+
   return {
     avgSleepHours: avg(sleeps.map(s => s.hours)),
     sessionsBySport,
     recoveryCompromised: binge || highRhr,
-    avgProteinG: avg(foods.map(f => f.proteinG || 0)),
-    avgKcal: avg(foods.map(f => f.kcal || 0)),
+    avgProteinG: avg(dailyProteins),
+    avgKcal: avg(dailyKcals),
+    foodDaysLogged: foodByDate.size,
+    foodWindowDays,
   }
 }
 
@@ -128,9 +148,19 @@ export async function GET(req: Request) {
       ? mondayOf(weekParam)
       : mondayOf(new Date())
 
+    const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+      try {
+        return await fn()
+      } catch {
+        return fallback
+      }
+    }
+
     const goal =
-      (await prisma.plannerGoal.findFirst({ where: { active: true }, orderBy: { updatedAt: 'desc' } })) ||
-      null
+      (await safe(
+        () => prisma.plannerGoal.findFirst({ where: { active: true }, orderBy: { updatedAt: 'desc' } }),
+        null,
+      )) || null
 
     const goalInput = goal
       ? {
@@ -149,7 +179,7 @@ export async function GET(req: Request) {
 
     const ctx = await recentContext(shiftDateStr(weekOf, -1))
     const plan = planWeek(weekOf, goalInput, ctx)
-    const saved = await prisma.plannerWeek.findUnique({ where: { weekOf } })
+    const saved = await safe(() => prisma.plannerWeek.findUnique({ where: { weekOf } }), null)
 
     return NextResponse.json({
       weekOf,

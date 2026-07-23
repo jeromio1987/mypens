@@ -23,11 +23,22 @@ export type RecentContext = {
   sessionsBySport: Partial<Record<Sport, number>>
   /** True if recent binge / RHR heavy band */
   recoveryCompromised?: boolean
-  /** Avg protein g/day if food logged */
+  /** Avg protein g/day across days that have food logs (null = no food data) */
   avgProteinG?: number | null
-  /** Avg kcal/day if food logged */
+  /** Avg kcal/day across days that have food logs (null = no food data) */
   avgKcal?: number | null
+  /** Count of distinct days with ≥1 food entry in the lookback window */
+  foodDaysLogged?: number | null
+  /** Length of food lookback window in days (for coverage ratio) */
+  foodWindowDays?: number | null
 }
+
+/** Soft floors — never medical advice; missing food never blocks planning. */
+export const FOOD_SOFT = {
+  proteinFloorG: 100,
+  kcalVeryLow: 1600,
+  minCoverage: 0.3,
+} as const
 
 export type DayPlan = {
   date: string
@@ -74,13 +85,29 @@ export function planWeek(
   const longDay: LongDay = goal.longDay === 'sunday' ? 'sunday' : 'saturday'
   const sleepLow = ctx.avgSleepHours != null && ctx.avgSleepHours < 6.5
   const compromised = Boolean(ctx.recoveryCompromised)
-  const proteinLow = ctx.avgProteinG != null && ctx.avgProteinG < 100
+  const proteinLow = ctx.avgProteinG != null && ctx.avgProteinG < FOOD_SOFT.proteinFloorG
+  const kcalVeryLow = ctx.avgKcal != null && ctx.avgKcal < FOOD_SOFT.kcalVeryLow
+  const logged = ctx.foodDaysLogged ?? 0
+  const windowDays = ctx.foodWindowDays ?? 0
+  const fuelingUnknown =
+    logged === 0 || (windowDays > 0 && logged / windowDays < FOOD_SOFT.minCoverage)
+  const softFuel = kcalVeryLow || (proteinLow && !fuelingUnknown)
   const notes: string[] = []
 
   if (sleepLow) notes.push('Sleep avg under 6.5h — volume capped; more core / easy.')
   if (compromised) notes.push('Recovery compromised (drink / high RHR) — Mon–Tue forced easy or rest.')
-  if (proteinLow && goal.kind === 'bodyfat') {
-    notes.push('Protein intake looks soft — keep gym, avoid aggressive deficit days.')
+  if (fuelingUnknown) {
+    notes.push('Fueling unknown — few/no food logs; plan not blocked (confidence lower).')
+  }
+  if (kcalVeryLow) {
+    notes.push('Recent daily kcal looks very low — quality softened and long session shortened.')
+  }
+  if (proteinLow && !fuelingUnknown) {
+    notes.push(
+      goal.kind === 'bodyfat'
+        ? 'Protein intake looks soft — keep gym, avoid stacking hard aerobic on low-fuel days.'
+        : 'Protein intake looks soft — prefer strength/core over extra quality work.',
+    )
   }
 
   const days: DayPlan[] = []
@@ -204,6 +231,28 @@ export function planWeek(
         title: 'Rest or easy walk',
         why: 'Leave space — quality over junk volume.',
         isLong: false,
+      }
+    }
+
+    // 6-D food soft rules: never remove the long day, never invent meals — only ease load.
+    if (softFuel && plan.intensity === 'quality') {
+      plan = {
+        ...plan,
+        intensity: 'easy',
+        minutes: Math.max(25, Math.round(plan.minutes * 0.75)),
+        title: plan.title.replace(/Quality/i, 'Easy'),
+        why: `${plan.why} Softened — recent fueling looks light.`,
+      }
+    } else if (kcalVeryLow && plan.isLong) {
+      plan = {
+        ...plan,
+        minutes: Math.max(45, Math.round(plan.minutes * 0.8)),
+        why: `${plan.why} Shortened — recent daily kcal looks very low.`,
+      }
+    } else if (proteinLow && !fuelingUnknown && plan.sport === 'gym') {
+      plan = {
+        ...plan,
+        why: `${plan.why} Gym protected while protein looks soft.`,
       }
     }
 

@@ -35,6 +35,7 @@ import {
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { usePensSync } from '@/hooks/usePensSync'
 import { defaultEatenGrams, scalePortion } from '@/lib/foodPortion'
+import { fuelingRead } from '@/lib/fuelingRead'
 
 const MOD = MODULE_COLORS.food
 const TARGETS_KEY = '@mypens/food_targets'
@@ -135,6 +136,8 @@ export default function FoodScreen() {
   const [catalogEatenG, setCatalogEatenG] = useState(100)
   const [apiProbe, setApiProbe] = useState<PensApiProbe | null>(null)
   const [productSearchError, setProductSearchError] = useState<string | null>(null)
+  const [showManualAdd, setShowManualAdd] = useState(false)
+  const [showNumbers, setShowNumbers] = useState(false)
 
   useEffect(() => {
     AsyncStorage.getItem(TARGETS_KEY).then((raw) => {
@@ -565,9 +568,17 @@ export default function FoodScreen() {
     {} as Record<FoodEntry['meal'], FoodEntry[]>,
   )
 
+  const read = fuelingRead({
+    kcal: totals.kcal,
+    proteinG: totals.proteinG,
+    entryCount: entries.length,
+    targets,
+  })
+
   const chartW = width - 48
   const accentBg = isDark ? MOD.bgDark : MOD.bg
   const topInset = Platform.OS === 'web' ? 67 : insets.top
+  const apiOk = isPensApiConfigured() && (!apiProbe || apiProbe.status === 'ok')
 
   return (
     <ScrollView
@@ -579,7 +590,7 @@ export default function FoodScreen() {
       <View style={styles.header}>
         <View style={[styles.moduleTag, { backgroundColor: accentBg }]}>
           <Ionicons name="restaurant-outline" size={16} color={MOD.primary} />
-          <Text style={[styles.moduleLabel, { color: MOD.primary }]}>Food</Text>
+          <Text style={[styles.moduleLabel, { color: MOD.primary }]}>Fueling</Text>
         </View>
         <Pressable onPress={() => setShowTargets((s) => !s)}>
           <Feather name="settings" size={20} color={colors.mutedForeground} />
@@ -601,7 +612,7 @@ export default function FoodScreen() {
             {!isPensApiConfigured() || apiProbe?.status === 'unconfigured'
               ? 'Add EXPO_PUBLIC_PENS_API_URL and EXPO_PUBLIC_PENS_API_TOKEN to mypens-mobile/.env (token must match MOBILE_PENS_API_TOKEN on the Next server). Restart Expo after changing env.'
               : apiProbe?.status === 'server_token_missing'
-                ? `Phone reaches ${apiProbe.baseUrl}, but Next reports hasMobileToken:false. Add MOBILE_PENS_API_TOKEN to C:\\Users\\jerom\\Desktop\\claude\\Projects\\mypens\\.env (same value as mobile EXPO_PUBLIC_PENS_API_TOKEN), then restart npm run dev.`
+                ? `Phone reaches ${apiProbe.baseUrl}, but Next reports hasMobileToken:false. Add MOBILE_PENS_API_TOKEN to the Next .env (same value as mobile), then restart npm run dev.`
                 : apiProbe?.status === 'unauthorized'
                   ? `Bearer rejected by ${apiProbe.baseUrl}. Make MOBILE_PENS_API_TOKEN (Next) identical to EXPO_PUBLIC_PENS_API_TOKEN (mobile), restart both.`
                   : apiProbe?.status === 'unreachable'
@@ -611,9 +622,40 @@ export default function FoodScreen() {
         </View>
       )}
 
+      {apiOk && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Today's Read</Text>
+          <Text style={[styles.readVerdict, { color: colors.foreground }]}>{read.verdict}</Text>
+          <Text style={[styles.readCause, { color: colors.mutedForeground }]}>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.foreground }}>Cause · </Text>
+            {read.cause}
+          </Text>
+          <Text style={[styles.readCause, { color: colors.mutedForeground, marginTop: 8 }]}>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.foreground }}>One move · </Text>
+            {read.oneMove}
+          </Text>
+          <Pressable onPress={() => setShowNumbers((s) => !s)} style={{ marginTop: 12 }}>
+            <Text style={{ color: MOD.primary, fontFamily: 'Inter_500Medium', fontSize: 12 }}>
+              {showNumbers ? 'Hide numbers' : 'Show numbers'}
+            </Text>
+          </Pressable>
+          {showNumbers && (
+            <View style={{ marginTop: 10 }}>
+              <MacroBar label="Calories" current={totals.kcal} target={targets.kcal} color={MOD.primary} />
+              <MacroBar label="Protein" current={totals.proteinG} target={targets.proteinG} color="#3b82f6" />
+              <MacroBar label="Carbs" current={totals.carbsG} target={targets.carbsG} color="#f97316" />
+              <MacroBar label="Fat" current={totals.fatG} target={targets.fatG} color="#eab308" />
+            </View>
+          )}
+        </View>
+      )}
+
       {showTargets && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Daily targets</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Day cues (soft)</Text>
+          <Text style={[styles.dateHint, { color: colors.mutedForeground, marginBottom: 8 }]}>
+            Not a diet target — only soft context for the planner.
+          </Text>
           {[
             { label: 'Calories', value: targetKcal, set: setTargetKcal, unit: 'kcal' },
             { label: 'Protein', value: targetProtein, set: setTargetProtein, unit: 'g' },
@@ -634,14 +676,15 @@ export default function FoodScreen() {
             </View>
           ))}
           <Pressable onPress={saveTargets} style={[styles.submitBtn, { backgroundColor: MOD.primary }]}>
-            <Text style={styles.submitText}>Save targets</Text>
+            <Text style={styles.submitText}>Save cues</Text>
           </Pressable>
         </View>
       )}
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' })}
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Capture</Text>
+        <Text style={[styles.dateHint, { color: colors.mutedForeground, marginBottom: 10 }]}>
+          One photo of the pack or plate — adjust grams if needed. Not a food diary.
         </Text>
         <Text style={[styles.dateHint, { color: colors.mutedForeground }]}>Date (yyyy-mm-dd)</Text>
         <TextInput
@@ -652,24 +695,16 @@ export default function FoodScreen() {
           autoCapitalize="none"
           style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary, marginBottom: 12 }]}
         />
-        <MacroBar label="Calories" current={totals.kcal} target={targets.kcal} color={MOD.primary} />
-        <MacroBar label="Protein" current={totals.proteinG} target={targets.proteinG} color="#3b82f6" />
-        <MacroBar label="Carbs" current={totals.carbsG} target={targets.carbsG} color="#f97316" />
-        <MacroBar label="Fat" current={totals.fatG} target={targets.fatG} color="#eab308" />
-      </View>
-
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Photo (AI)</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable
             onPress={() => void takeAndScan()}
             disabled={aiBusy || !isPensApiConfigured()}
-            style={[styles.secondaryBtn, { flex: 1, borderColor: MOD.primary, opacity: aiBusy || !isPensApiConfigured() ? 0.5 : 1 }]}
+            style={[styles.submitBtn, { flex: 1, backgroundColor: MOD.primary, opacity: aiBusy || !isPensApiConfigured() ? 0.5 : 1, marginBottom: 0 }]}
           >
             {aiBusy ? (
-              <ActivityIndicator color={MOD.primary} />
+              <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={[styles.secondaryBtnText, { color: MOD.primary }]}>📷 Take photo</Text>
+              <Text style={styles.submitText}>Take photo</Text>
             )}
           </Pressable>
           <Pressable
@@ -677,7 +712,7 @@ export default function FoodScreen() {
             disabled={aiBusy || !isPensApiConfigured()}
             style={[styles.secondaryBtn, { flex: 1, borderColor: colors.border, opacity: aiBusy || !isPensApiConfigured() ? 0.5 : 1 }]}
           >
-            <Text style={[styles.secondaryBtnText, { color: MOD.primary }]}>🖼 Choose photo</Text>
+            <Text style={[styles.secondaryBtnText, { color: MOD.primary }]}>Choose photo</Text>
           </Pressable>
         </View>
         {analysisMode && (
@@ -761,7 +796,7 @@ export default function FoodScreen() {
               )
             })}
             <Pressable onPress={() => void logAllScan()} disabled={aiBusy} style={[styles.submitBtn, { backgroundColor: '#7c3aed', marginTop: 8 }]}>
-              <Text style={styles.submitText}>Log all at chosen grams</Text>
+              <Text style={styles.submitText}>Save at chosen grams</Text>
             </Pressable>
           </>
         )}
@@ -786,8 +821,19 @@ export default function FoodScreen() {
         )}
       </View>
 
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Add food</Text>
+      
+      <Pressable
+        onPress={() => setShowManualAdd((s) => !s)}
+        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, paddingVertical: 14 }]}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 0 }]}>
+          {showManualAdd ? 'Hide type / brand search' : 'Type brand or product (optional)'}
+        </Text>
+      </Pressable>
+
+      {showManualAdd && (
+<View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Brand search</Text>
 
         <View style={styles.mealRow}>
           {MEAL_OPTIONS.map((m) => (
@@ -1013,12 +1059,15 @@ export default function FoodScreen() {
           {mutation.isPending ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={styles.submitText}>Add food</Text>
+            <Text style={styles.submitText}>Save item</Text>
           )}
         </Pressable>
       </View>
 
-      {isPensApiConfigured() && isLoading ? (
+      
+      )}
+
+{isPensApiConfigured() && isLoading ? (
         <ActivityIndicator color={MOD.primary} style={{ marginTop: 8 }} />
       ) : (
         MEAL_OPTIONS.map((meal) =>
@@ -1047,7 +1096,7 @@ export default function FoodScreen() {
 
       {barData.length > 1 && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.chartTitle, { color: colors.foreground }]}>14-day calorie trend</Text>
+          <Text style={[styles.chartTitle, { color: colors.foreground }]}>Recent days (context)</Text>
           <BarChart
             data={barData}
             barWidth={Math.max(12, (chartW - 80) / barData.length - 4)}
@@ -1069,6 +1118,7 @@ export default function FoodScreen() {
     </ScrollView>
   )
 }
+
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -1116,4 +1166,7 @@ const styles = StyleSheet.create({
   numInput: { fontSize: 14, fontFamily: 'Inter_400Regular', minWidth: 40, textAlign: 'right' },
   numUnit: { fontSize: 12, marginLeft: 4 },
   chartTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 12 },
+  readEyebrow: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  readVerdict: { fontSize: 20, fontFamily: 'Inter_600SemiBold', marginBottom: 10, lineHeight: 26 },
+  readCause: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19 },
 })

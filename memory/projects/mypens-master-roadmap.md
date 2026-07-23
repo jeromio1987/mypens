@@ -82,9 +82,9 @@
 - [x] TASK 6-A Goal model + UI (VO₂max / body-comp / marathon / custom) — first cut on cockpit/planner branch  
 - [x] TASK 6-B Deterministic planner engine (sleep + sport load + weekend-long rule) — first cut  
 - [x] TASK 6-C `/planner` week grid — running · cycling · core · gym switches — first cut  
-- [ ] TASK 6-D Food-aware soft constraints  
+- [x] TASK 6-D Food-aware soft constraints  
 - [ ] TASK 6-E Optional AI narrative on deterministic JSON only  
-- [ ] TASK 6-F Mobile week card  
+- [x] TASK 6-F Mobile week card  
 
 ### Phase 7 — Experiment Engine & Food as Confounder
 
@@ -112,7 +112,7 @@ Four slots only: **Weight · Food · Sleep · Journal** (overview remains in “
 1. Production migrations + Vercel deploy  
 2. Landing + onboarding QA against copy decks  
 3. **Phase 5 — Engine Report Cockpit** (ship + polish zoom / composition series)  
-4. **Phase 6 — Adaptive Sports Planner** (food soft-rules, AI why, mobile card)  
+4. **Phase 6 — Adaptive Sports Planner** (AI why narrative 6-E next)  
 5. **Phase 7 — Experiment Engine & Food as Confounder** (year-one flagship insight loop)  
 6. Programme builder: optional drag reorder  
 7. Phase 4 integrations and Clubroom / bloodwork track  
@@ -231,12 +231,12 @@ Goal → plan bias:
 
 ### Build order
 
-- [ ] **6-A** Goal model (`UserGoal` or `PlannerGoal`: type, target, raceDate?, notes) + settings UI  
-- [ ] **6-B** Deterministic planner engine (pure functions + tests) — load from sleep/training; no LLM required for v1  
-- [ ] **6-C** `/planner` web UI — week grid, weekend-long toggle, sport switches  
-- [ ] **6-D** Food-aware soft rules (low protein / very low kcal → bias easier day; never medical advice)  
+- [x] **6-A** Goal model (`UserGoal` or `PlannerGoal`: type, target, raceDate?, notes) + settings UI  
+- [x] **6-B** Deterministic planner engine (pure functions + tests) — load from sleep/training; no LLM required for v1  
+- [x] **6-C** `/planner` web UI — week grid, weekend-long toggle, sport switches  
+- [x] **6-D** Food-aware soft rules (low protein / very low kcal → bias easier day; never medical advice)  
 - [ ] **6-E** Optional Claude narrative layer (“why this week”) on top of deterministic JSON only  
-- [ ] **6-F** Expo companion card  
+- [x] **6-F** Expo companion card  
 
 ### Explicit non-goals (v1)
 

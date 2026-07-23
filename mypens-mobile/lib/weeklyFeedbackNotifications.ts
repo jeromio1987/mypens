@@ -89,10 +89,14 @@ export async function scheduleWeeklyFeedbackNotification(): Promise<void> {
 
   try {
     const perms = await Notifications.getPermissionsAsync()
-    let granted = perms.granted
-    if (!granted && perms.canAskAgain !== false) {
-      const req = await Notifications.requestPermissionsAsync()
-      granted = req.granted
+    const status = perms as { granted?: boolean; canAskAgain?: boolean; status?: string }
+    let granted = Boolean(status.granted) || status.status === 'granted'
+    if (!granted && status.canAskAgain !== false) {
+      const req = (await Notifications.requestPermissionsAsync()) as {
+        granted?: boolean
+        status?: string
+      }
+      granted = Boolean(req.granted) || req.status === 'granted'
     }
     if (!granted) return
 

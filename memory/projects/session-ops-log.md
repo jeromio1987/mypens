@@ -68,6 +68,14 @@ Append-only. Goal: fewer repeated failures, clearer handoffs.
 
 **Rule:** Mobile Food needs **both** env files: Next `MOBILE_PENS_API_TOKEN` + mobile `EXPO_PUBLIC_PENS_API_*`. Health must show `hasMobileToken:true`. Products API lives on branch with OFF typeahead (not on `main` yet) — stay on `cursor/fix-netinfo-mobile-d4c7` (includes typeahead) or merge `cursor/food-off-typeahead-d4c7`.
 
+### Workspace access (cloud vs local)
+| Symptom | Cause | Fix |
+|---------|--------|-----|
+| Agent can’t see `Projects\…` or `.env` | Cloud agent / single-folder workspace | Open **local** Cursor on `Desktop\claude` or add folders via **File → Add Folder to Workspace** (multi-root). Prefer root `Projects\mypens` for this repo. |
+| Junction `claude\mypens` vs `Projects\mypens` | Same tree via junction | Use `Projects\mypens` as canonical; junctions still work for old scripts |
+
+**Rule:** For full PC access, run the agent **locally** with workspace = `claude` or multi-root (`claude` + `Projects\mypens`). Cloud VMs only see the cloned git tree.
+
 ---
 
 ## Next append
