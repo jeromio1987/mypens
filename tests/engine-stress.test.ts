@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildMultiSourceFixture } from '../scripts/lib/engineFixtures.mjs'
-import { runEngineStressTest, stressTestToMarkdown } from '../scripts/lib/engineStressTest.mjs'
+import { runEngineStressTest, stressTestToMarkdown, stressTestToHtml } from '../scripts/lib/engineStressTest.mjs'
 import { analyzeGarmin } from '../scripts/lib/garminAnalyze.mjs'
 import { analyzePeriods, buildDailySignals } from '../scripts/lib/periodAnalyze.mjs'
 import { shiftDateStr } from '../scripts/lib/weekDates.mjs'
@@ -79,6 +79,8 @@ describe('full engine stress suite', () => {
     expect(report.summary.failed).toBe(0)
     expect(report.summary.passRate).toBe(100)
     expect(stressTestToMarkdown(report)).toMatch(/Engine stress test/)
+    expect(stressTestToHtml(report)).toMatch(/<!DOCTYPE html>/)
+    expect(stressTestToHtml(report)).toMatch(/checks passed/)
   })
 
   it('keeps alcohol binge as leading cause over idle RHR', () => {

@@ -318,3 +318,146 @@ export function stressTestToMarkdown(report) {
 
   return lines.join('\n')
 }
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function ul(items, empty = '<li class="muted">none</li>') {
+  if (!items?.length) return `<ul>${empty}</ul>`
+  return `<ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`
+}
+
+/**
+ * Standalone HTML report — double-click / `start` in browser. No server needed.
+ */
+export function stressTestToHtml(report) {
+  const pass = report.summary.failed === 0
+  const checks = report.checks
+    .map(
+      c =>
+        `<tr class="${c.ok ? 'ok' : 'bad'}"><td>${c.ok ? 'PASS' : 'FAIL'}</td><td><code>${esc(c.id)}</code></td><td>${esc(c.detail)}</td></tr>`,
+    )
+    .join('')
+  const horizons = report.periods.horizons
+    .map(h => {
+      const badge = h.verdict || '—'
+      return `<tr>
+        <td>${esc(h.label)}</td>
+        <td><span class="verdict ${esc(h.verdict || '')}">${esc(badge)}</span></td>
+        <td>${h.score ?? '—'} / 100</td>
+        <td>${h.weeks ?? 0}</td>
+        <td>${esc(h.causal || '—')}</td>
+        <td>${esc(h.topPattern || '—')}</td>
+      </tr>`
+    })
+    .join('')
+
+  const domainsJson = esc(
+    JSON.stringify(
+      {
+        sleep: report.garmin.domains.sleep,
+        stress: report.garmin.domains.stress,
+        hrv: report.garmin.domains.hrv,
+        restingHr: report.garmin.domains.restingHr,
+        activities: report.garmin.domains.activities,
+        training: report.garmin.domains.training,
+        weight: report.garmin.domains.weight,
+      },
+      null,
+      2,
+    ),
+  )
+
+  const conf = report.causal.topHypothesis
+    ? Math.round((report.causal.topHypothesis.confidence || 0) * 100)
+    : null
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Engine stress test — ${esc(report.asOf)}</title>
+<style>
+  :root { --bg:#0b1220; --card:#121a2b; --text:#e8eefc; --muted:#93a0b8; --ok:#34d399; --bad:#f87171; --line:#243049; --accent:#60a5fa; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.55 system-ui,Segoe UI,sans-serif; background:linear-gradient(160deg,#0b1220,#111827 45%,#0f172a); color:var(--text); }
+  main { max-width:980px; margin:0 auto; padding:32px 20px 64px; }
+  h1 { font-size:1.7rem; margin:0 0 8px; letter-spacing:-0.02em; }
+  h2 { font-size:1.15rem; margin:28px 0 10px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .sub { color:var(--muted); margin-bottom:20px; }
+  .hero { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px 22px; }
+  .score { font-size:1.35rem; font-weight:700; }
+  .score.pass { color:var(--ok); }
+  .score.fail { color:var(--bad); }
+  table { width:100%; border-collapse:collapse; background:var(--card); border-radius:12px; overflow:hidden; border:1px solid var(--line); }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:0.85rem; }
+  tr.ok td:first-child { color:var(--ok); font-weight:700; }
+  tr.bad td:first-child { color:var(--bad); font-weight:700; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:0.86em; }
+  .verdict { display:inline-block; padding:2px 8px; border-radius:999px; font-size:0.8rem; background:#1e293b; }
+  .verdict.good { background:#064e3b; color:#a7f3d0; }
+  .verdict.mixed { background:#78350f; color:#fde68a; }
+  .verdict.bad { background:#7f1d1d; color:#fecaca; }
+  ul { margin:8px 0 0; padding-left:1.2rem; }
+  li { margin:4px 0; }
+  .muted { color:var(--muted); }
+  pre { background:#0a0f1a; border:1px solid var(--line); border-radius:12px; padding:14px; overflow:auto; font-size:12px; color:#cbd5e1; }
+  .grid { display:grid; gap:14px; grid-template-columns:1fr; }
+  @media (min-width:800px) { .grid.two { grid-template-columns:1fr 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  .card h3 { margin:0 0 8px; font-size:0.95rem; color:var(--accent); }
+  .prose { white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Engine stress test</h1>
+  <p class="sub">Garmin · Strava · Tanita · Anchor — as of ${esc(report.asOf)}</p>
+
+  <section class="hero">
+    <div class="score ${pass ? 'pass' : 'fail'}">${report.summary.passed}/${report.summary.total} checks passed (${report.summary.passRate}%)</div>
+    <p class="sub" style="margin:8px 0 0">Fixture ${esc(report.meta?.start)} → ${esc(report.meta?.end)} · sources: ${(report.meta?.sources || []).map(esc).join(', ')}</p>
+  </section>
+
+  <h2>Checks</h2>
+  <table>
+    <thead><tr><th>Result</th><th>Id</th><th>Detail</th></tr></thead>
+    <tbody>${checks}</tbody>
+  </table>
+
+  <h2>Garmin Analysis</h2>
+  <p>Coverage <strong>${report.garmin.coverageScore}/${report.garmin.coverageMax || 7}</strong></p>
+  <div class="grid two">
+    <div class="card"><h3>Findings</h3>${ul(report.garmin.findings)}</div>
+    <div class="card"><h3>Risks</h3>${ul(report.garmin.risks)}</div>
+    <div class="card"><h3>Wins</h3>${ul(report.garmin.wins)}</div>
+    <div class="card"><h3>Inventory</h3><pre>${esc(JSON.stringify(report.garmin.inventory, null, 2))}</pre></div>
+  </div>
+  <h3 style="margin-top:18px">Domains</h3>
+  <pre>${domainsJson}</pre>
+
+  <h2>Period Review</h2>
+  <div class="card"><p>${esc(report.periods.headline)}</p></div>
+  <table style="margin-top:12px">
+    <thead><tr><th>Horizon</th><th>Verdict</th><th>Score</th><th>Weeks</th><th>Cause</th><th>Top pattern</th></tr></thead>
+    <tbody>${horizons}</tbody>
+  </table>
+  <h3 style="margin-top:18px">Deep analysis</h3>
+  <div class="card prose">${esc(report.periods.deepAnalysis || 'none')}</div>
+
+  <h2>Causal engine</h2>
+  <div class="card">
+    <p><strong>${esc(report.causal.topHypothesis?.label || 'No hypothesis')}</strong>${conf != null ? ` (${conf}%)` : ''}</p>
+    <p class="prose">${esc(report.causal.narrative || 'none')}</p>
+  </div>
+</main>
+</body>
+</html>`
+}
