@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   Area,
@@ -15,7 +15,7 @@ import {
   YAxis,
 } from 'recharts'
 import { ArrowLeft, CalendarRange, Activity, HeartPulse, Dumbbell, Scale } from 'lucide-react'
-import { shiftDateStr, toDateStr } from '@/lib/weekDates'
+import { fromDateStr, shiftDateStr, toDateStr } from '@/lib/weekDates'
 
 type Tab = 'read' | 'timeline' | 'body' | 'training' | 'composition' | 'cause'
 
@@ -106,6 +106,12 @@ export default function PeriodCockpit() {
   const [cockpit, setCockpit] = useState<Cockpit | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /** Last day that has any ledger rows — presets/zoom anchor here, not "today". */
+  const [ledgerTo, setLedgerTo] = useState<string | null>(null)
+  const [ledgerFrom, setLedgerFrom] = useState<string | null>(null)
+  const autoClampedRef = useRef(false)
+
+  const effectiveTo = ledgerTo && ledgerTo < today ? ledgerTo : today
 
   const load = useCallback(async (f: string, t: string) => {
     setLoading(true)
@@ -114,7 +120,32 @@ export default function PeriodCockpit() {
       const res = await fetch(`/api/period-review?from=${f}&to=${t}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-      setCockpit(data.cockpit ?? null)
+      const next: Cockpit | null = data.cockpit ?? null
+      setCockpit(next)
+
+      const span = next?.suggestedSpan
+      if (span?.from && span?.to) {
+        setLedgerFrom(span.from)
+        setLedgerTo(span.to)
+        // First successful load: if zoom runs past the last real day, snap to ledger end
+        // and keep roughly the same window length (default 90d).
+        if (!autoClampedRef.current && t > span.to) {
+          autoClampedRef.current = true
+          const spanDays = Math.max(
+            1,
+            Math.round(
+              (fromDateStr(t).getTime() - fromDateStr(f).getTime()) / 86_400_000,
+            ) + 1,
+          )
+          const newTo = span.to
+          let newFrom = shiftDateStr(newTo, -(spanDays - 1))
+          if (newFrom < span.from) newFrom = span.from
+          setFrom(newFrom)
+          setTo(newTo)
+          return
+        }
+      }
+      autoClampedRef.current = true
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load')
       setCockpit(null)
@@ -128,8 +159,12 @@ export default function PeriodCockpit() {
   }, [from, to, load])
 
   const applyPreset = (days: number) => {
-    setTo(today)
-    setFrom(shiftDateStr(today, -(days - 1)))
+    const end = effectiveTo
+    const startCandidate = shiftDateStr(end, -(days - 1))
+    const start =
+      ledgerFrom && startCandidate < ledgerFrom ? ledgerFrom : startCandidate
+    setTo(end)
+    setFrom(start)
   }
 
   const series = useMemo(() => cockpit?.series ?? [], [cockpit])
