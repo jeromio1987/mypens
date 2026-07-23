@@ -14,6 +14,7 @@
 import { mondayOf, shiftDateStr, toDateStr, fromDateStr, weekBounds } from './weekDates.mjs'
 import { analyzeCausal } from './periodCausal.mjs'
 import { esc, reportCss, friendlyCausal } from './reportHtml.mjs'
+import { dayTrainingLoad } from './trainingLoad.mjs'
 
 const GOOD = 'good'
 const MIXED = 'mixed'
@@ -123,6 +124,9 @@ export function buildDailySignals(data) {
         bodyBatteryMax: null,
         activityMinutes: 0,
         activityCount: 0,
+        trainingLoad: 0,
+        hardLoad: 0,
+        easyLoad: 0,
       })
     }
     return byDate.get(date)
@@ -154,27 +158,40 @@ export function buildDailySignals(data) {
       row.bodyBatteryMax = m.valueNum
     }
   }
+
+  // Group activities / trainings by date, then score with intensity-weighted PLU
+  /** @type {Map<string, any[]>} */
+  const actsByDate = new Map()
+  /** @type {Map<string, any[]>} */
+  const trainsByDate = new Map()
   for (const a of data.activities || []) {
-    const row = touch(a.date)
-    if (!row) continue
-    row.activityCount += 1
-    row.activityMinutes += Math.round((a.durationSec || 0) / 60)
+    if (!a?.date) continue
+    if (!actsByDate.has(a.date)) actsByDate.set(a.date, [])
+    actsByDate.get(a.date).push(a)
+    touch(a.date)
+  }
+  for (const t of data.trainings || []) {
+    if (!t?.date) continue
+    if (!trainsByDate.has(t.date)) trainsByDate.set(t.date, [])
+    trainsByDate.get(t.date).push(t)
+    touch(t.date)
   }
 
-  // Strava / manual / Health* TrainingEntry rows — count as structured sessions
-  // so Period Review does not treat a Strava-heavy week as “zero activity”.
-  for (const t of data.trainings || []) {
-    const row = touch(t.date)
+  const allLoadDates = new Set([...actsByDate.keys(), ...trainsByDate.keys()])
+  for (const date of allLoadDates) {
+    const row = touch(date)
     if (!row) continue
-    row.activityCount += 1
-    const mins =
-      typeof t.durationSec === 'number'
-        ? Math.round(t.durationSec / 60)
-        : typeof t.durationMin === 'number'
-          ? Math.round(t.durationMin)
-          : // Strength imports rarely carry duration; use volume as a soft proxy.
-            Math.max(20, Math.min(90, Math.round(((t.volume || 0) / 2000) * 10) || 45))
-    row.activityMinutes += mins
+    const acts = actsByDate.get(date) || []
+    const trains = trainsByDate.get(date) || []
+    const scored = dayTrainingLoad(acts, trains, {
+      restingHr: row.restingHr ?? 50,
+      hrMax: 185,
+    })
+    row.activityCount = acts.length + trains.length
+    row.activityMinutes = scored.activityMinutes
+    row.trainingLoad = scored.trainingLoad
+    row.hardLoad = scored.hardLoad
+    row.easyLoad = scored.easyLoad
   }
 
   return [...byDate.values()].sort((x, y) => x.date.localeCompare(y.date))
@@ -223,7 +240,9 @@ export function scoreDay(day) {
     parts.push(s)
   }
   if (day.activityCount > 0) {
-    parts.push(clamp(50 + day.activityCount * 15 + Math.min(day.activityMinutes, 90) / 3, 50, 95))
+    // Prefer intensity-weighted load (PLU) so long walks don't inflate Form
+    const load = day.trainingLoad != null ? day.trainingLoad : day.activityMinutes
+    parts.push(clamp(50 + day.activityCount * 12 + Math.min(load, 120) / 2.5, 50, 95))
   }
   if (!parts.length) return null
   return Math.round(avg(parts))

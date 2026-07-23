@@ -30,6 +30,9 @@ type SeriesDay = {
   steps: number | null
   activityMinutes: number
   activityCount: number
+  trainingLoad?: number
+  hardLoad?: number
+  easyLoad?: number
 }
 
 type Cockpit = {
@@ -369,8 +372,15 @@ export default function PeriodCockpit() {
         )}
 
         {!loading && cockpit && tab === 'training' && (
-          <section className="rounded-2xl border border-pens-muted/20 bg-pens-surface/80 p-5">
-            <h2 className="text-sm font-semibold text-orange-300 mb-3">Training load (minutes)</h2>
+          <section className="rounded-2xl border border-pens-muted/20 bg-pens-surface/80 p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-orange-300 mb-1">Training load (PLU)</h2>
+              <p className="text-xs text-pens-cream/45 leading-relaxed">
+                Pens Load Units = minutes × sport weight × HR intensity (Banister-style when avg HR
+                exists). Walks ≈ 0.22× — a long stroll no longer looks like a hard session. Orange =
+                total PLU · amber dashed = easy (walk/hike) · grey = raw minutes for comparison.
+              </p>
+            </div>
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={series}>
@@ -378,12 +388,37 @@ export default function PeriodCockpit() {
                   <XAxis dataKey="date" tick={{ fill: '#93a0b8', fontSize: 10 }} minTickGap={40} />
                   <YAxis tick={{ fill: '#93a0b8', fontSize: 10 }} />
                   <Tooltip contentStyle={{ background: '#121a2b', border: '1px solid #243049' }} />
-                  <Area type="monotone" dataKey="activityMinutes" stroke="#fb923c" fill="#fb923c33" />
+                  <Area
+                    type="monotone"
+                    dataKey="trainingLoad"
+                    name="PLU"
+                    stroke="#fb923c"
+                    fill="#fb923c33"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="easyLoad"
+                    name="Easy PLU"
+                    stroke="#fbbf24"
+                    strokeDasharray="4 4"
+                    dot={false}
+                    strokeWidth={1.5}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="activityMinutes"
+                    name="Raw minutes"
+                    stroke="#64748b"
+                    dot={false}
+                    strokeWidth={1}
+                    strokeOpacity={0.7}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-            <p className="text-xs text-pens-cream/40 mt-2">
-              Includes Garmin activities + Strava/manual training rows.
+            <p className="text-xs text-pens-cream/40">
+              Includes Garmin activities + Strava/manual training rows. Form score now uses PLU, not
+              raw minutes.
             </p>
           </section>
         )}

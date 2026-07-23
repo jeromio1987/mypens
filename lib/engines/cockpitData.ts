@@ -20,6 +20,9 @@ export type CockpitDay = {
   steps: number | null
   activityMinutes: number
   activityCount: number
+  trainingLoad: number
+  hardLoad: number
+  easyLoad: number
 }
 
 function clip<T extends { date: string }>(rows: T[], from: string, to: string) {
@@ -182,6 +185,9 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     steps: (d.steps as number | null) ?? null,
     activityMinutes: (d.activityMinutes as number) || 0,
     activityCount: (d.activityCount as number) || 0,
+    trainingLoad: (d.trainingLoad as number) || 0,
+    hardLoad: (d.hardLoad as number) || 0,
+    easyLoad: (d.easyLoad as number) || 0,
   }))
 
   const hrvDays = series.filter(s => s.hrv != null).length
