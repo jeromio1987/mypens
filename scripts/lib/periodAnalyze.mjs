@@ -13,6 +13,7 @@
 
 import { mondayOf, shiftDateStr, toDateStr, fromDateStr, weekBounds } from './weekDates.mjs'
 import { analyzeCausal } from './periodCausal.mjs'
+import { esc, reportCss, friendlyCausal } from './reportHtml.mjs'
 
 const GOOD = 'good'
 const MIXED = 'mixed'
@@ -1158,51 +1159,61 @@ export function periodsToMarkdown(report) {
 }
 
 function escHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  return esc(s)
 }
 
 /** Standalone HTML for double-click / `start` — no server required. */
 export function periodsToHtml(report) {
+  const conf = report.topHypothesis
+    ? Math.round((report.topHypothesis.confidence || 0) * 100)
+    : null
+
   const horizons = (report.horizons || [])
     .map(h => {
       if (!h.verdict) {
-        return `<section class="card"><h2>${escHtml(h.label)}</h2><p class="muted">No scored weeks in this window.</p></section>`
+        return `<article class="horizon"><strong>${escHtml(h.label)}</strong><div class="meta">No scored weeks in this window.</div></article>`
       }
       const patterns = (h.patterns || [])
-        .map(p => `<li><strong>[${escHtml(p.severity)}] ${escHtml(p.title)}</strong> — ${escHtml(p.text)}</li>`)
+        .slice(0, 4)
+        .map(p => `<li><strong>${escHtml(p.title)}</strong> — ${escHtml(p.text)}</li>`)
         .join('')
       const advice = (h.advice || [])
-        .map(a => `<li><em>(${escHtml(a.period)})</em> ${escHtml(a.text)}</li>`)
+        .slice(0, 5)
+        .map(a => `<li>${escHtml(a.text)}</li>`)
         .join('')
-      return `<section class="card">
-  <h2>${escHtml(h.label)}</h2>
-  <p><strong>${escHtml(h.verdict)}</strong> · ${h.score}/100 · ${h.weeks} weeks
-    (${h.goodWeeks} good / ${h.mixedWeeks} mixed / ${h.badWeeks} bad)</p>
-  ${h.analysis ? `<h3>Analysis</h3><p class="prose">${escHtml(h.analysis)}</p>` : ''}
-  ${patterns ? `<h3>Patterns</h3><ul>${patterns}</ul>` : ''}
-  ${advice ? `<h3>Advice</h3><ul>${advice}</ul>` : ''}
-</section>`
+      return `<article class="horizon">
+  <div class="horizon-top">
+    <div><strong>${escHtml(h.label)}</strong></div>
+    <span class="verdict ${escHtml(h.verdict)}">${escHtml(h.verdict)}</span>
+  </div>
+  <div class="meta" style="margin-top:8px">
+    Score ${h.score}/100 · ${h.weeks} weeks
+    (${h.goodWeeks} good / ${h.mixedWeeks} mixed / ${h.badWeeks} bad)
+    ${h.causal?.topHypothesis ? ` · Cause: ${escHtml(friendlyCausal(h.causal.topHypothesis.id) || h.causal.topHypothesis.label)}` : ''}
+  </div>
+  ${h.analysis ? `<details style="margin-top:10px"><summary>Read analysis</summary><p class="prose">${escHtml(h.analysis)}</p></details>` : ''}
+  ${patterns ? `<h3 style="margin-top:12px">Patterns</h3><ul class="list findings">${patterns}</ul>` : ''}
+  ${advice ? `<h3 style="margin-top:12px">Advice</h3><ul class="list wins">${advice}</ul>` : ''}
+</article>`
     })
     .join('\n')
 
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Period Review — ${escHtml(report.asOf)}</title>
-<style>
-body{margin:0;font:15px/1.55 system-ui,Segoe UI,sans-serif;background:#0b1220;color:#e8eefc}
-main{max-width:920px;margin:0 auto;padding:28px 18px 56px}
-.card{background:#121a2b;border:1px solid #243049;border-radius:14px;padding:14px 16px;margin:14px 0}
-h1{margin:0 0 6px} h2{margin:0 0 8px;font-size:1.1rem} h3{margin:14px 0 6px;font-size:0.95rem;color:#93c5fd}
-.muted{color:#93a0b8} .prose{white-space:pre-wrap} ul{padding-left:1.2rem}
-</style></head><body><main>
-<h1>Period Review</h1>
-<p class="muted">As of ${escHtml(report.asOf)} · data ${escHtml(report.dataSpan?.from || '—')} → ${escHtml(report.dataSpan?.to || '—')}</p>
-<section class="card"><h2>Headline</h2><p>${escHtml(report.headline)}</p></section>
-<section class="card"><h2>Deep analysis</h2><p class="prose">${escHtml(report.deepAnalysis || 'none')}</p></section>
-<section class="card"><h2>Causal engine</h2><p class="prose">${escHtml(report.causalNarrative || report.topHypothesis?.text || 'none')}</p></section>
+<style>${reportCss()}</style></head><body><main>
+<p class="kicker">MY PENS · Period review</p>
+<h1>Period conclusions</h1>
+<p class="sub">As of ${escHtml(report.asOf)} · data ${escHtml(report.dataSpan?.from || '—')} → ${escHtml(report.dataSpan?.to || '—')}</p>
+<section class="hero"><div class="score pass">${escHtml(report.headline)}</div></section>
+<section class="callout" style="margin-top:16px">
+  <div class="title">${escHtml(report.topHypothesis?.label || 'No clear leading cause')}</div>
+  <div class="note">${conf != null ? `${conf}% confidence` : ''}</div>
+  <p class="prose" style="margin-top:10px">${escHtml(report.causalNarrative || report.topHypothesis?.text || 'No causal narrative.')}</p>
+</section>
+<h2>Deep analysis</h2>
+<div class="card prose">${escHtml(report.deepAnalysis || 'none')}</div>
+<h2>By time window</h2>
 ${horizons}
 </main></body></html>`
 }
