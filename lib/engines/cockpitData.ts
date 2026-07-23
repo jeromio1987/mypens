@@ -96,7 +96,35 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
   const suggestedSpan =
     allDates.length > 0 ? { from: allDates[0], to: allDates[allDates.length - 1] } : null
 
-  if (ledger.totalRows === 0) {
+  // Cross-check with raw counts (not wrapped in loadGarminData's silent safe()).
+  let rawCounts: Record<string, number> | null = null
+  try {
+    const [sleepN, actN, trainN, weightN, metricN] = await Promise.all([
+      prisma.sleepEntry.count(),
+      prisma.garminActivity.count(),
+      prisma.trainingEntry.count(),
+      prisma.weightEntry.count(),
+      prisma.garminDailyMetric ? prisma.garminDailyMetric.count() : Promise.resolve(0),
+    ])
+    rawCounts = {
+      sleep: sleepN,
+      activities: actN,
+      trainings: trainN,
+      weights: weightN,
+      metrics: metricN,
+    }
+    const rawTotal = sleepN + actN + trainN + weightN + metricN
+    if (ledger.totalRows === 0 && rawTotal > 0) {
+      loadNotes.push(
+        `Prisma tables have ${rawTotal} rows, but the cockpit loader returned 0 (likely a query/select mismatch). Check the Next.js terminal for [garmin-analyze] warnings.`,
+      )
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    loadNotes.push(`Could not count ledger tables: ${msg}`)
+  }
+
+  if (ledger.totalRows === 0 && (!rawCounts || Object.values(rawCounts).every(n => n === 0))) {
     loadNotes.push(
       'Supabase ledger is empty for SleepEntry / GarminActivity / TrainingEntry / WeightEntry / GarminDailyMetric. Re-run the Garmin dump import against this same DATABASE_URL.',
     )
@@ -198,6 +226,7 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     series,
     thresholds: { rhrLikely: 50, rhrHeavy: 55 },
     ledger,
+    rawCounts,
     suggestedSpan,
     loadNotes,
     causal: {

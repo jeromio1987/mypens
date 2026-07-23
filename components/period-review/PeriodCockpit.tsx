@@ -52,6 +52,13 @@ type Cockpit = {
     activities: { count: number; from: string | null; to: string | null }
     trainings: { count: number; from: string | null; to: string | null }
   }
+  rawCounts?: {
+    sleep: number
+    activities: number
+    trainings: number
+    weights: number
+    metrics: number
+  } | null
   suggestedSpan?: { from: string; to: string } | null
   loadNotes?: string[]
   causal: {
@@ -236,6 +243,13 @@ export default function PeriodCockpit() {
                   ? ` (${cockpit.ledger.activities.from}→${cockpit.ledger.activities.to})`
                   : ''}
                 · training {cockpit.ledger.trainings.count}
+              </p>
+            )}
+            {cockpit.rawCounts && (
+              <p className="text-xs text-pens-cream/40">
+                Raw table counts — sleep {cockpit.rawCounts.sleep} · Garmin{' '}
+                {cockpit.rawCounts.activities} · training {cockpit.rawCounts.trainings} · weight{' '}
+                {cockpit.rawCounts.weights} · metrics {cockpit.rawCounts.metrics}
               </p>
             )}
             {cockpit.suggestedSpan && (
