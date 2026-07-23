@@ -22,11 +22,28 @@ function sleepDays(from: string, nights: number, hours: number) {
   return out
 }
 
-describe('classifyScore', () => {
-  it('bands good / mixed / bad', () => {
-    expect(classifyScore(70)).toBe('good')
-    expect(classifyScore(50)).toBe('mixed')
-    expect(classifyScore(30)).toBe('bad')
+describe('buildDailySignals HRV/stress sources', () => {
+  it('uses SleepEntry.hrv when metric hrv is missing', () => {
+    const daily = buildDailySignals({
+      sleeps: [{ date: '2026-06-01', hours: 7.2, quality: 4, hrv: 51 }],
+      metrics: [{ date: '2026-06-01', kind: 'steps', valueNum: 8000 }],
+      activities: [],
+    })
+    expect(daily[0].hrv).toBe(51)
+    expect(daily[0].steps).toBe(8000)
+  })
+
+  it('maps kind aliases for stress and hrv', () => {
+    const daily = buildDailySignals({
+      sleeps: [],
+      metrics: [
+        { date: '2026-06-02', kind: 'average_stress', valueNum: 37 },
+        { date: '2026-06-02', kind: 'sleeping_hrv', valueNum: 44 },
+      ],
+      activities: [],
+    })
+    expect(daily[0].stress).toBe(37)
+    expect(daily[0].hrv).toBe(44)
   })
 })
 

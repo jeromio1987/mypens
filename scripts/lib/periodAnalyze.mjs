@@ -133,15 +133,26 @@ export function buildDailySignals(data) {
     if (!row) continue
     if (typeof s.hours === 'number') row.sleepHours = s.hours
     if (typeof s.quality === 'number') row.sleepQuality = s.quality
+    // SleepEntry.hrv (avgSleepingHRV from dump) — use when daily metric HRV is missing
+    if (typeof s.hrv === 'number' && s.hrv > 0 && row.hrv == null) row.hrv = s.hrv
   }
   for (const m of data.metrics || []) {
     const row = touch(m.date)
     if (!row || m.valueNum == null) continue
-    if (m.kind === 'stress') row.stress = m.valueNum
-    else if (m.kind === 'hrv') row.hrv = m.valueNum
-    else if (m.kind === 'resting_hr') row.restingHr = m.valueNum
-    else if (m.kind === 'steps') row.steps = m.valueNum
-    else if (m.kind === 'body_battery_max') row.bodyBatteryMax = m.valueNum
+    const kind = String(m.kind || '')
+      .toLowerCase()
+      .trim()
+    if (kind === 'stress' || kind === 'stress_avg' || kind === 'average_stress') {
+      row.stress = m.valueNum
+    } else if (kind === 'hrv' || kind === 'hrv_rmssd' || kind === 'sleeping_hrv') {
+      row.hrv = m.valueNum
+    } else if (kind === 'resting_hr' || kind === 'rhr' || kind === 'resting_heart_rate') {
+      row.restingHr = m.valueNum
+    } else if (kind === 'steps' || kind === 'total_steps') {
+      row.steps = m.valueNum
+    } else if (kind === 'body_battery_max' || kind === 'body_battery') {
+      row.bodyBatteryMax = m.valueNum
+    }
   }
   for (const a of data.activities || []) {
     const row = touch(a.date)

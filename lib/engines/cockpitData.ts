@@ -143,6 +143,12 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     // Count failed (e.g. bad URL) — do not claim the ledger is empty.
   }
 
+  const metricKindCounts: Record<string, number> = {}
+  for (const m of allMetrics) {
+    const k = String(m.kind || 'unknown')
+    metricKindCounts[k] = (metricKindCounts[k] || 0) + 1
+  }
+
   const data = {
     sleeps: clip(allSleeps, from, to),
     metrics: clip(allMetrics, from, to),
@@ -177,6 +183,21 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     activityMinutes: (d.activityMinutes as number) || 0,
     activityCount: (d.activityCount as number) || 0,
   }))
+
+  const hrvDays = series.filter(s => s.hrv != null).length
+  const stressDays = series.filter(s => s.stress != null).length
+  if (data.metrics.length > 0 || data.sleeps.length > 0) {
+    if (hrvDays === 0) {
+      loadNotes.push(
+        'HRV series is empty in this window (no GarminDailyMetric kind=hrv and no SleepEntry.hrv). Re-run the Garmin dump import after pulling the nested-HRV importer fix.',
+      )
+    }
+    if (stressDays === 0) {
+      loadNotes.push(
+        'Stress series is empty in this window (no GarminDailyMetric kind=stress). Steps can exist without stress — re-import wellness/UDS files.',
+      )
+    }
+  }
 
   const formScores = series.map(s => s.formScore).filter((n): n is number => n != null)
   const avgForm =
@@ -262,6 +283,9 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
       trainings: data.trainings.length,
       weights: data.weights.length,
       days: series.length,
+      hrvDays,
+      stressDays,
+      metricKinds: metricKindCounts,
     },
   }
 }

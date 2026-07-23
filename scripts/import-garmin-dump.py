@@ -709,29 +709,70 @@ WELLNESS_MAP = [
 ]
 
 
+def _dig_num(d: dict, keys) -> float | None:
+    """Try flat keys, then one-level nested dicts (Garmin often nests hrv.lastNightAvg)."""
+    # flat
+    for k in keys:
+        if d.get(k) is None:
+            continue
+        try:
+            return float(d[k])
+        except Exception:
+            pass
+    # nested: look inside any dict-valued child for these keys
+    for child in d.values():
+        if not isinstance(child, dict):
+            continue
+        for k in keys:
+            if child.get(k) is None:
+                continue
+            try:
+                return float(child[k])
+            except Exception:
+                pass
+    # explicit common nests
+    for nest_key in ("hrv", "hrvSummary", "allDayStress", "stress", "wellness", "dailyValues"):
+        nested = d.get(nest_key)
+        if not isinstance(nested, dict):
+            continue
+        for k in keys:
+            if nested.get(k) is None:
+                continue
+            try:
+                return float(nested[k])
+            except Exception:
+                pass
+    return None
+
+
 def extract_wellness_metrics(d: dict) -> list[tuple[str, float, str]]:
     """Return list of (kind, value, unit) from a Garmin daily/wellness dict."""
     out: list[tuple[str, float, str]] = []
     for kind, unit, keys in WELLNESS_MAP:
-        for k in keys:
-            if d.get(k) is None:
-                continue
-            try:
-                v = float(d[k])
-            except Exception:
-                continue
-            # skip nonsense zeros for optional sensors sometimes
-            if kind in ("hrv", "resting_hr", "spo2", "respiration") and v <= 0:
-                continue
-            out.append((kind, v, unit))
-            break
+        v = _dig_num(d, keys)
+        if v is None:
+            continue
+        # skip nonsense zeros for optional sensors sometimes
+        if kind in ("hrv", "resting_hr", "spo2", "respiration") and v <= 0:
+            continue
+        # Garmin uses -1 / -2 for missing stress
+        if kind in ("stress", "stress_max") and v < 0:
+            continue
+        out.append((kind, v, unit))
     # intensity minutes: sum moderate+vigorous when both present
     try:
         mod = d.get("moderateIntensityMinutes")
         vig = d.get("vigorousIntensityMinutes")
+        if mod is None and vig is None:
+            for nest_key in ("wellness", "dailyValues", "totals"):
+                nested = d.get(nest_key)
+                if isinstance(nested, dict):
+                    if mod is None:
+                        mod = nested.get("moderateIntensityMinutes")
+                    if vig is None:
+                        vig = nested.get("vigorousIntensityMinutes")
         if mod is not None or vig is not None:
             total = float(mod or 0) + float(vig or 0)
-            # replace single intensity_min if we already added one from first key only
             out = [x for x in out if x[0] != "intensity_min"]
             out.append(("intensity_min", total, "minutes"))
     except Exception:

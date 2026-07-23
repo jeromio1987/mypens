@@ -226,7 +226,9 @@ export default function PeriodCockpit() {
 
         {!loading && cockpit?.loadNotes && cockpit.loadNotes.length > 0 && (
           <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 space-y-2">
-            <p className="text-sm font-semibold text-amber-200">Why this window looks empty</p>
+            <p className="text-sm font-semibold text-amber-200">
+              {(cockpit.inventory?.days || 0) > 0 ? 'Data gaps in this window' : 'Why this window looks empty'}
+            </p>
             {cockpit.loadNotes.map(n => (
               <p key={n} className="text-sm text-amber-100/80">
                 {n}
@@ -449,10 +451,20 @@ function ChartCard({
   color: string
   children?: React.ReactNode
 }) {
+  const hasPoints = data.some(d => {
+    const v = d[dataKey]
+    return typeof v === 'number' && !Number.isNaN(v)
+  })
   return (
     <div className="rounded-2xl border border-pens-muted/20 bg-pens-surface/80 p-4">
       <h3 className="text-xs font-semibold text-pens-cream/60 mb-2">{title}</h3>
-      <div className="h-44">
+      <div className="h-44 relative">
+        {!hasPoints && (
+          <p className="absolute inset-0 z-10 flex items-center justify-center px-4 text-center text-xs text-pens-cream/45">
+            No {title} rows in this window — Form score is weaker without it. Re-import Garmin wellness
+            (HRV/stress) if this stays empty.
+          </p>
+        )}
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#243049" />
