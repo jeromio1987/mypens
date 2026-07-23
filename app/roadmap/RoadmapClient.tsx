@@ -123,22 +123,32 @@ const TRACKS: Track[] = [
 ]
 
 const NEXT_30_DAYS = [
-  'Lock core schema and adjustment v1',
-  'Polish the mobile trust loop and trip flow',
-  'Ship privacy baseline and review pack',
-  'Start HealthKit / Health Connect evaluation',
+  'Phase 5-A/B: RHR drinking ladder (≥50 / ≥55) + period-review from/to API',
+  'Phase 5-C: Tabbed /period-review — The Read, Form score graph, zoom brush',
+  'Phase 6-A/B: Goal model + deterministic Adaptive Sports Planner engine',
+  'Phase 6-C: /planner week grid — running · cycling · core · gym; long session Sat or Sun',
+]
+
+const PRODUCT_BETS = [
+  {
+    phase: 'Phase 5',
+    title: 'Engine Report Cockpit',
+    blurb:
+      'The Read (not “executive summary”), tabs, zoomable period so all metrics and conclusions reflow, Form score + pillar graphs, RHR drinking bands, offline HTML snapshot only.',
+  },
+  {
+    phase: 'Phase 6',
+    title: 'Adaptive Sports Planner',
+    blurb:
+      'Dynamic week plan from sleep + how much of each sport you did + food context. You declare the goal (e.g. VO₂max 50, ~13% BF without losing muscle, marathon). Switch sports: running, cycling, core, gym. Long session only Saturday or Sunday.',
+  },
 ]
 
 const GAPS = [
-  'Tech stack decisions — what language/framework for mobile? React Native? Swift/Kotlin native?',
-  'Solo vs team — who is building this? Are you coding it yourself or directing AI/developers?',
-  'Monetization model — freemium tiers not yet defined (what\'s free, what\'s paid, price points)',
-  'Data model spec — the canonical schema is named but not designed (field names, types, relationships)',
-  'Adjustment logic spec — "adjustment v1" is referenced but algorithm not defined',
-  'MVP scope cut — Phase 2 deliverables are still broad; what is the absolute minimum to ship?',
-  'Design language — no visual identity yet (colors, typography, UI tone)',
-  'Name / domain — is "MY PENS" final? Is a domain available?',
-  'Metrics / success KPIs — retention targets, engagement benchmarks not defined',
+  'Confirm weekend long-day default (Saturday vs Sunday) and whether both can ever be long in one week',
+  'Goal units and targets for VO₂max / body-fat / race — which fields are required vs optional',
+  'How aggressively Food gaps should soften the plan when logging is incomplete',
+  'Whether Accept week writes into Programme (2-C) or a new PlannerPlan table',
 ]
 
 export default function RoadmapClient() {
@@ -154,7 +164,7 @@ export default function RoadmapClient() {
           <div>
             <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">P.E.N.S.</p>
             <h1 className="text-2xl font-bold text-pens-cream mt-0.5">Product Roadmap</h1>
-            <p className="text-xs text-pens-cream/40 mt-0.5">4 phases · 5 tracks · updated March 2026</p>
+            <p className="text-xs text-pens-cream/40 mt-0.5">4 phases · 5 tracks · Phase 5–6 backlog · updated July 2026</p>
           </div>
         </div>
 
@@ -243,10 +253,29 @@ export default function RoadmapClient() {
           </ol>
         </div>
 
+        {/* Phase 5–6 product bets */}
+        <div className="space-y-3">
+          <h2 className="font-semibold text-pens-cream/70 text-sm px-1 uppercase tracking-widest">
+            Next product bets
+          </h2>
+          {PRODUCT_BETS.map(bet => (
+            <div
+              key={bet.phase}
+              className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5"
+            >
+              <p className="text-[10px] font-semibold text-pens-gold uppercase tracking-widest mb-1">
+                {bet.phase}
+              </p>
+              <h3 className="font-bold text-pens-cream mb-2">{bet.title}</h3>
+              <p className="text-sm text-pens-cream/65 leading-relaxed">{bet.blurb}</p>
+            </div>
+          ))}
+        </div>
+
         {/* Gaps to fill */}
         <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-5">
-          <h2 className="font-bold text-pens-cream mb-1">Gaps to Fill</h2>
-          <p className="text-xs text-pens-cream/40 mb-4">Open items this roadmap does not yet cover.</p>
+          <h2 className="font-bold text-pens-cream mb-1">Open decisions</h2>
+          <p className="text-xs text-pens-cream/40 mb-4">Resolve before or during Phase 5–6 build.</p>
           <ul className="space-y-2.5">
             {GAPS.map((gap, idx) => (
               <li key={idx} className="flex items-start gap-3">
@@ -258,7 +287,7 @@ export default function RoadmapClient() {
         </div>
 
         <p className="text-xs text-pens-cream/30 text-center pb-4 italic">
-          Roadmap version: revised — exported March 2026
+          Roadmap version: July 2026 — Engine Cockpit + Adaptive Sports Planner intake
         </p>
       </div>
     </main>
