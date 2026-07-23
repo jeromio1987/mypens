@@ -1,6 +1,6 @@
 # MY PENS — Master Development Roadmap
 
-**Version:** July 2026 — synced to repo audit + Engine Cockpit / Adaptive Planner intake  
+**Version:** July 2026 — Engine Cockpit / Adaptive Planner / Experiment+Food flagship  
 **Repo:** https://github.com/jeromio1987/mypens  
 
 ## Session / infra status
@@ -79,12 +79,21 @@
 
 ### Phase 6 — Adaptive Sports Planner
 
-- [ ] TASK 6-A Goal model + UI (VO₂max / body-comp / marathon / custom)  
-- [ ] TASK 6-B Deterministic planner engine (sleep + sport load + weekend-long rule)  
-- [ ] TASK 6-C `/planner` week grid — running · cycling · core · gym switches  
+- [x] TASK 6-A Goal model + UI (VO₂max / body-comp / marathon / custom) — first cut on cockpit/planner branch  
+- [x] TASK 6-B Deterministic planner engine (sleep + sport load + weekend-long rule) — first cut  
+- [x] TASK 6-C `/planner` week grid — running · cycling · core · gym switches — first cut  
 - [ ] TASK 6-D Food-aware soft constraints  
 - [ ] TASK 6-E Optional AI narrative on deterministic JSON only  
 - [ ] TASK 6-F Mobile week card  
+
+### Phase 7 — Experiment Engine & Food as Confounder
+
+- [ ] TASK 7-A Food daily aggregates + energy-availability signals (protein/kcal vs training load)  
+- [ ] TASK 7-B Wire Food into Cause / The Read / RHR stack (food × alcohol × next-morning RHR)  
+- [ ] TASK 7-C `Experiment` model — hypothesis, window, primary metric, guardrails  
+- [ ] TASK 7-D Experiment runner — adherence + auto verdict (supported / weak / confounded)  
+- [ ] TASK 7-E `/experiments` UI + link from Cockpit / Planner goals  
+- [ ] TASK 7-F Closed loop — Accept week → adherence → experiment progress card  
 
 ## UI note — `/context` bottom bar
 
@@ -102,10 +111,11 @@ Four slots only: **Weight · Food · Sleep · Journal** (overview remains in “
 
 1. Production migrations + Vercel deploy  
 2. Landing + onboarding QA against copy decks  
-3. **Phase 5 — Engine Report Cockpit** (The Read, tabs, zoomable period, graphs, RHR drinking ladder)  
-4. **Phase 6 — Adaptive Sports Planner** (goal-driven week plan from sleep + load + food context)  
-5. Programme builder: optional drag reorder  
-6. Phase 4 integrations and Clubroom / bloodwork track  
+3. **Phase 5 — Engine Report Cockpit** (ship + polish zoom / composition series)  
+4. **Phase 6 — Adaptive Sports Planner** (food soft-rules, AI why, mobile card)  
+5. **Phase 7 — Experiment Engine & Food as Confounder** (year-one flagship insight loop)  
+6. Programme builder: optional drag reorder  
+7. Phase 4 integrations and Clubroom / bloodwork track  
 
 ---
 
@@ -166,7 +176,7 @@ Rules of engagement:
 
 ## Phase 6 — Adaptive Sports Planner
 
-**Status:** Spec intake Jul 2026 · not built  
+**Status:** Spec Jul 2026 · **first cut shipping** (`/planner`, `PlannerGoal`, `planWeek`) on Phase 5–6 branch · deepen 6-D/E/F next  
 **Depends on:** Training + Sleep ledgers (live); Food logging (user tracks; planner reads intake when present); Garmin/Strava history preferred  
 **Distinct from:** static Programme builder (2-C) — that is a fixed template. This is a **dynamic week planner** that adapts to recovery and goal.
 
@@ -234,6 +244,111 @@ Goal → plan bias:
 - Not auto-booking calendar  
 - Not medical / injury diagnosis  
 - Does not replace Food logging — only consumes it  
+
+---
+
+## Phase 7 — Experiment Engine & Food as Confounder
+
+**Status:** Spec locked Jul 2026 · year-one flagship insight · not built  
+**Depends on:** Phase 5 Cockpit (The Read / Cause / zoom) · Phase 6 Planner goals · existing Food + Weight/Tanita + Anchor + RHR ladder  
+**North star loop:** **signal → cause → plan → proof**
+
+### Product intent
+Stop treating goals as slogans. Every meaningful goal becomes a **time-bounded experiment** with a hypothesis, primary metric, guardrails, and an auto-verdict.  
+Food stops being “another diary” and becomes a **first-class confounder** beside alcohol, sleep, and training — the missing input that makes weight, RHR, and session quality stop lying to each other.
+
+### Why this is the flagship
+Cockpit explains *what happened*. Planner proposes *what to do*.  
+Phase 7 closes the loop: *did the plan + fueling actually move the metric — or was it confounded?*
+
+That is the difference between a chart app and a **private operating system for your body**.
+
+### Food as causal pillar (not a calorie coach)
+
+| Signal | How it enters the engine |
+|--------|---------------------------|
+| Rolling protein g/day | Soft floor for body-comp / gym weeks |
+| Rolling kcal vs training load | Energy-availability proxy (never medical advice) |
+| Hard session on low-fuel day | Cause finding + planner bias next week |
+| Alcohol × late meal × next RHR ≥50/≥55 | One stack in Cause / The Read |
+| Photo/structured meals (existing friction) | Weekly “what I actually ate” line in The Read |
+
+Rules:
+- Missing food logs **never block** Cockpit or Planner — they lower confidence / add a “fueling unknown” tag.  
+- Do **not** invent diets, meal plans, or diagnoses.  
+- Do **not** modify `lib/retentionModels.ts` — food explains noise; the weight engine stays sacred.
+
+### Experiment object
+
+```text
+Experiment
+  goalKind          // vo2max | bodyfat | marathon | custom (ties to PlannerGoal)
+  hypothesis        // one sentence, user-editable
+  window            // startDate → endDate (2–6 weeks typical)
+  primaryMetric     // e.g. bodyFatPct ↓ | Form avg ↑ | long-run minutes ↑ | VO2 proxy
+  guardrails[]      // e.g. sleep avg ≥6.5 · RHR≥55 days ≤2 · gym volume not ↓ >15%
+  planLink          // optional accepted PlannerWeek ids
+  foodPolicy        // optional protein floor / kcal band (soft)
+  status            // draft | running | completed | aborted
+  verdict           // supported | weak | confounded | inconclusive
+  verdictJson       // deterministic evidence pack
+```
+
+Example hypotheses (user-declared, system-scored):
+- “Sun long only + ≥160g protein → BF% ↓ without gym volume ↓ over 4 weeks.”  
+- “Two quality aerobic sessions/week + RHR clean-band mornings → Form avg ↑.”  
+- “Marathon long progression Sat; mid-week easy only — long-run minutes ↑ without sleep crash.”
+
+### Auto-verdict logic (deterministic first)
+
+At window end (or on demand):
+
+1. **Adherence** — % accepted plan days completed (sport/intensity match, soft).  
+2. **Primary metric delta** — vs baseline window of equal length before start.  
+3. **Guardrail breaches** — count + severity (RHR heavy days, sleep floor, muscle-proxy volume).  
+4. **Confounder score** — binge days, travel/illness tags, food-log coverage.  
+5. **Verdict**  
+   - **supported** — metric moved in goal direction, adherence decent, confounders low  
+   - **weak** — metric flat/noisy, adherence ok  
+   - **confounded** — metric moved but binge / RHR≥55 cluster / tiny food coverage / illness  
+   - **inconclusive** — not enough primary-metric samples  
+
+Optional Claude layer: prose on top of `verdictJson` only (same pattern as Weekly Feedback / Verdict).
+
+### Surfaces
+
+| Surface | Job |
+|---------|-----|
+| `/experiments` | List, create from Planner goal, running/completed |
+| Cockpit → The Read | “Active experiment: week 3/4 — adherence 71% — fueling unknown 2d” |
+| Cause tab | Food × alcohol × RHR stack when relevant |
+| Planner | “This week serves experiment X” banner |
+| Weekly Feedback | Experiment progress card |
+| Proof pack (later) | Season dossier: experiments + graphs + causes |
+
+### Build order
+
+- [ ] **7-A** Food daily aggregates API/helper (kcal, protein, meal count) + coverage %  
+- [ ] **7-B** Food confounders into Cause / The Read / cockpit series tags  
+- [ ] **7-C** Prisma `Experiment` (+ optional `ExperimentDay` adherence) + migration  
+- [ ] **7-D** Deterministic verdict engine + vitest (supported / weak / confounded / inconclusive)  
+- [ ] **7-E** `/experiments` UI — create from goal, progress, end-of-window verdict  
+- [ ] **7-F** Closed loop: Accept week → adherence hooks → Cockpit experiment chip  
+
+### Explicit non-goals (v1)
+
+- Not a meal-plan generator or macro marketplace  
+- Not clinical nutrition or medical advice  
+- Not multi-user challenges  
+- Not ML personalization until personal baselines (Layer C) exist and stay transparent  
+
+### 1-year placement
+
+| Horizon | Layer |
+|---------|--------|
+| Now | Phase 5–6: explain + plan |
+| Next | **Phase 7: proof via experiments + food confounders** |
+| Then | Personal baselines / readiness · seasonal Form · proof-pack export · bloodwork punctuation |
 
 ---
 
