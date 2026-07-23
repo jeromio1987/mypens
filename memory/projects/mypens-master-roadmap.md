@@ -1,6 +1,6 @@
 # MY PENS — Master Development Roadmap
 
-**Version:** May 2026 — synced to repo audit (`C:\Users\jerom\Desktop\claude\mypens`)  
+**Version:** Jul 2026 — pathways UX parked · synced to repo (`C:\Users\jerom\Desktop\claude\mypens`)  
 **Repo:** https://github.com/jeromio1987/mypens  
 
 ## Session / infra status
@@ -13,6 +13,7 @@
 - Replit decommissioned — Cursor owns code
 - `JournalEntry` in Prisma + web `/journal`
 - Core modules, auth, wearables (Garmin, Strava, HealthKit, Health Connect), goals, streaks, events, backup, CSV, Anchor, Verdict, Clubroom, Dopamine router, PWA
+- Habit pathways v0 (see Phase 3-E below) — **parked**
 
 **Ops / handover**
 
@@ -33,6 +34,7 @@
 | Premium scaffold | `UserSettings.tier`, gates on Verdict / PDF / programme |
 | Morning brief | `app/morning-brief/page.tsx`, API route |
 | Landing / onboarding | Routes exist (`/landing`, `/onboarding`); verify copy vs `LANDING_PAGE_COPY.md` |
+| Habit pathways v0 | `/dopamine` workspace (Focus · Log · Weekly); `GET /api/pathways`; Verdict `PathwayStatusChip`; strength from Anchor + Sleep. Focus in `localStorage`. **Parked — no further UX until unparked.** |
 
 **Polish / backlog**
 
@@ -62,12 +64,43 @@
 - [ ] TASK 3-B Onboarding — confirm build matches final copy  
 - [x] TASK 3-C Premium feature scaffold  
 - [ ] TASK 3-D Landing page — confirm build matches `LANDING_PAGE_COPY.md`  
+- [x] TASK 3-E Habit pathways v0 (shipped + **PARKED**) — see section below  
 
 ### Phase 4 — Scale
 
 - [ ] TASK 4-A Clubroom multi-user (privacy-first, weekly wrap share)  
 - [ ] TASK 4-B Garmin weight & sleep sync extensions  
 - [ ] TASK 4-C Tanita direct via Apple Health body composition ingest  
+
+---
+
+## Habit pathways — PARKED (Jul 2026)
+
+**Status:** v0 in tree · no active build · resume only when explicitly unparked.
+
+**Product rule:** HTML dossier = science lab (frozen). myPENS Dopamine = daily UX. Verdict = status chip only.
+
+| Piece | Location |
+|-------|----------|
+| Lab / teaching dossier | `Private/dopamine-adhd-dossier.html` (outside this repo) — zoom tone chart, pathway map, focus+local tags |
+| UX wireframe | Cursor canvas `mypens-pathway-ux.canvas.tsx` |
+| IM / commercial notes | `Private/state-platform-IM.html`, `Private/state-platform-financial-plan.html` |
+| Dopamine workspace | `app/dopamine/page.tsx` + `components/pathways/PathwayWorkspace.tsx` |
+| Verdict chip | `components/pathways/PathwayStatusChip.tsx` |
+| Strength API | `app/api/pathways/route.ts`, `lib/pathways/*` |
+
+**Parked next (do not start unless unparked)**
+
+1. Persist weekly focus in DB (`RecoverySettings` or `UserSettings`) instead of `localStorage`  
+2. Morning Brief one-liner from pathway focus  
+3. Mobile (Expo) Focus · Log · Weekly parity  
+4. Explicit cold/scaffold tags in Anchor UI (today: notes/supplements inference)  
+5. Week-over-week strength delta on Weekly check  
+6. Commercial Path A/B — only after personal loop sticky (see Private IM)
+
+**Do not build while parked:** receptor dashboards, MDR/DTx, duplicate pathway UI on more pages, expanding the HTML dossier into an app shell.
+
+---
 
 ## UI note — `/context` bottom bar
 
@@ -87,6 +120,8 @@ Four slots only: **Weight · Food · Sleep · Journal** (overview remains in “
 2. Landing + onboarding QA against copy decks  
 3. Programme builder: optional drag reorder  
 4. Phase 4 integrations and Clubroom  
+5. Habit pathways — **parked** (Phase 3-E); unpark before any further pathway work  
+6. Memory practice loop — **long-term only** (see § below); not a top-level module yet  
 
 ---
 
@@ -100,5 +135,25 @@ Four slots only: **Weight · Food · Sleep · Journal** (overview remains in “
 - [ ] **9 — Longevity / prevention lens** — Separate UX tone: slower cadence, gentler defaults, **educational** suggested retest intervals by marker *class* (lipids, metabolic, iron, thyroid, etc.) with strong “ask your clinician” rails — no automated scheduling of real medical care.  
 - [ ] **Easy vs deep** — One-tap summaries + optional raw tables, LOINC optional, personal baseline bands.  
 - [ ] **Women’s health / cycle-aware labs** — opt-in high-privacy module (ties to cycle phases only when user logs them).  
+
+---
+
+## Very long roadmap — memory & cognition (parked)
+
+**Status:** long-list only · **do not build** until habit pathways are unparked and sticky.  
+**Advise (Jul 2026):** memory is trainable in parts (encoding, consolidation via sleep, prospective memory via scaffolds). It is a poor fit for a fake “hippocampus / memory %” visualization. Prefer sleep + Anchor honesty + external scaffolds over a brain-training theatre module.
+
+**If / when built — keep tiny**
+
+- [ ] **Memory practice loop (optional)** — not a top-level nav module; nest under Sleep or Dopamine  
+- [ ] **One metric only** — e.g. streak of completed recalls or spaced items; optional “name 3 things from yesterday”  
+- [ ] **Link to sleep / alcohol** — “last night’s sleep & drinks vs today’s forgetfulness” (correlation framing, never causation cosplay)  
+- [ ] **Optional pathway framing** — build path: encode → protect sleep → recall (only if pathways unparked)  
+
+**Do not build**
+
+- Standalone Memory module with brain/hippocampus meters  
+- Claims of measured synaptic / receptor improvement  
+- Dual n-back as a core product (optional drill at most; small effect sizes)  
 
 *Other product roadmaps (Investing Dashboard, Personal Cockpit, Jarvis, ISZE Dashboards) live in their own repos/paths — not duplicated here.*

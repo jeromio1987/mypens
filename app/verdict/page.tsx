@@ -10,6 +10,7 @@ import {
 import type { VerdictData, VerdictPillar, LedgerItem } from '@/app/api/verdict/route'
 import { VERDICT_LABELS } from '@/lib/explanationCopy'
 import PremiumGate from '@/components/shared/PremiumGate'
+import PathwayStatusChip from '@/components/pathways/PathwayStatusChip'
 
 const PILLAR_ICONS: Record<string, React.ElementType> = {
   'arrow-up-right': ArrowUpRight,
@@ -278,6 +279,8 @@ export default function VerdictPage() {
             </p>
           )}
         </header>
+
+        <PathwayStatusChip />
 
         {/* Audit summary card */}
         {!loading && data && (

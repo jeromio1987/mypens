@@ -94,7 +94,7 @@ Never rename or drop columns without checking all API routes that reference them
 
 ## Built modules (do not rebuild)
 
-Weight · Food · Sleep · Training · Body Measurements · Journal / Mood · Events & Streaks · Anchor (private) · Verdict (rule-based audit + AI weekly summary) · Clubroom (medals, tiers, weekly wrap) · Dopamine Router
+Weight · Food · Sleep · Training · Body Measurements · Journal / Mood · Events & Streaks · Anchor (private) · Verdict (rule-based audit + AI weekly summary) · Clubroom (medals, tiers, weekly wrap) · Dopamine Router · Habit pathways v0 (Focus/Log/Weekly on `/dopamine` — **parked**, see master roadmap)
 
 **Integrations built:** Garmin OAuth + webhook · Strava OAuth + webhook · Apple HealthKit · Android Health Connect · Tanita CSV import · CSV export
 
@@ -102,10 +102,11 @@ Weight · Food · Sleep · Training · Body Measurements · Journal / Mood · Ev
 
 ## Not built yet (Phase 2+)
 
-- Workout programme builder (Phase 2-C)
-- Weekly PDF report (Phase 2-D)
+- Workout programme builder polish (DnD reorder) — core CRUD is live
+- Weekly PDF report polish as needed (core is live)
 - Per-pillar AI breakdown in Verdict (summary is live; per-pillar is not)
 - Multi-user / social features — intentionally excluded from v1
+- **Habit pathways beyond v0** — v0 parked on roadmap (`memory/projects/mypens-master-roadmap.md` § Habit pathways); do not expand until explicitly unparked
 
 ---
 
