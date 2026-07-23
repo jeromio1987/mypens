@@ -225,6 +225,13 @@ export default function PeriodCockpit() {
             </label>
             <p className="text-xs text-pens-cream/40 pb-2">
               Zoom the window — The Read, graphs, and cause all reflow.
+              {ledgerTo && (
+                <span className="text-cyan-400/70">
+                  {' '}
+                  Auto-ends at last ledger day ({ledgerTo}
+                  {ledgerTo < today ? ' — no rows after that yet' : ''}).
+                </span>
+              )}
             </p>
           </div>
         </div>
