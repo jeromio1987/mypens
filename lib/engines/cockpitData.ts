@@ -26,23 +26,93 @@ function clip<T extends { date: string }>(rows: T[], from: string, to: string) {
   return rows.filter(r => r.date >= from && r.date <= to)
 }
 
+function spanOf(rows: { date: string }[]) {
+  if (!rows.length) return { count: 0, from: null as string | null, to: null as string | null }
+  const dates = rows.map(r => r.date).filter(Boolean).sort()
+  return { count: rows.length, from: dates[0], to: dates[dates.length - 1] }
+}
+
 export async function buildCockpitWindow(opts: { from: string; to: string; asOf?: string }) {
   const { from, to } = opts
   const asOf = opts.asOf || to
 
-  const [garmin, confounders] = await Promise.all([
-    loadGarminData(prisma, { allTime: true }),
-    loadConfounders(prisma, {}),
-  ])
+  const loadNotes: string[] = []
+  let garmin: Awaited<ReturnType<typeof loadGarminData>>
+  let confounders: Awaited<ReturnType<typeof loadConfounders>>
+  try {
+    ;[garmin, confounders] = await Promise.all([
+      loadGarminData(prisma, { allTime: true }),
+      loadConfounders(prisma, {}),
+    ])
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    loadNotes.push(`Ledger load failed: ${msg}`)
+    garmin = { sleeps: [], weights: [], trainings: [], activities: [], metrics: [] }
+    confounders = { recoveries: [], dayEntries: [], weights: [] }
+  }
+
+  const allSleeps = garmin.sleeps || []
+  const allActivities = garmin.activities || []
+  const allTrainings = garmin.trainings || []
+  const allWeights = garmin.weights || []
+  const allMetrics = garmin.metrics || []
+
+  const ledger = {
+    sleep: spanOf(allSleeps),
+    activities: spanOf(allActivities),
+    trainings: spanOf(allTrainings),
+    weights: spanOf(allWeights),
+    metrics: spanOf(allMetrics),
+    totalRows:
+      allSleeps.length +
+      allActivities.length +
+      allTrainings.length +
+      allWeights.length +
+      allMetrics.length,
+  }
+
+  // Suggested full span across all sources
+  const allDates = [
+    ledger.sleep.from,
+    ledger.sleep.to,
+    ledger.activities.from,
+    ledger.activities.to,
+    ledger.trainings.from,
+    ledger.trainings.to,
+    ledger.weights.from,
+    ledger.weights.to,
+    ledger.metrics.from,
+    ledger.metrics.to,
+  ].filter(Boolean) as string[]
+  allDates.sort()
+  const suggestedSpan =
+    allDates.length > 0 ? { from: allDates[0], to: allDates[allDates.length - 1] } : null
+
+  if (ledger.totalRows === 0) {
+    loadNotes.push(
+      'Supabase ledger is empty for SleepEntry / GarminActivity / TrainingEntry / WeightEntry / GarminDailyMetric. Re-run the Garmin dump import against this same DATABASE_URL.',
+    )
+  }
 
   const data = {
-    sleeps: clip(garmin.sleeps || [], from, to),
-    metrics: clip(garmin.metrics || [], from, to),
-    activities: clip(garmin.activities || [], from, to),
-    trainings: clip(garmin.trainings || [], from, to),
-    weights: clip(garmin.weights || [], from, to),
+    sleeps: clip(allSleeps, from, to),
+    metrics: clip(allMetrics, from, to),
+    activities: clip(allActivities, from, to),
+    trainings: clip(allTrainings, from, to),
+    weights: clip(allWeights, from, to),
     recoveries: clip(confounders.recoveries || [], from, to),
     dayEntries: clip(confounders.dayEntries || [], from, to),
+  }
+
+  if (
+    ledger.totalRows > 0 &&
+    data.sleeps.length + data.activities.length + data.trainings.length + data.metrics.length === 0
+  ) {
+    loadNotes.push(
+      `Window ${from}→${to} has 0 rows, but the ledger has data` +
+        (suggestedSpan ? ` from ${suggestedSpan.from} to ${suggestedSpan.to}` : '') +
+        '. Widen the zoom (Use full ledger span).',
+    )
   }
 
   const daily = buildDailySignals(data)
@@ -66,11 +136,11 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
       : Math.round((formScores.reduce((a, b) => a + b, 0) / formScores.length) * 10) / 10
 
   const fullData = {
-    sleeps: garmin.sleeps || [],
-    metrics: garmin.metrics || [],
-    activities: garmin.activities || [],
-    trainings: garmin.trainings || [],
-    weights: [...(garmin.weights || []), ...(confounders.weights || [])],
+    sleeps: allSleeps,
+    metrics: allMetrics,
+    activities: allActivities,
+    trainings: allTrainings,
+    weights: [...allWeights, ...(confounders.weights || [])],
     recoveries: confounders.recoveries || [],
     dayEntries: confounders.dayEntries || [],
   }
@@ -119,6 +189,9 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     theRead,
     series,
     thresholds: { rhrLikely: 50, rhrHeavy: 55 },
+    ledger,
+    suggestedSpan,
+    loadNotes,
     causal: {
       topHypothesis: causal.topHypothesis,
       narrative: causal.narrative,

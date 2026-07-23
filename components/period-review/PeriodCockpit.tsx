@@ -46,6 +46,14 @@ type Cockpit = {
   }
   series: SeriesDay[]
   thresholds: { rhrLikely: number; rhrHeavy: number }
+  ledger?: {
+    totalRows: number
+    sleep: { count: number; from: string | null; to: string | null }
+    activities: { count: number; from: string | null; to: string | null }
+    trainings: { count: number; from: string | null; to: string | null }
+  }
+  suggestedSpan?: { from: string; to: string } | null
+  loadNotes?: string[]
   causal: {
     topHypothesis?: { id: string; label: string; confidence: number; text?: string } | null
     narrative?: string
@@ -207,6 +215,42 @@ export default function PeriodCockpit() {
               If the DB is empty, run analyze:periods locally first — live cockpit still needs rows.
             </span>
           </p>
+        )}
+
+        {!loading && cockpit?.loadNotes && cockpit.loadNotes.length > 0 && (
+          <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 space-y-2">
+            <p className="text-sm font-semibold text-amber-200">Why this window looks empty</p>
+            {cockpit.loadNotes.map(n => (
+              <p key={n} className="text-sm text-amber-100/80">
+                {n}
+              </p>
+            ))}
+            {cockpit.ledger && (
+              <p className="text-xs text-pens-cream/50">
+                Ledger totals — sleep {cockpit.ledger.sleep.count}
+                {cockpit.ledger.sleep.from
+                  ? ` (${cockpit.ledger.sleep.from}→${cockpit.ledger.sleep.to})`
+                  : ''}
+                · Garmin {cockpit.ledger.activities.count}
+                {cockpit.ledger.activities.from
+                  ? ` (${cockpit.ledger.activities.from}→${cockpit.ledger.activities.to})`
+                  : ''}
+                · training {cockpit.ledger.trainings.count}
+              </p>
+            )}
+            {cockpit.suggestedSpan && (
+              <button
+                type="button"
+                className="mt-1 text-xs px-3 py-1.5 rounded-full border border-amber-400/50 text-amber-100 hover:bg-amber-500/10"
+                onClick={() => {
+                  setFrom(cockpit.suggestedSpan!.from)
+                  setTo(cockpit.suggestedSpan!.to)
+                }}
+              >
+                Use full ledger span ({cockpit.suggestedSpan.from} → {cockpit.suggestedSpan.to})
+              </button>
+            )}
+          </div>
         )}
 
         {!loading && cockpit && tab === 'read' && (
