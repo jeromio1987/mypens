@@ -53,6 +53,11 @@ Append-only. Goal: fewer repeated failures, clearer handoffs.
 6. Don’t invent paths; give 2–3 candidates from prior `dir` hits.
 7. Secrets: don’t ask to paste `.env` into chat; guide edits locally.
 
+### Expo / NetInfo
+| Symptom | Cause | Fix |
+|---------|--------|-----|
+| `NetInfo.default.addEventListener is not a function` | Bad default import / wrong API (`addListener` vs `addEventListener`) under Metro | Normalize `default ?? module`, use `addEventListener`, fail open (assume online) |
+
 ---
 
 ## Next append
