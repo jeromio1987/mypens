@@ -3,6 +3,7 @@ import { shiftDateStr } from '../scripts/lib/weekDates.mjs'
 import {
   analyzeCausal,
   classifyDrinkLoad,
+  classifyRhrDrinkBand,
   attachConfounders,
   lagEffects,
 } from '../scripts/lib/periodCausal.mjs'
@@ -14,6 +15,64 @@ describe('classifyDrinkLoad', () => {
     expect(classifyDrinkLoad(10)).toBe('binge')
     expect(classifyDrinkLoad(6)).toBe('heavy')
     expect(classifyDrinkLoad(0)).toBe('clean')
+  })
+})
+
+describe('RHR drinking ladder', () => {
+  it('bands ≤49 / ≥50 / ≥55', () => {
+    expect(classifyRhrDrinkBand(49)).toBe('clean_band')
+    expect(classifyRhrDrinkBand(50)).toBe('likely_drinking')
+    expect(classifyRhrDrinkBand(54)).toBe('likely_drinking')
+    expect(classifyRhrDrinkBand(55)).toBe('heavy_stack')
+  })
+
+  it('ranks heavy RHR stack when Anchor drinks are empty', () => {
+    const days = []
+    let d = '2026-06-01'
+    for (let i = 0; i < 10; i++) {
+      days.push({
+        date: d,
+        sleepHours: 6.8,
+        stress: 40,
+        hrv: 40,
+        restingHr: i >= 5 ? 58 : 52,
+        steps: 2500,
+        activityMinutes: 0,
+        activityCount: 0,
+      })
+      d = shiftDateStr(d, 1)
+    }
+    const causal = analyzeCausal(days, {
+      recoveries: [],
+      domains: {
+        activity: { sessions: 0, activeDays: 0, zeroActivityShare: 1, daysInWindow: 10 },
+        restingHr: { latest: 58, avg: 55 },
+      },
+    })
+    expect(causal.rhrLadder.heavyStackDays).toBeGreaterThan(0)
+    expect(causal.topHypothesis?.id).toBe('rhr_heavy_stack')
+    expect(causal.narrative).toMatch(/≥55|heavy stack|above 54/i)
+  })
+
+  it('flags ≥50 as likely drinking', () => {
+    const days = []
+    let d = '2026-06-01'
+    for (let i = 0; i < 8; i++) {
+      days.push({
+        date: d,
+        sleepHours: 7,
+        stress: 32,
+        hrv: 48,
+        restingHr: 51,
+        steps: 4000,
+        activityMinutes: 0,
+        activityCount: 0,
+      })
+      d = shiftDateStr(d, 1)
+    }
+    const causal = analyzeCausal(days, { recoveries: [] })
+    expect(causal.topHypothesis?.id).toBe('rhr_likely_drinking')
+    expect(causal.narrative).toMatch(/≥50|likely drinking|above 49/i)
   })
 })
 

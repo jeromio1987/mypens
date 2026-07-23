@@ -249,6 +249,18 @@ export default function DashboardClient() {
             Data
           </Link>
           <Link
+            href="/period-review"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-cyan-300/80 transition-colors border border-cyan-500/25"
+          >
+            Cockpit
+          </Link>
+          <Link
+            href="/planner"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-orange-300/80 transition-colors border border-orange-500/25"
+          >
+            Planner
+          </Link>
+          <Link
             href="/roadmap"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-pens-cream/60 transition-colors border border-pens-muted/30"
           >

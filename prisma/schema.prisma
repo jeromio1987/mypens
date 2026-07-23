@@ -487,6 +487,38 @@ model PeriodReviewReport {
   generatedAt DateTime @default(now())
 }
 
+// Phase 6 — Adaptive Sports Planner: user-declared goal + weekend long-day preference.
+model PlannerGoal {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  active     Boolean  @default(true)
+  // vo2max | bodyfat | marathon | custom
+  kind       String
+  label      String
+  targetNum  Float?
+  targetText String?
+  raceDate   String? // yyyy-mm-dd
+  // saturday | sunday — only long session day
+  longDay    String   @default("saturday")
+  // JSON string array: running | cycling | core | gym
+  sportsJson String   @default("[\"running\",\"gym\"]")
+  notes      String?
+}
+
+model PlannerWeek {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  // Monday of the planned week (yyyy-mm-dd)
+  weekOf    String
+  goalId    String?
+  planJson  String   @default("{}")
+  accepted  Boolean  @default(false)
+
+  @@unique([weekOf])
+  @@index([goalId])
+}
+
 // =====================================================================
 // ANCHOR — recovery & ADD self-management module.
 // All models below are ADDITIVE; no existing model is altered. Local-only,

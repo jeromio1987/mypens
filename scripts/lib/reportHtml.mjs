@@ -159,6 +159,9 @@ export function friendlyCausal(id) {
   const map = {
     alcohol_binge_stack: 'Heavy / binge drinking',
     idle_underload: 'Idle under-load',
+    idle_low_rhr: 'Idle under-load',
+    rhr_heavy_stack: 'High RHR heavy stack',
+    rhr_likely_drinking: 'Elevated RHR — likely drinking',
     sleep_debt: 'Sleep debt',
     stress_stack: 'Stress stack',
   }

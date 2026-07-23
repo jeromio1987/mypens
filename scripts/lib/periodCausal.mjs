@@ -26,6 +26,40 @@ export function classifyDrinkLoad(n) {
   return 'binge' // 10+ — 15 beers lands here
 }
 
+/**
+ * RHR drinking ladder (night / resting HR).
+ *   ≤49  clean_band
+ *   ≥50  likely_drinking  (“definitely been drinking”)
+ *   ≥55  heavy_stack      (“very bad — heavy drinking and/or other load”)
+ */
+export function classifyRhrDrinkBand(rhr) {
+  if (rhr == null || Number.isNaN(Number(rhr))) return null
+  const v = Number(rhr)
+  if (v >= 55) return 'heavy_stack'
+  if (v >= 50) return 'likely_drinking'
+  return 'clean_band'
+}
+
+export function rhrDrinkWindowStats(daily) {
+  const withRhr = (daily || []).filter(d => d.restingHr != null && !Number.isNaN(Number(d.restingHr)))
+  const likelyDays = withRhr.filter(d => Number(d.restingHr) >= 50)
+  const heavyDays = withRhr.filter(d => Number(d.restingHr) >= 55)
+  const latest = [...withRhr].reverse()[0] || null
+  return {
+    daysWithRhr: withRhr.length,
+    likelyDrinkingDays: likelyDays.length,
+    heavyStackDays: heavyDays.length,
+    latestRhr: latest?.restingHr ?? null,
+    latestBand: latest ? classifyRhrDrinkBand(latest.restingHr) : null,
+    maxRhr: withRhr.length ? Math.max(...withRhr.map(d => Number(d.restingHr))) : null,
+    shareLikely:
+      withRhr.length === 0 ? 0 : Math.round((likelyDays.length / withRhr.length) * 100) / 100,
+    shareHeavy: withRhr.length === 0 ? 0 : Math.round((heavyDays.length / withRhr.length) * 100) / 100,
+    exampleHeavyDates: heavyDays.slice(-3).map(d => d.date),
+    exampleLikelyDates: likelyDays.slice(-3).map(d => d.date),
+  }
+}
+
 function avg(nums) {
   const a = nums.filter(n => typeof n === 'number' && !Number.isNaN(n))
   if (!a.length) return null
@@ -272,9 +306,53 @@ export function rankHypotheses({ daily, domains, alcohol, lags }) {
     })
   }
 
+  // --- H1b: RHR drinking ladder (when Anchor drinks are thin / absent) ---
+  const rhrStats = rhrDrinkWindowStats(daily)
+  const anchorStrong =
+    alcohol && (alcohol.bingeDays > 0 || alcohol.maxDrinks >= 10 || alcohol.totalDrinks >= 20)
+  if (!anchorStrong && rhrStats.heavyStackDays > 0) {
+    let conf = 0.62 + Math.min(0.25, rhrStats.heavyStackDays * 0.06)
+    if (noActivity) conf += 0.08
+    if (rhrStats.shareHeavy >= 0.3) conf += 0.08
+    hypotheses.push({
+      id: 'rhr_heavy_stack',
+      label: 'Very high resting HR — heavy drinking and/or other load',
+      confidence: Math.min(0.92, Math.round(conf * 100) / 100),
+      priority: 1,
+      text:
+        `${rhrStats.heavyStackDays} morning(s) with resting HR ≥55 (band: very bad). ` +
+        `Above 54 bpm on this ladder means heavy drinking and/or other physiological load — not a fitness peak. ` +
+        (rhrStats.exampleHeavyDates?.length
+          ? `Examples: ${rhrStats.exampleHeavyDates.join(', ')}. `
+          : '') +
+        `Log Anchor alcoholDrinks the same night so the engine can confirm; until then treat these mornings as contaminated.`,
+    })
+  } else if (!anchorStrong && rhrStats.likelyDrinkingDays > 0) {
+    let conf = 0.5 + Math.min(0.25, rhrStats.likelyDrinkingDays * 0.05)
+    if (noActivity) conf += 0.05
+    hypotheses.push({
+      id: 'rhr_likely_drinking',
+      label: 'Elevated resting HR — likely drinking',
+      confidence: Math.min(0.85, Math.round(conf * 100) / 100),
+      priority: 2,
+      text:
+        `${rhrStats.likelyDrinkingDays} morning(s) with resting HR ≥50 (above 49 = definitely been drinking on this ladder). ` +
+        (rhrStats.exampleLikelyDates?.length
+          ? `Examples: ${rhrStats.exampleLikelyDates.join(', ')}. `
+          : '') +
+        `Confirm with Anchor drink counts; do not read these days as clean recovery.`,
+    })
+  }
+
   // --- H2: Idle under-load / recovery illusion (only if alcohol NOT dominant) ---
-  const alcoholDominant = hypotheses.some(h => h.id === 'alcohol_binge_stack' && h.confidence >= 0.7)
-  if (noActivity && latestRhr != null && latestRhr <= 56) {
+  const alcoholDominant = hypotheses.some(
+    h =>
+      (h.id === 'alcohol_binge_stack' && h.confidence >= 0.7) ||
+      (h.id === 'rhr_heavy_stack' && h.confidence >= 0.7),
+  )
+  const rhrSuggestsDrink =
+    rhrStats.likelyDrinkingDays > 0 || rhrStats.heavyStackDays > 0 || (latestRhr != null && latestRhr >= 50)
+  if (noActivity && latestRhr != null && latestRhr <= 56 && !rhrSuggestsDrink) {
     const conf = alcoholDominant ? 0.25 : 0.7
     hypotheses.push({
       id: 'idle_low_rhr',
@@ -433,6 +511,7 @@ export function analyzeCausal(daily, confounderTables = {}) {
 
   const alcohol = alcoholWindowStats(enriched)
   const lags = lagEffects(enriched)
+  const rhrLadder = rhrDrinkWindowStats(enriched)
 
   // domains-lite for hypothesis ranking (caller usually passes full domains)
   const domains = confounderTables.domains || null
@@ -460,7 +539,7 @@ export function analyzeCausal(daily, confounderTables = {}) {
   })
 
   const top = hypotheses[0] || null
-  const narrative = buildCausalNarrative({ alcohol, lags, hypotheses, enriched })
+  const narrative = buildCausalNarrative({ alcohol, lags, hypotheses, enriched, rhrLadder })
 
   const patterns = hypotheses.slice(0, 6).map(h => ({
     id: h.id,
@@ -471,6 +550,7 @@ export function analyzeCausal(daily, confounderTables = {}) {
 
   return {
     alcohol,
+    rhrLadder,
     lags,
     hypotheses,
     topHypothesis: top,
@@ -480,7 +560,7 @@ export function analyzeCausal(daily, confounderTables = {}) {
   }
 }
 
-export function buildCausalNarrative({ alcohol, lags, hypotheses, enriched }) {
+export function buildCausalNarrative({ alcohol, lags, hypotheses, enriched, rhrLadder }) {
   const paras = []
 
   paras.push(
@@ -490,6 +570,14 @@ export function buildCausalNarrative({ alcohol, lags, hypotheses, enriched }) {
       (alcohol.maxDrinkDate ? ` on ${alcohol.maxDrinkDate}` : '') +
       ` · binge days ${alcohol.bingeDays}.`,
   )
+
+  if (rhrLadder && (rhrLadder.likelyDrinkingDays > 0 || rhrLadder.heavyStackDays > 0)) {
+    paras.push(
+      `RHR drinking ladder: ${rhrLadder.likelyDrinkingDays} day(s) ≥50 (likely drinking), ` +
+        `${rhrLadder.heavyStackDays} day(s) ≥55 (heavy stack). ` +
+        `Thresholds: above 49 = drinking signal; above 54 = very bad — heavy drinking and/or other load.`,
+    )
+  }
 
   if (alcohol.maxDrinks >= 10) {
     paras.push(

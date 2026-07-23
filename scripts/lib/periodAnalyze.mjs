@@ -543,6 +543,7 @@ export function interpretPatterns(domains, cross, daily, causal = null) {
 
   const alcoholDominant =
     causal?.topHypothesis?.id === 'alcohol_binge_stack' ||
+    causal?.topHypothesis?.id === 'rhr_heavy_stack' ||
     (causal?.alcohol?.maxDrinks ?? 0) >= 10 ||
     (causal?.alcohol?.bingeDays ?? 0) > 0
 
