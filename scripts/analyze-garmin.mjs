@@ -49,7 +49,7 @@ function toMarkdown(report) {
   return `# Garmin Analysis Engine
 
 _Window: ${report.weekOf || 'all-time'} → ${report.weekEnd || 'all-time'}_
-_Coverage score: ${report.coverageScore}/6 domains_
+_Coverage score: ${report.coverageScore}/${report.coverageMax || 7} domains_
 
 ## Summary
 ${report.summary}

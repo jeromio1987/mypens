@@ -149,6 +149,22 @@ export function buildDailySignals(data) {
     row.activityMinutes += Math.round((a.durationSec || 0) / 60)
   }
 
+  // Strava / manual / Health* TrainingEntry rows — count as structured sessions
+  // so Period Review does not treat a Strava-heavy week as “zero activity”.
+  for (const t of data.trainings || []) {
+    const row = touch(t.date)
+    if (!row) continue
+    row.activityCount += 1
+    const mins =
+      typeof t.durationSec === 'number'
+        ? Math.round(t.durationSec / 60)
+        : typeof t.durationMin === 'number'
+          ? Math.round(t.durationMin)
+          : // Strength imports rarely carry duration; use volume as a soft proxy.
+            Math.max(20, Math.min(90, Math.round(((t.volume || 0) / 2000) * 10) || 45))
+    row.activityMinutes += mins
+  }
+
   return [...byDate.values()].sort((x, y) => x.date.localeCompare(y.date))
 }
 
