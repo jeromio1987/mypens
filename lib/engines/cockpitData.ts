@@ -47,7 +47,15 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     loadNotes.push(`Ledger load failed: ${msg}`)
-    garmin = { sleeps: [], weights: [], trainings: [], activities: [], metrics: [] }
+    garmin = {
+      sleeps: [],
+      weights: [],
+      trainings: [],
+      activities: [],
+      metrics: [],
+      weekOf: undefined,
+      weekEnd: undefined,
+    }
     confounders = { recoveries: [], dayEntries: [], weights: [] }
   }
 
