@@ -106,8 +106,9 @@ Weight · Food · Sleep · Training · Body Measurements · Journal / Mood · Ev
 - Multi-user / social features — intentionally excluded from v1
 - Phase 5-D/E polish — offline HTML snapshot parity with cockpit visual language
 - Phase 6-D/E/F — food soft-rules depth, AI narrative layer, Expo planner card
+- **Phase 7 — Experiment Engine & Food as Confounder** (year-one flagship) — food as causal pillar; timed experiments with auto-verdict (supported / weak / confounded); closes signal → cause → plan → proof
 
-**In progress / shipping on branch:** Engine Report Cockpit (`/period-review` tabs + zoom), Adaptive Sports Planner (`/planner`), RHR drinking ladder (≥50 / ≥55)
+**Shipping / in progress:** Engine Report Cockpit (`/period-review`), Adaptive Sports Planner (`/planner`), RHR drinking ladder (≥50 / ≥55)
 
 Programme builder (2-C) and weekly PDF (2-D) are **built** — do not rebuild; extend only.
 ---

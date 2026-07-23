@@ -123,10 +123,10 @@ const TRACKS: Track[] = [
 ]
 
 const NEXT_30_DAYS = [
-  'Phase 5-A/B: RHR drinking ladder (≥50 / ≥55) + period-review from/to API',
-  'Phase 5-C: Tabbed /period-review — The Read, Form score graph, zoom brush',
-  'Phase 6-A/B: Goal model + deterministic Adaptive Sports Planner engine',
-  'Phase 6-C: /planner week grid — running · cycling · core · gym; long session Sat or Sun',
+  'Finish Phase 5–6 polish: composition series in cockpit + planner food soft-rules (6-D)',
+  'Phase 7-A/B: Food daily aggregates + food×alcohol×RHR in Cause / The Read',
+  'Phase 7-C/D: Experiment model + deterministic verdict (supported / weak / confounded)',
+  'Phase 7-E: /experiments UI — create from Planner goal, end-of-window proof',
 ]
 
 const PRODUCT_BETS = [
@@ -142,13 +142,20 @@ const PRODUCT_BETS = [
     blurb:
       'Dynamic week plan from sleep + how much of each sport you did + food context. You declare the goal (e.g. VO₂max 50, ~13% BF without losing muscle, marathon). Switch sports: running, cycling, core, gym. Long session only Saturday or Sunday.',
   },
+  {
+    phase: 'Phase 7',
+    title: 'Experiment Engine & Food as Confounder',
+    blurb:
+      'Year-one flagship. Food becomes a causal pillar (protein/kcal vs load, fueling × RHR). Every goal becomes a timed experiment with hypothesis, guardrails, and auto-verdict: supported / weak / confounded. Closes the loop: signal → cause → plan → proof.',
+  },
 ]
 
 const GAPS = [
-  'Confirm weekend long-day default (Saturday vs Sunday) and whether both can ever be long in one week',
-  'Goal units and targets for VO₂max / body-fat / race — which fields are required vs optional',
-  'How aggressively Food gaps should soften the plan when logging is incomplete',
-  'Whether Accept week writes into Programme (2-C) or a new PlannerPlan table',
+  'Confirm weekend long-day default (Saturday vs Sunday)',
+  'Default experiment length and required primary metric per goal kind',
+  'Protein floor suggestion for body-comp experiments (user-set vs default)',
+  'How aggressively missing food logs should tag “fueling unknown” vs stay silent',
+  'Whether Accept week writes into Programme (2-C) or stays on PlannerWeek only',
 ]
 
 export default function RoadmapClient() {
@@ -164,7 +171,7 @@ export default function RoadmapClient() {
           <div>
             <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">P.E.N.S.</p>
             <h1 className="text-2xl font-bold text-pens-cream mt-0.5">Product Roadmap</h1>
-            <p className="text-xs text-pens-cream/40 mt-0.5">4 phases · 5 tracks · Phase 5–6 backlog · updated July 2026</p>
+            <p className="text-xs text-pens-cream/40 mt-0.5">4 phases · 5 tracks · Phase 5–7 backlog · updated July 2026</p>
           </div>
         </div>
 
@@ -287,7 +294,7 @@ export default function RoadmapClient() {
         </div>
 
         <p className="text-xs text-pens-cream/30 text-center pb-4 italic">
-          Roadmap version: July 2026 — Engine Cockpit + Adaptive Sports Planner intake
+          Roadmap version: July 2026 — Cockpit · Planner · Experiment+Food flagship
         </p>
       </div>
     </main>

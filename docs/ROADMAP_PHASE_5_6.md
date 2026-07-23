@@ -1,43 +1,61 @@
-# Cursor brief — Phase 5 Engine Cockpit + Phase 6 Adaptive Sports Planner
+# Cursor brief — Phases 5 · 6 · 7
 
 **For:** Cursor  
 **Date:** July 2026  
-**Source of truth:** `memory/projects/mypens-master-roadmap.md` (Phases 5–6)
+**Source of truth:** `memory/projects/mypens-master-roadmap.md`
 
-Do **not** start these builds until the current Engine HTML / stress-test PR stack is merged or explicitly combined. Read the master roadmap sections before coding.
-
----
-
-## Phase 5 — Engine Report Cockpit (summary)
-
-- Top block name: **The Read**
-- Tabs: The Read · Timeline · Body · Training · Composition · Cause · Checks
-- Zoomable `from`/`to` on `/period-review` recalculates everything (web app — not offline HTML zoom)
-- Graphs: Form score + pillar small-multiples + composition + cause evidence
-- RHR ladder: **≥50** likely drinking · **≥55** heavy stack; Anchor binge still outranks when logged
-- Offline HTML = snapshot export only
-
-Build order: **5-A → 5-B → 5-C → 5-D → 5-E**
+North star loop: **signal → cause → plan → proof**
 
 ---
 
-## Phase 6 — Adaptive Sports Planner (summary)
+## Phase 5 — Engine Report Cockpit
 
-Dynamic week plan (not the static Programme template).
+- **The Read** · tabs · zoomable `/period-review` · Form score + pillars  
+- RHR ladder: **≥50** likely drinking · **≥55** heavy stack  
+- Offline HTML = snapshot only  
 
-**Inputs:** sleep, sport history (which sport + volume), optional food, optional Anchor recovery.  
-**Sports:** running · cycling · core · gym (user can switch per slot).  
-**Constraint:** long session **Saturday or Sunday only** (user toggle).  
-**Goals (user-declared):** e.g. VO₂max → 50 · ~13% BF without muscle loss · marathon · custom.
-
-Build order: **6-A → 6-B → 6-C → 6-D → 6-E → 6-F**
-
-v1 planner is **deterministic** (tested pure functions). Optional Claude prose only after JSON plan exists.
+Build: **5-A → 5-E** (first cut of 5-A/B/C shipping on Phase 5–6 branch)
 
 ---
 
-## Open decisions (ask Jerome if blocked)
+## Phase 6 — Adaptive Sports Planner
 
-1. Default long day: Saturday or Sunday?  
-2. Accept week → write into Programme (2-C) or new `PlannerPlan` table?  
-3. Required goal fields for VO₂max / BF% / race date  
+- Goal-driven week from sleep + sport load + food context  
+- Sports: running · cycling · core · gym  
+- Long session **Sat or Sun only**  
+
+Build: **6-A → 6-F** (first cut of 6-A/B/C shipping)
+
+---
+
+## Phase 7 — Experiment Engine & Food as Confounder *(year-one flagship)*
+
+Closes the loop: Cockpit explains, Planner proposes, **Experiments prove**.
+
+### Food as confounder
+- Rolling protein / kcal vs training load (energy-availability proxy — never medical)  
+- Hard session on low-fuel day → Cause + planner bias  
+- Alcohol × meal timing × next RHR ≥50/≥55 as one stack  
+- Missing food logs → lower confidence, never block  
+
+### Experiment
+- User hypothesis + 2–6 week window + primary metric + guardrails  
+- Deterministic verdict: **supported | weak | confounded | inconclusive**  
+- Optional Claude prose on `verdictJson` only  
+
+### Build order
+**7-A** Food daily aggregates → **7-B** Food into Cause/The Read → **7-C** Experiment schema → **7-D** Verdict engine + tests → **7-E** `/experiments` UI → **7-F** Accept-week → adherence → Cockpit chip  
+
+### Do not
+- Modify `lib/retentionModels.ts`  
+- Invent meal plans or diagnoses  
+- Start 7 before 5–6 food soft-rules (6-D) unless explicitly combined  
+
+---
+
+## Open decisions
+
+1. Default long day: Saturday vs Sunday?  
+2. Accept week → Programme (2-C) vs `PlannerWeek` only?  
+3. Default experiment length (28 days?) and required primary metrics per goalKind  
+4. Protein floor default for body-comp experiments (e.g. 160g?) — user-set vs suggested  
