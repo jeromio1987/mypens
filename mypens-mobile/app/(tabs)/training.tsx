@@ -29,6 +29,7 @@ import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { PlannerWeekCard } from '@/components/PlannerWeekCard'
+import { TrainingReviewCard } from '@/components/TrainingReviewCard'
 
 const MOD = MODULE_COLORS.training
 const EXERCISES_KEY = '@mypens/recent_exercises'
@@ -314,6 +315,7 @@ export default function TrainingScreen() {
         )}
       </View>
 
+      <TrainingReviewCard defaultDays={14} />
       <PlannerWeekCard />
 
       {pending > 0 ? (

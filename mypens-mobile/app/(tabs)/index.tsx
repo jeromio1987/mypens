@@ -21,6 +21,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
 
 import { IntegrationStatusStrip } from '@/components/IntegrationStatusStrip'
+import { EngineReadCard } from '@/components/EngineReadCard'
 import { useColors } from '@/hooks/useColors'
 import { usePensSync } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
@@ -378,6 +379,8 @@ export default function WeightScreen() {
       ) : null}
 
       <IntegrationStatusStrip />
+
+      <EngineReadCard defaultDays={7} />
 
       {/* Form card */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
