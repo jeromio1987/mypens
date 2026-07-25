@@ -37,6 +37,11 @@ export function mapSessionToDraft(s: HealthConnectExerciseSession): DraftTrainin
   if (s.packageName) noteParts.push(s.packageName)
   if (s.notes) noteParts.push(s.notes)
 
+  const calories =
+    s.totalEnergyKcal != null && s.totalEnergyKcal > 0
+      ? Math.round(s.totalEnergyKcal)
+      : null
+
   return {
     date: isoDate(s.startTime),
     exercise,
@@ -50,6 +55,7 @@ export function mapSessionToDraft(s: HealthConnectExerciseSession): DraftTrainin
     externalId: s.id,
     externalUrl: '',
     externalRaw: JSON.stringify(s),
+    calories,
   }
 }
 
@@ -59,7 +65,12 @@ export function pushedToDraft(p: {
   exercise: string
   notes: string | null
   raw: string
+  calories?: number | null
 }): DraftTrainingEntry {
+  const calories =
+    p.calories != null && p.calories > 0
+      ? Math.round(p.calories)
+      : null
   return {
     date: p.date,
     exercise: p.exercise,
@@ -73,5 +84,6 @@ export function pushedToDraft(p: {
     externalId: p.externalId,
     externalUrl: '',
     externalRaw: p.raw,
+    calories,
   }
 }

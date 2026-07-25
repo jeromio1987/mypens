@@ -61,6 +61,12 @@ export async function syncSleep(days = 30): Promise<{ ingested: number; skipped:
   }
   const data: GarminDaily[] = await res.json()
 
+  // Also persist steps / Active / Resting / Total for Fuel NEAT + reconcile.
+  const { processPushedDailiesWellness } = await import('./dailiesSync')
+  await processPushedDailiesWellness(data ?? []).catch(err => {
+    console.error('[garmin] wellness dailies persist failed', err)
+  })
+
   let ingested = 0
   let skipped = 0
   for (const d of data ?? []) {

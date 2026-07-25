@@ -40,6 +40,11 @@ export function mapActivityToDraft(a: GarminActivity): DraftTrainingEntry {
   }
   if (a.activeKilocalories) noteParts.push(`${Math.round(a.activeKilocalories)} kcal`)
 
+  const calories =
+    a.activeKilocalories != null && a.activeKilocalories > 0
+      ? Math.round(a.activeKilocalories)
+      : null
+
   return {
     date: localDate(a.startTimeInSeconds, a.startTimeOffsetInSeconds ?? 0),
     exercise,
@@ -53,5 +58,6 @@ export function mapActivityToDraft(a: GarminActivity): DraftTrainingEntry {
     externalId: String(a.activityId),
     externalUrl: `https://connect.garmin.com/modern/activity/${a.activityId}`,
     externalRaw: JSON.stringify(a),
+    calories,
   }
 }

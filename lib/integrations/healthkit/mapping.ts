@@ -35,6 +35,11 @@ export function mapWorkoutToDraft(w: HealthkitWorkout): DraftTrainingEntry {
   if (w.sourceName) noteParts.push(w.sourceName)
   if (w.notes) noteParts.push(w.notes)
 
+  const calories =
+    w.totalEnergyKcal != null && w.totalEnergyKcal > 0
+      ? Math.round(w.totalEnergyKcal)
+      : null
+
   return {
     date: isoDate(w.startDate),
     exercise,
@@ -48,6 +53,7 @@ export function mapWorkoutToDraft(w: HealthkitWorkout): DraftTrainingEntry {
     externalId: w.uuid,
     externalUrl: '',
     externalRaw: JSON.stringify(w),
+    calories,
   }
 }
 
@@ -58,7 +64,10 @@ export function pushedToDraft(p: {
   exercise: string
   notes: string | null
   raw: string
+  calories?: number | null
 }): DraftTrainingEntry {
+  const calories =
+    p.calories != null && p.calories > 0 ? Math.round(p.calories) : null
   return {
     date: p.date,
     exercise: p.exercise,
@@ -72,5 +81,6 @@ export function pushedToDraft(p: {
     externalId: p.externalId,
     externalUrl: '',
     externalRaw: p.raw,
+    calories,
   }
 }

@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     if (items.length === 0) {
       return NextResponse.json({ error: 'items array required' }, { status: 400 })
     }
-    const { created, skipped } = await importDrafts('healthkit', items)
+    const { created, skipped, updated } = await importDrafts('healthkit', items)
     // Drop the corresponding queued rows so /status pendingCount reflects true backlog.
     const ids = items.map(i => i.externalId).filter(Boolean)
     if (ids.length) {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       where: { userId: 'default' },
       data: { lastSyncAt: new Date(), lastError: null, lastErrorAt: null },
     })
-    return NextResponse.json({ ok: true, created, skipped })
+    return NextResponse.json({ ok: true, created, skipped, updated })
   } catch (err) {
     console.error(err)
     const message = err instanceof Error ? err.message : String(err)

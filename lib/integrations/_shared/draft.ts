@@ -12,6 +12,8 @@ export interface DraftTrainingEntry {
   externalId: string
   externalUrl: string
   externalRaw: string
+  /** Structured session active kcal when known. */
+  calories?: number | null
 }
 
 export function fmtDuration(seconds: number): string {

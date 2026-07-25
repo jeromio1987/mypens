@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     if (items.length === 0) {
       return NextResponse.json({ error: 'items array required' }, { status: 400 })
     }
-    const { created, skipped } = await importDrafts('healthconnect', items)
+    const { created, skipped, updated } = await importDrafts('healthconnect', items)
     const ids = items.map(i => i.externalId).filter(Boolean)
     if (ids.length) {
       await prisma.pushedWorkout.deleteMany({
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       where: { userId: 'default' },
       data: { lastSyncAt: new Date(), lastError: null, lastErrorAt: null },
     })
-    return NextResponse.json({ ok: true, created, skipped })
+    return NextResponse.json({ ok: true, created, skipped, updated })
   } catch (err) {
     console.error(err)
     const message = err instanceof Error ? err.message : String(err)

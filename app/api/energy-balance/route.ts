@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import {
   getDayEnergyBalance,
   getEnergyBalanceRange,
+  getMonthEnergyRecap,
   getWeekEnergyRecap,
 } from '@/lib/energyBalance'
 
@@ -14,7 +15,14 @@ export async function GET(request: Request) {
     const from = searchParams.get('from')
     const to = searchParams.get('to')
     const week = searchParams.get('week')
+    const month = searchParams.get('month')
     const mode = searchParams.get('mode')
+
+    if (month === '1' || mode === 'month' || mode === '30') {
+      const asOf = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined
+      const recap = await getMonthEnergyRecap(asOf)
+      return NextResponse.json(recap)
+    }
 
     if (week === '1' || mode === 'week') {
       const asOf = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined

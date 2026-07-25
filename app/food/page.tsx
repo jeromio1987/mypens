@@ -45,7 +45,8 @@ export default function FoodPage() {
 
         <MacroTargets onTargetsChange={setTargets} />
         <EnergyBalanceCard date={date} refresh={refresh} />
-        <WeekEnergyRecapCard asOf={date} refresh={refresh} />
+        <WeekEnergyRecapCard asOf={date} refresh={refresh} windowDays={7} />
+        <WeekEnergyRecapCard asOf={date} refresh={refresh} windowDays={30} />
         <FoodEntry date={date} onSaved={bump} />
         <NutrientCard date={date} refresh={refresh} targets={targets} />
         <FoodLog date={date} refresh={refresh} targets={targets} onSaved={bump} />

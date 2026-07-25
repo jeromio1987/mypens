@@ -8,6 +8,7 @@ import {
 } from '@/lib/integrations/garmin/sync'
 import { processPushedBodyComps, type GarminBodyComp } from '@/lib/integrations/garmin/bodyCompSync'
 import { processPushedSleep } from '@/lib/integrations/garmin/sleepSync'
+import { processPushedDailiesWellness } from '@/lib/integrations/garmin/dailiesSync'
 import type { GarminActivity } from '@/lib/integrations/garmin/api'
 
 /**
@@ -40,6 +41,11 @@ type IncomingDaily = PingRef & {
   avgSleepingHRV?: number
   durationInSeconds?: number
   averageHrv?: number
+  steps?: number
+  activeKilocalories?: number
+  bmrKilocalories?: number
+  restingKilocalories?: number
+  totalKilocalories?: number
 }
 type IncomingBodyComp = (GarminBodyComp & PingRef) | PingRef
 
@@ -55,6 +61,17 @@ function hasFullSummary(a: IncomingActivity): a is GarminActivity & PingRef {
   return typeof (a as GarminActivity).activityId !== 'undefined'
     && typeof (a as GarminActivity).startTimeInSeconds === 'number'
     && typeof (a as GarminActivity).activityType === 'string'
+}
+
+function hasWellnessFields(d: IncomingDaily): boolean {
+  return Boolean(
+    d.calendarDate &&
+      (d.steps != null ||
+        d.activeKilocalories != null ||
+        d.bmrKilocalories != null ||
+        d.restingKilocalories != null ||
+        d.totalKilocalories != null),
+  )
 }
 
 function hasSleepSummary(d: IncomingDaily): boolean {
@@ -154,11 +171,25 @@ export async function POST(request: Request) {
           if (!ref.callbackURL) continue
           try {
             const fetched = await fetchPingPayload<IncomingDaily>(ref.callbackURL, accessToken)
-            if (fetched.length > 0) await processPushedSleep(fetched)
+            if (fetched.length > 0) {
+              await processPushedSleep(fetched)
+              await processPushedDailiesWellness(fetched)
+            }
           } catch (err) {
             console.error('[garmin webhook] sleep ping fetch failed', ref, err)
           }
         }
+      }
+
+      // ── Wellness steps / Active / Resting / Total (Fuel NEAT + reconcile) ─
+      const wellnessSummaries = dailies.filter(hasWellnessFields)
+      if (wellnessSummaries.length > 0) {
+        await processPushedDailiesWellness(wellnessSummaries)
+      }
+      // Full sleep summaries on dailies may also carry steps/kcal — persist those too.
+      const sleepWithWellness = sleepSummaries.filter(hasWellnessFields)
+      if (sleepWithWellness.length > 0) {
+        await processPushedDailiesWellness(sleepWithWellness)
       }
 
       // ── Body composition / weight ─────────────────────────────────────

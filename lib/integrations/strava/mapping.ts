@@ -162,6 +162,11 @@ export function mapActivityToDraft(a: StravaActivity): DraftTrainingEntry[] {
     ? (a.name?.trim() || 'Strength training')
     : `${a.sport_type || a.type}${a.name && a.name !== a.sport_type ? ` — ${a.name}` : ''}`
 
+  const calories =
+    a.calories != null && Number.isFinite(a.calories) && a.calories > 0
+      ? Math.round(a.calories)
+      : null
+
   return [{
     date,
     exercise,
@@ -175,5 +180,6 @@ export function mapActivityToDraft(a: StravaActivity): DraftTrainingEntry[] {
     externalId: String(a.id),
     externalUrl,
     externalRaw,
+    calories,
   }]
 }

@@ -3,7 +3,9 @@ import {
   extractKcalFromExternalRaw,
   extractKcalFromNotes,
   extractKcalFromTraining,
-} from '../lib/energyBalance'
+} from '../lib/energyKcalExtract'
+import { estimateBmrDetailed, mifflinStJeorKcal } from '../lib/energyBmr'
+import { estimateNeat, stepsToKcal } from '../lib/energyNeat'
 import { scalePortion } from '../lib/foodPortion'
 import { inferFoodTags, softNutrientFlags, sumMicros } from '../lib/foodMicros'
 import {
@@ -28,6 +30,16 @@ describe('extractKcalFromExternalRaw', () => {
 })
 
 describe('extractKcalFromTraining', () => {
+  it('prefers calories column over raw and notes', () => {
+    const r = extractKcalFromTraining({
+      calories: 1840,
+      notes: '100 kcal',
+      externalRaw: JSON.stringify({ calories: 500 }),
+      exercise: 'Ride',
+    })
+    expect(r?.kcal).toBe(1840)
+    expect(r?.origin).toBe('column')
+  })
   it('prefers externalRaw over notes', () => {
     const r = extractKcalFromTraining({
       notes: '100 kcal',
@@ -36,6 +48,46 @@ describe('extractKcalFromTraining', () => {
     })
     expect(r?.kcal).toBe(500)
     expect(r?.origin).toBe('training')
+  })
+})
+
+describe('BMR', () => {
+  it('mifflin male', () => {
+    expect(mifflinStJeorKcal({ weightKg: 80, heightCm: 180, ageYears: 38, sex: 'male' })).toBe(
+      Math.round(10 * 80 + 6.25 * 180 - 5 * 38 + 5),
+    )
+  })
+  it('falls back to stub without profile', () => {
+    const e = estimateBmrDetailed(80, null)
+    expect(e.method).toBe('stub_22kcal_kg')
+    expect(e.kcal).toBe(1760)
+  })
+  it('uses mifflin when profile complete', () => {
+    const e = estimateBmrDetailed(80, { heightCm: 180, birthYear: 1988, sex: 'male' })
+    expect(e.method).toBe('mifflin_st_jeor')
+    expect(e.kcal).toBeGreaterThan(0)
+  })
+})
+
+describe('NEAT', () => {
+  it('prefers active residual over steps', () => {
+    const n = estimateNeat({
+      sessionEatKcal: 1000,
+      deviceActiveKcal: 1690,
+      steps: 8000,
+      weightKg: 80,
+    })
+    expect(n.source).toBe('device_active_residual')
+    expect(n.neatKcal).toBe(690)
+  })
+  it('uses steps model when no device active', () => {
+    const n = estimateNeat({ sessionEatKcal: 0, steps: 10000, weightKg: 70 })
+    expect(n.source).toBe('steps_model')
+    expect(n.neatKcal).toBe(stepsToKcal(10000, 70))
+  })
+  it('never double-counts: residual floors at 0', () => {
+    const n = estimateNeat({ sessionEatKcal: 2000, deviceActiveKcal: 1500 })
+    expect(n.neatKcal).toBe(0)
   })
 })
 

@@ -77,6 +77,34 @@ export async function POST(request: Request) {
           continue
         }
         const draft = mapWorkoutToDraft(w)
+        const cal = draft.calories ?? (w.totalEnergyKcal != null && w.totalEnergyKcal > 0 ? Math.round(w.totalEnergyKcal) : 0)
+        const existing = await prisma.pushedWorkout.findUnique({
+          where: {
+            source_externalId: { source: 'healthkit', externalId: draft.externalId },
+          },
+          select: { id: true, calories: true },
+        })
+        if (existing) {
+          const oldCal = existing.calories ?? 0
+          if (cal > 0 && (oldCal === 0 || cal !== oldCal)) {
+            await prisma.pushedWorkout.update({
+              where: { id: existing.id },
+              data: {
+                calories: cal,
+                notes: draft.notes,
+                raw: draft.externalRaw,
+                durationSec: w.durationSec ?? 0,
+                distanceM: w.totalDistanceM ?? 0,
+                exercise: draft.exercise,
+                date: draft.date,
+              },
+            })
+            stored++
+          } else {
+            skipped++
+          }
+          continue
+        }
         try {
           await prisma.pushedWorkout.create({
             data: {
@@ -87,7 +115,7 @@ export async function POST(request: Request) {
               notes: draft.notes,
               durationSec: w.durationSec ?? 0,
               distanceM: w.totalDistanceM ?? 0,
-              calories: w.totalEnergyKcal ?? 0,
+              calories: cal,
               raw: draft.externalRaw,
             },
           })

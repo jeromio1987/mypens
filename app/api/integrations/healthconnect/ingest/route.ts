@@ -108,7 +108,36 @@ export async function POST(request: Request) {
             externalId: draft.externalId,
             externalUrl: draft.externalUrl || undefined,
             externalRaw: draft.externalRaw,
+            calories: draft.calories ?? null,
           })
+          continue
+        }
+        const cal = draft.calories ?? (s.totalEnergyKcal != null && s.totalEnergyKcal > 0 ? Math.round(s.totalEnergyKcal) : 0)
+        const existing = await prisma.pushedWorkout.findUnique({
+          where: {
+            source_externalId: { source: 'healthconnect', externalId: draft.externalId },
+          },
+          select: { id: true, calories: true },
+        })
+        if (existing) {
+          const oldCal = existing.calories ?? 0
+          if (cal > 0 && (oldCal === 0 || cal !== oldCal)) {
+            await prisma.pushedWorkout.update({
+              where: { id: existing.id },
+              data: {
+                calories: cal,
+                notes: draft.notes,
+                raw: draft.externalRaw,
+                durationSec: s.durationSec ?? 0,
+                distanceM: s.totalDistanceM ?? 0,
+                exercise: draft.exercise,
+                date: draft.date,
+              },
+            })
+            stored++
+          } else {
+            skipped++
+          }
           continue
         }
         try {
@@ -121,7 +150,7 @@ export async function POST(request: Request) {
               notes: draft.notes,
               durationSec: s.durationSec ?? 0,
               distanceM: s.totalDistanceM ?? 0,
-              calories: s.totalEnergyKcal ?? 0,
+              calories: cal,
               raw: draft.externalRaw,
             },
           })

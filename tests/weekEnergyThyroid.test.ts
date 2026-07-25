@@ -3,6 +3,7 @@ import {
   buildWeekEnergyRecap,
   estimateBmrKcal,
   rolling7Window,
+  rollingNWindow,
 } from '../lib/energyWeek'
 import { calibrateWeekVsWeight } from '../lib/energyWeightCalibration'
 import { schildklierRead } from '../lib/bloodworkThyroidRead'
@@ -23,6 +24,15 @@ describe('rolling7Window', () => {
     expect(w.to).toBe('2026-07-25')
     expect(w.from).toBe('2026-07-19')
     expect(w.dates).toHaveLength(7)
+  })
+})
+
+describe('rollingNWindow 30', () => {
+  it('spans 30 inclusive days', () => {
+    const w = rollingNWindow('2026-07-25', 30)
+    expect(w.to).toBe('2026-07-25')
+    expect(w.from).toBe('2026-06-26')
+    expect(w.dates).toHaveLength(30)
   })
 })
 

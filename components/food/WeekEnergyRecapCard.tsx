@@ -6,6 +6,8 @@ type WeekDay = {
   date: string
   foodKcal: number
   activityKcal: number
+  eatKcal?: number
+  neatKcal?: number
   bmrKcal: number
   estimatedOut: number
   delta: number
@@ -25,8 +27,16 @@ type Calibration = {
   weightEnd: { date: string; scaleKg: number }
 }
 
+type ThyroidContext = {
+  present: boolean
+  title: string
+  summary: string
+  disclaimer: string
+}
+
 type Recap = {
   window: { from: string; to: string }
+  windowDays?: number
   days: WeekDay[]
   summary: {
     daysTracked: number
@@ -36,21 +46,27 @@ type Recap = {
     avgDailyNetKcal: number
     foodKcalTotal: number
     activityKcalTotal: number
+    eatKcalTotal?: number
+    neatKcalTotal?: number
     bmrKcalTotal: number
     bmrMissingDays: number
     disclaimer: string
   }
   calibration: Calibration | null
+  thyroidContext?: ThyroidContext | null
 }
 
 export default function WeekEnergyRecapCard({
   asOf,
   refresh = 0,
   compact = false,
+  windowDays = 7,
 }: {
   asOf: string
   refresh?: number
   compact?: boolean
+  /** 7 or 30 */
+  windowDays?: 7 | 30
 }) {
   const [data, setData] = useState<Recap | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -58,7 +74,11 @@ export default function WeekEnergyRecapCard({
   useEffect(() => {
     let cancelled = false
     setErr(null)
-    fetch(`/api/energy-balance?week=1&date=${encodeURIComponent(asOf)}`)
+    const q =
+      windowDays === 30
+        ? `/api/energy-balance?month=1&date=${encodeURIComponent(asOf)}`
+        : `/api/energy-balance?week=1&date=${encodeURIComponent(asOf)}`
+    fetch(q)
       .then(async r => {
         const j = await r.json()
         if (!r.ok) throw new Error(j.error || 'failed')
@@ -70,31 +90,32 @@ export default function WeekEnergyRecapCard({
     return () => {
       cancelled = true
     }
-  }, [asOf, refresh])
+  }, [asOf, refresh, windowDays])
 
   if (err) {
     return (
       <div className="bg-pens-surface rounded-2xl p-4 border border-pens-muted/30 text-sm text-red-300">
-        Week energy: {err}
+        {windowDays}-day energy: {err}
       </div>
     )
   }
   if (!data) {
     return (
       <div className="bg-pens-surface rounded-2xl p-4 border border-pens-muted/30 text-sm text-pens-cream/40">
-        Loading week ledger…
+        Loading {windowDays}-day ledger…
       </div>
     )
   }
 
   const net = data.summary.weekNetKcal
   const surplus = net >= 0
+  const label = windowDays === 30 ? '30-day ledger' : '7-day ledger'
 
   if (compact) {
     return (
       <div className="bg-pens-surface rounded-2xl px-4 py-3 border border-amber-500/20 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-widest text-amber-400/90 font-semibold">7-day ledger</p>
+          <p className="text-[10px] uppercase tracking-widest text-amber-400/90 font-semibold">{label}</p>
           <p className="text-xs text-pens-cream/50 truncate">
             {data.window.from} → {data.window.to} · {data.summary.daysTracked} tracked
             {data.summary.daysImputed ? ` · ${data.summary.daysImputed} imputed` : ''}
@@ -114,14 +135,14 @@ export default function WeekEnergyRecapCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] uppercase tracking-widest text-amber-400/90 font-semibold">
-            Weekly energy recap
+            {windowDays === 30 ? '30-day energy recap' : 'Weekly energy recap'}
           </p>
           <p className="text-sm text-pens-cream/70 mt-0.5">
-            Rolling 7 days · {data.window.from} → {data.window.to}
+            Rolling {windowDays} days · {data.window.from} → {data.window.to}
           </p>
         </div>
         <div className={`text-right ${surplus ? 'text-amber-300' : 'text-sky-300'}`}>
-          <p className="text-xs text-pens-cream/40">{surplus ? 'week surplus' : 'week deficit'}</p>
+          <p className="text-xs text-pens-cream/40">{surplus ? 'window surplus' : 'window deficit'}</p>
           <p className="text-xl font-semibold tabular-nums">
             {surplus ? '+' : ''}
             {net}
@@ -134,17 +155,21 @@ export default function WeekEnergyRecapCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <div className="rounded-xl bg-pens-navy/60 border border-pens-muted/20 px-2 py-2">
           <p className="text-[10px] uppercase text-pens-cream/40">Food</p>
           <p className="tabular-nums text-pens-cream">{data.summary.foodKcalTotal}</p>
         </div>
         <div className="rounded-xl bg-pens-navy/60 border border-pens-muted/20 px-2 py-2">
-          <p className="text-[10px] uppercase text-pens-cream/40">Activity</p>
-          <p className="tabular-nums text-pens-cream">{data.summary.activityKcalTotal}</p>
+          <p className="text-[10px] uppercase text-pens-cream/40">EAT</p>
+          <p className="tabular-nums text-pens-cream">{data.summary.eatKcalTotal ?? '—'}</p>
         </div>
         <div className="rounded-xl bg-pens-navy/60 border border-pens-muted/20 px-2 py-2">
-          <p className="text-[10px] uppercase text-pens-cream/40">BMR stub</p>
+          <p className="text-[10px] uppercase text-pens-cream/40">NEAT</p>
+          <p className="tabular-nums text-pens-cream">{data.summary.neatKcalTotal ?? '—'}</p>
+        </div>
+        <div className="rounded-xl bg-pens-navy/60 border border-pens-muted/20 px-2 py-2">
+          <p className="text-[10px] uppercase text-pens-cream/40">BMR</p>
           <p className="tabular-nums text-pens-cream">{data.summary.bmrKcalTotal}</p>
         </div>
       </div>
@@ -156,22 +181,24 @@ export default function WeekEnergyRecapCard({
           : ''}
       </p>
 
-      <ul className="space-y-1 border-t border-pens-muted/20 pt-3">
-        {data.days.map(d => (
-          <li key={d.date} className="flex justify-between gap-2 text-xs text-pens-cream/70">
-            <span className="min-w-0 truncate">
-              {d.date.slice(5)}
-              {d.imputed ? (
-                <span className="ml-1 text-amber-400/70">imputed</span>
-              ) : null}
-            </span>
-            <span className={`tabular-nums shrink-0 ${d.delta >= 0 ? 'text-amber-200/80' : 'text-sky-200/80'}`}>
-              {d.delta >= 0 ? '+' : ''}
-              {d.delta}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {windowDays === 7 && (
+        <ul className="space-y-1 border-t border-pens-muted/20 pt-3">
+          {data.days.map(d => (
+            <li key={d.date} className="flex justify-between gap-2 text-xs text-pens-cream/70">
+              <span className="min-w-0 truncate">
+                {d.date.slice(5)}
+                {d.imputed ? (
+                  <span className="ml-1 text-amber-400/70">imputed</span>
+                ) : null}
+              </span>
+              <span className={`tabular-nums shrink-0 ${d.delta >= 0 ? 'text-amber-200/80' : 'text-sky-200/80'}`}>
+                {d.delta >= 0 ? '+' : ''}
+                {d.delta}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {data.calibration && (
         <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 px-3 py-2 space-y-1">
@@ -187,6 +214,16 @@ export default function WeekEnergyRecapCard({
             {data.calibration.observedKg} kg)
           </p>
           <p className="text-[10px] text-pens-cream/35">{data.calibration.disclaimer}</p>
+        </div>
+      )}
+
+      {data.thyroidContext?.present && (
+        <div className="rounded-xl border border-violet-500/20 bg-violet-950/15 px-3 py-2 space-y-1">
+          <p className="text-[10px] uppercase tracking-wider text-violet-300/90 font-semibold">
+            {data.thyroidContext.title} (context only)
+          </p>
+          <p className="text-xs text-pens-cream/70 leading-relaxed">{data.thyroidContext.summary}</p>
+          <p className="text-[10px] text-pens-cream/35">{data.thyroidContext.disclaimer}</p>
         </div>
       )}
 

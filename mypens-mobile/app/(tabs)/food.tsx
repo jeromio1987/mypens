@@ -141,9 +141,16 @@ export default function FoodScreen() {
   const [energy, setEnergy] = useState<{
     foodKcal: number
     activityKcal: number
+    eatKcal: number
+    neatKcal: number
+    bmrKcal: number
+    estimatedOut: number
     delta: number
     incompleteCapture: boolean
-    sources: Array<{ label: string; kcal: number; detail?: string }>
+    neatDetail?: string
+    steps: number | null
+    deviceTotal: number | null
+    sources: Array<{ label: string; kcal: number; detail?: string; origin?: string }>
   } | null>(null)
   const [weekEnergy, setWeekEnergy] = useState<{
     weekNetKcal: number
@@ -151,6 +158,14 @@ export default function FoodScreen() {
     daysImputed: number
     from: string
     to: string
+    calibrationNote: string | null
+  } | null>(null)
+  const [monthEnergy, setMonthEnergy] = useState<{
+    weekNetKcal: number
+    daysTracked: number
+    from: string
+    to: string
+    calibrationNote: string | null
   } | null>(null)
 
   useEffect(() => {
@@ -185,14 +200,16 @@ export default function FoodScreen() {
     if (!isPensApiConfigured()) {
       setEnergy(null)
       setWeekEnergy(null)
+      setMonthEnergy(null)
       return
     }
     let cancelled = false
     void (async () => {
       try {
-        const [dayRes, weekRes] = await Promise.all([
+        const [dayRes, weekRes, monthRes] = await Promise.all([
           pensFetch(`/api/energy-balance?date=${encodeURIComponent(selectedDate)}`),
           pensFetch(`/api/energy-balance?week=1&date=${encodeURIComponent(selectedDate)}`),
+          pensFetch(`/api/energy-balance?month=1&date=${encodeURIComponent(selectedDate)}`),
         ])
         if (dayRes.ok) {
           const j = await dayRes.json()
@@ -200,8 +217,15 @@ export default function FoodScreen() {
             setEnergy({
               foodKcal: j.foodKcal ?? 0,
               activityKcal: j.activityKcal ?? 0,
+              eatKcal: j.eatKcal ?? 0,
+              neatKcal: j.neatKcal ?? 0,
+              bmrKcal: j.bmrKcal ?? 0,
+              estimatedOut: j.estimatedOut ?? 0,
               delta: j.delta ?? 0,
               incompleteCapture: Boolean(j.incompleteCapture),
+              neatDetail: typeof j.neatDetail === 'string' ? j.neatDetail : undefined,
+              steps: j.deviceRef?.steps ?? null,
+              deviceTotal: j.deviceRef?.totalKcal ?? null,
               sources: Array.isArray(j.sources) ? j.sources : [],
             })
           }
@@ -215,6 +239,19 @@ export default function FoodScreen() {
               daysImputed: w.summary?.daysImputed ?? 0,
               from: w.window?.from ?? '',
               to: w.window?.to ?? '',
+              calibrationNote: w.calibration?.note ?? null,
+            })
+          }
+        }
+        if (monthRes.ok) {
+          const m = await monthRes.json()
+          if (!cancelled) {
+            setMonthEnergy({
+              weekNetKcal: m.summary?.weekNetKcal ?? 0,
+              daysTracked: m.summary?.daysTracked ?? 0,
+              from: m.window?.from ?? '',
+              to: m.window?.to ?? '',
+              calibrationNote: m.calibration?.note ?? null,
             })
           }
         }
@@ -222,6 +259,7 @@ export default function FoodScreen() {
         if (!cancelled) {
           setEnergy(null)
           setWeekEnergy(null)
+          setMonthEnergy(null)
         }
       }
     })()
@@ -878,20 +916,34 @@ export default function FoodScreen() {
           <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Energy ledger</Text>
           <Text style={[styles.readVerdict, { color: colors.foreground, fontSize: 18 }]}>
             {energy.delta >= 0 ? '+' : ''}
-            {energy.delta} kcal vs burn
+            {energy.delta} kcal vs stack
           </Text>
           <Text style={[styles.readCause, { color: colors.mutedForeground }]}>
-            Food {energy.foodKcal} · Activity {energy.activityKcal}
-            {energy.incompleteCapture ? ' · incomplete burn capture' : ''}
+            Food {energy.foodKcal} · BMR {energy.bmrKcal} · EAT {energy.eatKcal} · NEAT {energy.neatKcal}
+            {energy.incompleteCapture ? ' · incomplete session kcal' : ''}
           </Text>
-          {energy.sources.slice(0, 3).map((s, i) => (
+          {energy.steps != null || energy.neatDetail ? (
+            <Text style={[styles.readCause, { color: colors.mutedForeground, marginTop: 4 }]}>
+              {energy.steps != null ? `Steps ${energy.steps.toLocaleString()}` : 'Steps —'}
+              {energy.neatDetail ? ` · ${energy.neatDetail}` : ''}
+            </Text>
+          ) : null}
+          {energy.sources
+            .filter(s => s.origin === 'garmin_activity' || s.origin === 'training' || s.origin === 'notes' || s.origin === 'pushed' || !s.origin)
+            .slice(0, 3)
+            .map((s, i) => (
             <Text key={`${s.label}-${i}`} style={[styles.readCause, { color: colors.mutedForeground, marginTop: 4 }]}>
               {s.label}
               {s.detail ? ` · ${s.detail}` : ''} · {s.kcal} kcal
             </Text>
           ))}
+          {energy.deviceTotal != null ? (
+            <Text style={[styles.readCause, { color: colors.mutedForeground, marginTop: 4 }]}>
+              MY PENS out {energy.estimatedOut} · Garmin Total {energy.deviceTotal} (reference only)
+            </Text>
+          ) : null}
           <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 8 }}>
-            Device estimates — not metabolic TDEE.
+            Device estimates — not metabolic TDEE. Garmin Total is never added into the stack.
           </Text>
         </View>
       )}
@@ -907,8 +959,34 @@ export default function FoodScreen() {
             {weekEnergy.from} → {weekEnergy.to} · {weekEnergy.daysTracked} tracked
             {weekEnergy.daysImputed ? ` · ${weekEnergy.daysImputed} imputed` : ''}
           </Text>
+          {weekEnergy.calibrationNote ? (
+            <Text style={[styles.readCause, { color: colors.mutedForeground, marginTop: 4 }]}>
+              Scale check: {weekEnergy.calibrationNote}
+            </Text>
+          ) : null}
           <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 8 }}>
-            Food − (activity + BMR stub). Imputed days use tracked averages.
+            Food − (BMR + EAT + NEAT). Imputed days use tracked averages.
+          </Text>
+        </View>
+      )}
+
+      {apiOk && monthEnergy && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: `${MOD.primary}30` }]}>
+          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>30-day ledger</Text>
+          <Text style={[styles.readVerdict, { color: colors.foreground, fontSize: 18 }]}>
+            {monthEnergy.weekNetKcal >= 0 ? '+' : ''}
+            {monthEnergy.weekNetKcal} kcal
+          </Text>
+          <Text style={[styles.readCause, { color: colors.mutedForeground }]}>
+            {monthEnergy.from} → {monthEnergy.to} · {monthEnergy.daysTracked} tracked
+          </Text>
+          {monthEnergy.calibrationNote ? (
+            <Text style={[styles.readCause, { color: colors.mutedForeground, marginTop: 4 }]}>
+              Scale check: {monthEnergy.calibrationNote}
+            </Text>
+          ) : null}
+          <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 8 }}>
+            Same stack as day/week; weight residual is approximate over longer windows.
           </Text>
         </View>
       )}
