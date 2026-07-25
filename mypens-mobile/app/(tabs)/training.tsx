@@ -30,6 +30,7 @@ import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { PlannerWeekCard } from '@/components/PlannerWeekCard'
 import { TrainingReviewCard } from '@/components/TrainingReviewCard'
+import { HealthConnectCard } from '@/components/HealthConnectCard'
 
 const MOD = MODULE_COLORS.training
 const EXERCISES_KEY = '@mypens/recent_exercises'
@@ -315,6 +316,7 @@ export default function TrainingScreen() {
         )}
       </View>
 
+      <HealthConnectCard />
       <TrainingReviewCard defaultDays={14} />
       <PlannerWeekCard />
 

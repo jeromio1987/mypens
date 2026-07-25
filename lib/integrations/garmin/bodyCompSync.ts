@@ -1,36 +1,28 @@
 import { prisma } from '@/lib/db'
+import { getValidAccessToken } from './oauth'
 
-interface GarminBodyComp {
-  calendarDate: string
+export interface GarminBodyComp {
+  calendarDate?: string
+  userId?: string
   weightInGrams?: number
   bodyFatPercentage?: number
   muscleMassInGrams?: number
   boneWeightInGrams?: number
 }
 
-async function garminGet(path: string, accessToken: string, refreshToken: string) {
-  const res = await fetch(`https://apis.garmin.com${path}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-  if (res.status === 401) {
-    // Token refresh not implemented here — caller handles
-    throw new Error('GARMIN_UNAUTHORIZED')
-  }
-  if (!res.ok) throw new Error(`Garmin API error ${res.status}`)
-  return res.json()
-}
-
 export async function syncBodyComps(days = 30): Promise<{ ingested: number; skipped: number }> {
-  const settings = await prisma.garminToken?.findFirst?.().catch(() => null)
-  if (!settings) return { ingested: 0, skipped: 0 }
-
+  const { accessToken } = await getValidAccessToken()
   const now = Math.floor(Date.now() / 1000)
   const start = now - days * 86400
-  const data: GarminBodyComp[] = await garminGet(
-    `/wellness-api/rest/bodyComps?uploadStartTimeInSeconds=${start}&uploadEndTimeInSeconds=${now}`,
-    (settings as any).accessToken,
-    (settings as any).refreshToken,
+  const res = await fetch(
+    `https://apis.garmin.com/wellness-api/rest/bodyComps?uploadStartTimeInSeconds=${start}&uploadEndTimeInSeconds=${now}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
   )
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Garmin bodyComps sync failed: ${res.status} ${text}`)
+  }
+  const data: GarminBodyComp[] = await res.json()
 
   let ingested = 0
   let skipped = 0

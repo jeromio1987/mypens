@@ -1,5 +1,45 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import {
+  inferFoodTags,
+  parseMicrosJson,
+  serializeMicros,
+  serializeTags,
+  type FoodMicros,
+} from '@/lib/foodMicros'
+
+function coerceMicros(raw: unknown): FoodMicros | null {
+  if (raw == null) return null
+  if (typeof raw === 'string') {
+    const m = parseMicrosJson(raw)
+    return Object.keys(m).length ? m : null
+  }
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    const out: FoodMicros = {}
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const n = typeof v === 'number' ? v : Number(v)
+      if (Number.isFinite(n) && n >= 0) out[k] = Math.round(n * 100) / 100
+    }
+    return Object.keys(out).length ? out : null
+  }
+  return null
+}
+
+function coerceTags(raw: unknown): string[] | null {
+  if (raw == null) return null
+  if (typeof raw === 'string') {
+    try {
+      const p = JSON.parse(raw)
+      if (Array.isArray(p)) return p.filter((t): t is string => typeof t === 'string').slice(0, 12)
+    } catch {
+      return null
+    }
+  }
+  if (Array.isArray(raw)) {
+    return raw.filter((t): t is string => typeof t === 'string' && t.trim().length > 0).slice(0, 12)
+  }
+  return null
+}
 
 export async function POST(request: Request) {
   try {
@@ -18,13 +58,52 @@ export async function POST(request: Request) {
 
     if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 })
 
-    const entry = await prisma.foodEntry.create({
-      data: { date, meal, name, kcal, proteinG, carbsG, fatG, fiberG, notes },
-    })
+    const micros = coerceMicros(body.micros ?? body.microsJson)
+    const providedTags = coerceTags(body.tags ?? body.tagsJson)
+    const tags =
+      providedTags ??
+      inferFoodTags({
+        kcal: Number(kcal) || 0,
+        proteinG: Number(proteinG) || 0,
+        fiberG: Number(fiberG) || 0,
+        name: String(name),
+      })
+
+    const base = {
+      date,
+      meal,
+      name,
+      kcal,
+      proteinG,
+      carbsG,
+      fatG,
+      fiberG,
+      notes,
+    }
+    let entry
+    try {
+      entry = await prisma.foodEntry.create({
+        data: {
+          ...base,
+          microsJson: serializeMicros(micros),
+          tagsJson: serializeTags(tags),
+        },
+      })
+    } catch (first) {
+      // Pre-migration DB: microsJson/tagsJson columns missing — still save macros.
+      const msg = first instanceof Error ? first.message : String(first)
+      if (!/microsJson|tagsJson|does not exist|Unknown argument/i.test(msg)) throw first
+      console.warn('[food POST] micros columns missing; saving without micros/tags', msg.slice(0, 160))
+      entry = await prisma.foodEntry.create({ data: base })
+    }
     return NextResponse.json(entry)
   } catch (error) {
     console.error(error)
-    return NextResponse.json({ error: 'Failed to save' }, { status: 500 })
+    const detail = error instanceof Error ? error.message : 'Failed to save'
+    return NextResponse.json(
+      { error: process.env.NODE_ENV === 'production' ? 'Failed to save' : detail },
+      { status: 500 },
+    )
   }
 }
 
@@ -66,6 +145,14 @@ export async function PATCH(request: Request) {
     const body = await request.json()
     const { id, meal, name, kcal, proteinG, carbsG, fatG, fiberG, notes } = body
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+    const micros = body.micros !== undefined || body.microsJson !== undefined
+      ? coerceMicros(body.micros ?? body.microsJson)
+      : undefined
+    const tags = body.tags !== undefined || body.tagsJson !== undefined
+      ? coerceTags(body.tags ?? body.tagsJson)
+      : undefined
+
     const entry = await prisma.foodEntry.update({
       where: { id },
       data: {
@@ -77,6 +164,8 @@ export async function PATCH(request: Request) {
         ...(fatG      !== undefined && { fatG:     Number(fatG) }),
         ...(fiberG    !== undefined && { fiberG:   Number(fiberG) }),
         ...(notes     !== undefined && { notes }),
+        ...(micros !== undefined && { microsJson: serializeMicros(micros) }),
+        ...(tags !== undefined && { tagsJson: serializeTags(tags ?? []) }),
       },
     })
     return NextResponse.json(entry)

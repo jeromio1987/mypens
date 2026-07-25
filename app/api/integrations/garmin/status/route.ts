@@ -8,7 +8,11 @@ export async function GET() {
   if (authError) return authError
 
   try {
-    const configured = Boolean(process.env.GARMIN_CLIENT_ID && process.env.GARMIN_CLIENT_SECRET)
+    const configured = Boolean(
+      process.env.GARMIN_CLIENT_ID
+      && process.env.GARMIN_CLIENT_SECRET
+      && process.env.GARMIN_WEBHOOK_VERIFY_TOKEN,
+    )
     const conn = await prisma.garminConnection.findUnique({ where: { userId: 'default' } })
     const errorStale = isIntegrationErrorStale(conn?.lastErrorAt ?? null)
     return NextResponse.json({

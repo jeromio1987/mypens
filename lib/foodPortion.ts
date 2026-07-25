@@ -14,6 +14,8 @@ export type PortionableMacros = {
   /** Full package net weight when readable from label (optional). */
   packGrams: number | null
   brand?: string | null
+  micros?: Record<string, number>
+  tags?: string[]
 }
 
 export function roundMacro(n: number, decimals = 1): number {
@@ -32,6 +34,12 @@ export function scalePortion<T extends PortionableMacros>(
   const assumed = item.assumedGrams && item.assumedGrams > 0 ? item.assumedGrams : null
   const eaten = Math.max(0, Number(eatenGrams) || 0)
   const scale = assumed ? eaten / assumed : 1
+  const micros =
+    item.micros && Object.keys(item.micros).length > 0
+      ? Object.fromEntries(
+          Object.entries(item.micros).map(([k, v]) => [k, Math.round(v * scale * 100) / 100]),
+        )
+      : item.micros
   return {
     ...item,
     kcal: roundMacro(item.kcal * scale, 0),
@@ -39,6 +47,7 @@ export function scalePortion<T extends PortionableMacros>(
     carbsG: roundMacro(item.carbsG * scale),
     fatG: roundMacro(item.fatG * scale),
     fiberG: roundMacro(item.fiberG * scale),
+    ...(micros ? { micros } : {}),
     eatenGrams: eaten,
     scale: roundMacro(scale, 3),
   }

@@ -17,6 +17,10 @@ export type FoodProductHit = {
   carbsG: number
   fatG: number
   fiberG: number
+  /** Present micros only (per assumedGrams, usually per 100g). */
+  micros?: Record<string, number>
+  /** Soft tags when inferable. */
+  tags?: string[]
   /** OFF barcode when from catalog. */
   barcode?: string | null
   imageUrl?: string | null
@@ -92,6 +96,27 @@ function macrosPer100g(n: OffNutriments | undefined): {
   }
 }
 
+/** Map OFF nutriments → present micro keys only (per 100g). */
+export function microsPer100g(n: OffNutriments | undefined): Record<string, number> {
+  if (!n) return {}
+  const pairs: Array<[string, number | null]> = [
+    ['sodiumMg', num(n['sodium_100g']) != null ? Math.round(Number(n['sodium_100g']) * 1000 * 10) / 10 : num(n['salt_100g']) != null ? Math.round(Number(n['salt_100g']) * 400 * 10) / 10 : null],
+    ['potassiumMg', num(n['potassium_100g']) != null ? Math.round(Number(n['potassium_100g']) * 1000 * 10) / 10 : null],
+    ['calciumMg', num(n['calcium_100g']) != null ? Math.round(Number(n['calcium_100g']) * 1000 * 10) / 10 : null],
+    ['ironMg', num(n['iron_100g']) != null ? Math.round(Number(n['iron_100g']) * 1000 * 100) / 100 : null],
+    ['magnesiumMg', num(n['magnesium_100g']) != null ? Math.round(Number(n['magnesium_100g']) * 1000 * 10) / 10 : null],
+    ['vitaminCMg', num(n['vitamin-c_100g']) != null ? Math.round(Number(n['vitamin-c_100g']) * 1000 * 10) / 10 : null],
+    ['vitaminDMcg', num(n['vitamin-d_100g']) != null ? Math.round(Number(n['vitamin-d_100g']) * 1e6 * 100) / 100 : null],
+    ['vitaminB12Mcg', num(n['vitamin-b12_100g']) != null ? Math.round(Number(n['vitamin-b12_100g']) * 1e6 * 100) / 100 : null],
+    ['zincMg', num(n['zinc_100g']) != null ? Math.round(Number(n['zinc_100g']) * 1000 * 100) / 100 : null],
+  ]
+  const out: Record<string, number> = {}
+  for (const [k, v] of pairs) {
+    if (v != null && v > 0) out[k] = v
+  }
+  return out
+}
+
 export function mapOffProduct(p: OffProduct): FoodProductHit | null {
   const name = pickName(p)
   if (!name) return null
@@ -110,6 +135,7 @@ export function mapOffProduct(p: OffProduct): FoodProductHit | null {
 
   const brand = p.brands?.split(',')[0]?.trim() || null
   const code = p.code ? String(p.code) : null
+  const micros = microsPer100g(p.nutriments)
 
   return {
     id: code ? `off:${code}` : `off:${name.toLowerCase()}:${brand ?? ''}`,
@@ -119,6 +145,7 @@ export function mapOffProduct(p: OffProduct): FoodProductHit | null {
     packGrams,
     assumedGrams: 100,
     ...macros,
+    ...(Object.keys(micros).length ? { micros } : {}),
     barcode: code,
     imageUrl: p.image_front_small_url || p.image_small_url || null,
   }

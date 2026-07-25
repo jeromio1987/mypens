@@ -56,6 +56,10 @@ model FoodEntry {
   fatG     Float @default(0)
   fiberG   Float @default(0)
   notes    String?
+  // Present micronutrients only — JSON object e.g. {"sodiumMg":120,"ironMg":2.1}
+  microsJson String?
+  // Soft display tags — JSON string array e.g. ["high_protein"]
+  tagsJson   String?
 }
 
 // Phase 3 — Sleep

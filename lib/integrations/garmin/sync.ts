@@ -79,10 +79,12 @@ function isAllowedGarminCallback(rawUrl: string): boolean {
   return host === 'garmin.com' || host.endsWith(GARMIN_HOST_SUFFIX)
 }
 
-/** Fetch a Garmin activity payload from a `callbackURL` provided by a PING
- * notification. Returns the parsed activities array (Garmin returns the same
- * `{ activities: [...] }` envelope as the push body). */
-export async function fetchPingActivities(callbackUrl: string, accessToken: string): Promise<GarminActivity[]> {
+/** Fetch a Garmin payload from a `callbackURL` provided by a PING notification. */
+export async function fetchPingPayload<T>(
+  callbackUrl: string,
+  accessToken: string,
+  key?: string,
+): Promise<T[]> {
   if (!isAllowedGarminCallback(callbackUrl)) {
     throw new Error(`Garmin ping callbackURL rejected (not on garmin.com): ${callbackUrl}`)
   }
@@ -94,7 +96,19 @@ export async function fetchPingActivities(callbackUrl: string, accessToken: stri
     const text = await res.text()
     throw new Error(`Garmin ping fetch failed: ${res.status} ${text}`)
   }
-  const data = (await res.json()) as { activities?: GarminActivity[] } | GarminActivity[]
+  const data = (await res.json()) as Record<string, T[]> | T[]
   if (Array.isArray(data)) return data
-  return data.activities ?? []
+  if (key && Array.isArray(data[key])) return data[key]
+  // Fall back to the first array value in the envelope.
+  for (const value of Object.values(data)) {
+    if (Array.isArray(value)) return value
+  }
+  return []
+}
+
+/** Fetch a Garmin activity payload from a `callbackURL` provided by a PING
+ * notification. Returns the parsed activities array (Garmin returns the same
+ * `{ activities: [...] }` envelope as the push body). */
+export async function fetchPingActivities(callbackUrl: string, accessToken: string): Promise<GarminActivity[]> {
+  return fetchPingPayload<GarminActivity>(callbackUrl, accessToken, 'activities')
 }

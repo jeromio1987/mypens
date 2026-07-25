@@ -6,6 +6,8 @@ import { ArrowLeft } from 'lucide-react'
 import FoodEntry from '@/components/food/FoodEntry'
 import FoodLog from '@/components/food/FoodLog'
 import MacroTargets from '@/components/food/MacroTargets'
+import EnergyBalanceCard from '@/components/food/EnergyBalanceCard'
+import NutrientCard from '@/components/food/NutrientCard'
 import { DEFAULT_TARGETS, type DailyTargets } from '@/lib/foodModels'
 
 export default function FoodPage() {
@@ -41,7 +43,9 @@ export default function FoodPage() {
         </div>
 
         <MacroTargets onTargetsChange={setTargets} />
+        <EnergyBalanceCard date={date} refresh={refresh} />
         <FoodEntry date={date} onSaved={bump} />
+        <NutrientCard date={date} refresh={refresh} targets={targets} />
         <FoodLog date={date} refresh={refresh} targets={targets} onSaved={bump} />
       </div>
     </main>

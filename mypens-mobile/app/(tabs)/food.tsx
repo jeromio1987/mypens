@@ -138,6 +138,13 @@ export default function FoodScreen() {
   const [productSearchError, setProductSearchError] = useState<string | null>(null)
   const [showManualAdd, setShowManualAdd] = useState(false)
   const [showNumbers, setShowNumbers] = useState(false)
+  const [energy, setEnergy] = useState<{
+    foodKcal: number
+    activityKcal: number
+    delta: number
+    incompleteCapture: boolean
+    sources: Array<{ label: string; kcal: number; detail?: string }>
+  } | null>(null)
 
   useEffect(() => {
     AsyncStorage.getItem(TARGETS_KEY).then((raw) => {
@@ -166,6 +173,35 @@ export default function FoodScreen() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!isPensApiConfigured()) {
+      setEnergy(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await pensFetch(`/api/energy-balance?date=${encodeURIComponent(selectedDate)}`)
+        if (!res.ok) return
+        const j = await res.json()
+        if (!cancelled) {
+          setEnergy({
+            foodKcal: j.foodKcal ?? 0,
+            activityKcal: j.activityKcal ?? 0,
+            delta: j.delta ?? 0,
+            incompleteCapture: Boolean(j.incompleteCapture),
+            sources: Array.isArray(j.sources) ? j.sources : [],
+          })
+        }
+      } catch {
+        if (!cancelled) setEnergy(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedDate])
 
   useEffect(() => {
     if (!isPensApiConfigured() || name.trim().length < 2) {
@@ -647,6 +683,29 @@ export default function FoodScreen() {
               <MacroBar label="Fat" current={totals.fatG} target={targets.fatG} color="#eab308" />
             </View>
           )}
+        </View>
+      )}
+
+      {apiOk && energy && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: `${MOD.primary}55` }]}>
+          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Energy ledger</Text>
+          <Text style={[styles.readVerdict, { color: colors.foreground, fontSize: 18 }]}>
+            {energy.delta >= 0 ? '+' : ''}
+            {energy.delta} kcal vs burn
+          </Text>
+          <Text style={[styles.readCause, { color: colors.mutedForeground }]}>
+            Food {energy.foodKcal} · Activity {energy.activityKcal}
+            {energy.incompleteCapture ? ' · incomplete burn capture' : ''}
+          </Text>
+          {energy.sources.slice(0, 3).map((s, i) => (
+            <Text key={`${s.label}-${i}`} style={[styles.readCause, { color: colors.mutedForeground, marginTop: 4 }]}>
+              {s.label}
+              {s.detail ? ` · ${s.detail}` : ''} · {s.kcal} kcal
+            </Text>
+          ))}
+          <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 8 }}>
+            Device estimates — not metabolic TDEE.
+          </Text>
         </View>
       )}
 

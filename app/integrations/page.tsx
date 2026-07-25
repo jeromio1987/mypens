@@ -43,10 +43,10 @@ const PROVIDERS: ProviderConfig[] = [
     name: 'Garmin Connect',
     initial: 'G',
     color: 'bg-sky-600',
-    description: 'Pull recent workouts from Garmin Connect into the Training log.',
+    description: 'Auto-upload workouts, sleep, and weight from Garmin Connect (push webhook + daily cron).',
     authMode: 'oauth',
     syncLabel: 'Sync now',
-    envHint: 'GARMIN_CLIENT_ID and GARMIN_CLIENT_SECRET',
+    envHint: 'GARMIN_CLIENT_ID, GARMIN_CLIENT_SECRET, GARMIN_WEBHOOK_VERIFY_TOKEN',
     externalLinkLabel: 'View on Garmin ↗',
   },
   {

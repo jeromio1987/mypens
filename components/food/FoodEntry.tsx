@@ -25,24 +25,42 @@ interface ScanItem {
   packGrams: number | null
   assumedGrams: number | null
   portionGrams: number | null
+  micros: Record<string, number> | null
+  tags: string[] | null
 }
 
 function mapScanItems(items: unknown[], fallbackMeal: MealType): ScanItem[] {
   return items
     .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === 'object')
-    .map(x => ({
-      name: String(x.name ?? ''),
-      meal: MEAL_ORDER.includes(x.meal as MealType) ? (x.meal as MealType) : fallbackMeal,
-      kcal: Math.max(0, Number(x.kcal) || 0),
-      proteinG: Math.max(0, Number(x.proteinG) || 0),
-      carbsG: Math.max(0, Number(x.carbsG) || 0),
-      fatG: Math.max(0, Number(x.fatG) || 0),
-      fiberG: Math.max(0, Number(x.fiberG) || 0),
-      brand: typeof x.brand === 'string' && x.brand.trim() ? x.brand.trim() : null,
-      packGrams: Number(x.packGrams) > 0 ? Number(x.packGrams) : null,
-      assumedGrams: Number(x.assumedGrams) > 0 ? Number(x.assumedGrams) : null,
-      portionGrams: Number(x.portionGrams) > 0 ? Number(x.portionGrams) : null,
-    }))
+    .map(x => {
+      let micros: Record<string, number> | null = null
+      if (x.micros && typeof x.micros === 'object' && !Array.isArray(x.micros)) {
+        const m: Record<string, number> = {}
+        for (const [k, v] of Object.entries(x.micros as Record<string, unknown>)) {
+          const n = Number(v)
+          if (Number.isFinite(n) && n >= 0) m[k] = n
+        }
+        if (Object.keys(m).length) micros = m
+      }
+      const tags = Array.isArray(x.tags)
+        ? x.tags.filter((t): t is string => typeof t === 'string').slice(0, 12)
+        : null
+      return {
+        name: String(x.name ?? ''),
+        meal: MEAL_ORDER.includes(x.meal as MealType) ? (x.meal as MealType) : fallbackMeal,
+        kcal: Math.max(0, Number(x.kcal) || 0),
+        proteinG: Math.max(0, Number(x.proteinG) || 0),
+        carbsG: Math.max(0, Number(x.carbsG) || 0),
+        fatG: Math.max(0, Number(x.fatG) || 0),
+        fiberG: Math.max(0, Number(x.fiberG) || 0),
+        brand: typeof x.brand === 'string' && x.brand.trim() ? x.brand.trim() : null,
+        packGrams: Number(x.packGrams) > 0 ? Number(x.packGrams) : null,
+        assumedGrams: Number(x.assumedGrams) > 0 ? Number(x.assumedGrams) : null,
+        portionGrams: Number(x.portionGrams) > 0 ? Number(x.portionGrams) : null,
+        micros,
+        tags: tags && tags.length ? tags : null,
+      }
+    })
     .filter(x => x.name.trim().length > 0)
 }
 
@@ -81,6 +99,8 @@ export default function FoodEntry({ date, onSaved }: Props) {
   /** Catalog/history pick waiting for grams confirm. */
   const [catalogPick, setCatalogPick] = useState<FoodProductHit | null>(null)
   const [catalogEatenG, setCatalogEatenG] = useState(100)
+  const [pendingMicros, setPendingMicros] = useState<Record<string, number> | null>(null)
+  const [pendingTags, setPendingTags] = useState<string[] | null>(null)
 
   const [analyzing, setAnalyzing] = useState(false)
   const [refining, setRefining] = useState(false)
@@ -217,6 +237,8 @@ export default function FoodEntry({ date, onSaved }: Props) {
         ? `OFF pack ${catalogPick.packGrams}g · ate ${Math.round(g)}g`
         : `OFF per ${catalogPick.assumedGrams}g · ate ${Math.round(g)}g`,
     }))
+    setPendingMicros(catalogScaled.micros && Object.keys(catalogScaled.micros).length ? catalogScaled.micros : null)
+    setPendingTags(catalogPick.tags ?? null)
     setCatalogPick(null)
   }
 
@@ -235,6 +257,8 @@ export default function FoodEntry({ date, onSaved }: Props) {
         fatG: form.fatG ? parseFloat(form.fatG) : 0,
         fiberG: form.fiberG ? parseFloat(form.fiberG) : 0,
         notes: form.notes || undefined,
+        ...(pendingMicros ? { micros: pendingMicros } : {}),
+        ...(pendingTags ? { tags: pendingTags } : {}),
       }
       const res = await fetch('/api/food', {
         method: 'POST',
@@ -244,6 +268,8 @@ export default function FoodEntry({ date, onSaved }: Props) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
       setForm(f => ({ ...f, name: '', kcal: '', proteinG: '', carbsG: '', fatG: '', fiberG: '', notes: '' }))
+      setPendingMicros(null)
+      setPendingTags(null)
       onSaved?.()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -385,6 +411,8 @@ export default function FoodEntry({ date, onSaved }: Props) {
                 : scaled.packGrams
                   ? `Pack ${scaled.packGrams}g · ate ${Math.round(g)}g`
                   : undefined,
+            ...(scaled.micros && Object.keys(scaled.micros).length ? { micros: scaled.micros } : {}),
+            ...(scaled.tags?.length ? { tags: scaled.tags } : {}),
           }),
         })
         const data = await res.json()

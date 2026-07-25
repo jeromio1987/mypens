@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import TrainingEntry, { type ProgrammeExerciseQueueItem } from '@/components/training/TrainingEntry'
 import TrainingLog from '@/components/training/TrainingLog'
+import EnergyBalanceCard from '@/components/food/EnergyBalanceCard'
 
 interface ExerciseAggregate {
   exercise: string
@@ -231,6 +232,7 @@ export default function TrainingPage() {
           </div>
         )}
 
+        <EnergyBalanceCard date={date} refresh={refresh} />
         <TrainingEntry
           date={date}
           programmeQueue={queue.length ? queue : undefined}

@@ -59,6 +59,8 @@ describe('normalizeItems packaged fields', () => {
     )
     expect(items[0].brand).toBe('Delhaize')
     expect(items[0].packGrams).toBe(1000)
+    expect(items[0].micros).toBeNull()
+    expect(items[0].tags).toBeNull()
     expect(defaultEatenGrams(items[0])).toBe(1000)
   })
 

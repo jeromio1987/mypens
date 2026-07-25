@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/check-stale-pairings",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/integrations/garmin/cron",
+      "schedule": "15 5 * * *"
+    },
+    {
+      "path": "/api/integrations/strava/cron",
+      "schedule": "20 5 * * *"
     }
   ]
 }

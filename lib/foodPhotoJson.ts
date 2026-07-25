@@ -16,6 +16,8 @@ export interface FoodAnalyzeItem {
   assumedGrams: number | null
   /** AI default portion to log (often = pack or serving). */
   portionGrams: number | null
+  micros: Record<string, number> | null
+  tags: string[] | null
 }
 
 export function parseJsonFromAssistant(text: string): unknown {
@@ -42,6 +44,25 @@ function optBrand(n: unknown): string | null {
   if (typeof n !== 'string') return null
   const t = n.trim()
   return t.length ? t.slice(0, 80) : null
+}
+
+function optMicros(raw: unknown): Record<string, number> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const out: Record<string, number> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const n = Number(v)
+    if (Number.isFinite(n) && n >= 0) out[k.slice(0, 40)] = Math.round(n * 100) / 100
+  }
+  return Object.keys(out).length ? out : null
+}
+
+function optTags(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null
+  const tags = raw
+    .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+    .map(t => t.trim().toLowerCase().replace(/\s+/g, '_').slice(0, 40))
+    .slice(0, 12)
+  return tags.length ? tags : null
 }
 
 export function normalizeAnalysisMode(raw: unknown): FoodAnalysisMode {
@@ -79,6 +100,8 @@ export function normalizeItems(raw: unknown, defaultMeal: MealType): FoodAnalyze
       packGrams,
       assumedGrams,
       portionGrams,
+      micros: optMicros(r.micros),
+      tags: optTags(r.tags),
     })
     if (out.length >= 12) break
   }

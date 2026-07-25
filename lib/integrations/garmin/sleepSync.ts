@@ -1,9 +1,18 @@
 import { prisma } from '@/lib/db'
+import { getValidAccessToken } from './oauth'
 
 interface GarminDaily {
-  calendarDate: string
+  calendarDate?: string
+  userId?: string
   sleepingSeconds?: number
   avgSleepingHRV?: number
+}
+
+interface GarminSleep {
+  calendarDate?: string
+  userId?: string
+  durationInSeconds?: number
+  averageHrv?: number
 }
 
 function hrvToQuality(hrv?: number): number {
@@ -24,17 +33,32 @@ function deriveBedtime(sleepHours: number, wakeTime = '07:00'): string {
   return `${h}:${m}`
 }
 
-export async function syncSleep(days = 30): Promise<{ ingested: number; skipped: number }> {
-  const settings = await (prisma as any).garminToken?.findFirst?.().catch(() => null)
-  if (!settings) return { ingested: 0, skipped: 0 }
+function toDaily(summary: GarminDaily | GarminSleep): GarminDaily | null {
+  if ('durationInSeconds' in summary && summary.durationInSeconds != null) {
+    return {
+      calendarDate: summary.calendarDate,
+      userId: summary.userId,
+      sleepingSeconds: summary.durationInSeconds,
+      avgSleepingHRV: summary.averageHrv,
+    }
+  }
+  const daily = summary as GarminDaily
+  if (daily.sleepingSeconds != null) return daily
+  return null
+}
 
+export async function syncSleep(days = 30): Promise<{ ingested: number; skipped: number }> {
+  const { accessToken } = await getValidAccessToken()
   const now = Math.floor(Date.now() / 1000)
   const start = now - days * 86400
   const res = await fetch(
     `https://apis.garmin.com/wellness-api/rest/dailies?uploadStartTimeInSeconds=${start}&uploadEndTimeInSeconds=${now}`,
-    { headers: { Authorization: `Bearer ${(settings as any).accessToken}` } },
+    { headers: { Authorization: `Bearer ${accessToken}` } },
   )
-  if (!res.ok) return { ingested: 0, skipped: 0 }
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Garmin dailies sync failed: ${res.status} ${text}`)
+  }
   const data: GarminDaily[] = await res.json()
 
   let ingested = 0
@@ -48,12 +72,17 @@ export async function syncSleep(days = 30): Promise<{ ingested: number; skipped:
 }
 
 export async function processPushedSleep(
-  summaries: GarminDaily[],
+  summaries: Array<GarminDaily | GarminSleep>,
 ): Promise<{ ingested: number; skipped: number }> {
   let ingested = 0
   let skipped = 0
-  for (const d of summaries) {
-    const result = await upsertSleepFromDaily(d)
+  for (const summary of summaries) {
+    const daily = toDaily(summary)
+    if (!daily) {
+      skipped++
+      continue
+    }
+    const result = await upsertSleepFromDaily(daily)
     if (result === 'ingested') ingested++
     else skipped++
   }

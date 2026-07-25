@@ -1,61 +1,76 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getValidAccessToken } from '@/lib/integrations/garmin/oauth'
-import { fetchPingActivities, importPushedActivities } from '@/lib/integrations/garmin/sync'
+import {
+  fetchPingActivities,
+  fetchPingPayload,
+  importPushedActivities,
+} from '@/lib/integrations/garmin/sync'
+import { processPushedBodyComps, type GarminBodyComp } from '@/lib/integrations/garmin/bodyCompSync'
+import { processPushedSleep } from '@/lib/integrations/garmin/sleepSync'
 import type { GarminActivity } from '@/lib/integrations/garmin/api'
 
 /**
- * Garmin's Activity (Push / Ping) Service POSTs activity notifications here.
+ * Garmin's Push / Ping Service POSTs wellness notifications here.
  *
- * Push payloads carry the full activity summary:
- *   { "activities": [ { activityId, activityType, startTimeInSeconds, ... } ] }
- *
- * Ping payloads only carry pointers; the full data must be fetched from the
- * provided callbackURL with the user's bearer token:
- *   { "activities": [ { userId, userAccessToken, summaryId, callbackURL } ] }
- *
- * We support both shapes. Garmin retries on non-2xx responses, so we ack
- * immediately and process asynchronously — slow imports must not time out
- * the webhook.
+ * Supported envelopes (full summary OR ping pointer with callbackURL):
+ *   { "activities": [...] }
+ *   { "dailies": [...] }      — sleep hours from daily summaries
+ *   { "sleeps": [...] }       — dedicated sleep summaries
+ *   { "bodyComps": [...] }    — weight / body composition
+ *   { "deregistrations": [...] }
  *
  * Auth: Garmin does not sign payloads. We require a shared secret supplied as
  * the `verify_token` query parameter on every inbound request. Set
  * `GARMIN_WEBHOOK_VERIFY_TOKEN` in the environment and register the webhook
  * URL with `?verify_token=<secret>` appended in the Garmin developer portal.
- * Requests without a valid token are rejected (403) before any DB access.
- *
- * Within verified payloads, activity items are further validated against the
- * `garminUserId` stored on the connection row. Items for a different user are
- * silently discarded, and items missing `userId` are treated as foreign.
  */
 
-interface PingActivityRef {
+interface PingRef {
   userId?: string
   userAccessToken?: string
   summaryId?: string
   callbackURL?: string
 }
 
-type IncomingActivity = (GarminActivity & PingActivityRef) | PingActivityRef
+type IncomingActivity = (GarminActivity & PingRef) | PingRef
+type IncomingDaily = PingRef & {
+  calendarDate?: string
+  sleepingSeconds?: number
+  avgSleepingHRV?: number
+  durationInSeconds?: number
+  averageHrv?: number
+}
+type IncomingBodyComp = (GarminBodyComp & PingRef) | PingRef
 
 interface GarminWebhookBody {
   activities?: IncomingActivity[]
-  // Garmin also sends `deregistrations: [{ userId, userAccessToken }]` when a
-  // user revokes app access from their Garmin account.
+  dailies?: IncomingDaily[]
+  sleeps?: IncomingDaily[]
+  bodyComps?: IncomingBodyComp[]
   deregistrations?: Array<{ userId?: string; userAccessToken?: string }>
 }
 
-function hasFullSummary(a: IncomingActivity): a is GarminActivity & PingActivityRef {
+function hasFullSummary(a: IncomingActivity): a is GarminActivity & PingRef {
   return typeof (a as GarminActivity).activityId !== 'undefined'
     && typeof (a as GarminActivity).startTimeInSeconds === 'number'
     && typeof (a as GarminActivity).activityType === 'string'
 }
 
+function hasSleepSummary(d: IncomingDaily): boolean {
+  return Boolean(d.calendarDate && (d.sleepingSeconds || d.durationInSeconds))
+}
+
+function hasBodyCompSummary(b: IncomingBodyComp): b is GarminBodyComp & PingRef {
+  return typeof (b as GarminBodyComp).calendarDate === 'string'
+    && typeof (b as GarminBodyComp).weightInGrams === 'number'
+}
+
+function oursOnly<T extends PingRef>(items: T[], garminUserId: string): T[] {
+  return items.filter(a => a.userId === garminUserId)
+}
+
 export async function POST(request: Request) {
-  // Verify the shared webhook secret. Set GARMIN_WEBHOOK_VERIFY_TOKEN in the
-  // environment and append ?verify_token=<secret> to the webhook URL
-  // registered in the Garmin developer portal. This is required — requests
-  // without a valid token are rejected regardless of their payload content.
   const verifyToken = process.env.GARMIN_WEBHOOK_VERIFY_TOKEN
   if (!verifyToken) {
     console.error('[garmin webhook] GARMIN_WEBHOOK_VERIFY_TOKEN is not configured; rejecting request')
@@ -76,11 +91,9 @@ export async function POST(request: Request) {
 
   const conn = await prisma.garminConnection.findUnique({ where: { userId: 'default' } })
   if (!conn) {
-    // Nothing to do — no connected user. Ack so Garmin doesn't retry.
     return NextResponse.json({ ok: true, ignored: 'not connected' })
   }
 
-  // Handle deregistration: user revoked the app from Garmin's side.
   if (Array.isArray(body.deregistrations)) {
     const ours = body.deregistrations.find(d => d.userId && d.userId === conn.garminUserId)
     if (ours) {
@@ -95,55 +108,84 @@ export async function POST(request: Request) {
     }
   }
 
-  const activities = Array.isArray(body.activities) ? body.activities : []
-  if (activities.length === 0) {
-    return NextResponse.json({ ok: true, ignored: 'no activities' })
-  }
-
-  // Drop anything for a different Garmin user. Without a stored garminUserId
-  // we cannot authenticate any item, so we ignore the entire payload. With
-  // one, we require an exact match — items missing `userId` are treated as
-  // foreign to prevent unauthenticated injection.
   if (!conn.garminUserId) {
     return NextResponse.json({ ok: true, ignored: 'no garmin userId on connection' })
   }
-  const ours = activities.filter(a => a.userId === conn.garminUserId)
 
-  if (ours.length === 0) {
-    return NextResponse.json({ ok: true, ignored: 'foreign user' })
+  const activities = oursOnly(Array.isArray(body.activities) ? body.activities : [], conn.garminUserId)
+  const dailies = oursOnly(Array.isArray(body.dailies) ? body.dailies : [], conn.garminUserId)
+  const sleeps = oursOnly(Array.isArray(body.sleeps) ? body.sleeps : [], conn.garminUserId)
+  const bodyComps = oursOnly(Array.isArray(body.bodyComps) ? body.bodyComps : [], conn.garminUserId)
+
+  if (activities.length + dailies.length + sleeps.length + bodyComps.length === 0) {
+    return NextResponse.json({ ok: true, ignored: 'no matching summaries' })
   }
 
-  // Fire-and-forget the actual import — Garmin expects a quick 200 ack.
   void (async () => {
     try {
-      const fullSummaries: GarminActivity[] = []
-      const pingRefs: PingActivityRef[] = []
-      for (const a of ours) {
-        if (hasFullSummary(a)) fullSummaries.push(a)
-        else if (a.callbackURL) pingRefs.push(a)
+      // ── Activities ────────────────────────────────────────────────────
+      const fullActivities: GarminActivity[] = []
+      const activityPings: PingRef[] = []
+      for (const a of activities) {
+        if (hasFullSummary(a)) fullActivities.push(a)
+        else if (a.callbackURL) activityPings.push(a)
       }
-
-      if (fullSummaries.length > 0) {
-        await importPushedActivities(fullSummaries)
-      }
-
-      if (pingRefs.length > 0) {
+      if (fullActivities.length > 0) await importPushedActivities(fullActivities)
+      if (activityPings.length > 0) {
         const { accessToken } = await getValidAccessToken()
-        for (const ref of pingRefs) {
+        for (const ref of activityPings) {
           if (!ref.callbackURL) continue
           try {
             const fetched = await fetchPingActivities(ref.callbackURL, accessToken)
             if (fetched.length > 0) await importPushedActivities(fetched)
           } catch (err) {
-            console.error('[garmin webhook] ping fetch failed', ref, err)
-            const message = err instanceof Error ? err.message : String(err)
-            await prisma.garminConnection.updateMany({
-              where: { userId: 'default' },
-              data: { lastError: message.slice(0, 500), lastErrorAt: new Date() },
-            }).catch(e => console.error('[garmin webhook] failed to persist error', e))
+            console.error('[garmin webhook] activity ping fetch failed', ref, err)
           }
         }
       }
+
+      // ── Sleep (dailies + sleeps) ──────────────────────────────────────
+      const sleepSummaries = [...dailies, ...sleeps].filter(hasSleepSummary)
+      const sleepPings = [...dailies, ...sleeps].filter(d => !hasSleepSummary(d) && d.callbackURL)
+      if (sleepSummaries.length > 0) await processPushedSleep(sleepSummaries)
+      if (sleepPings.length > 0) {
+        const { accessToken } = await getValidAccessToken()
+        for (const ref of sleepPings) {
+          if (!ref.callbackURL) continue
+          try {
+            const fetched = await fetchPingPayload<IncomingDaily>(ref.callbackURL, accessToken)
+            if (fetched.length > 0) await processPushedSleep(fetched)
+          } catch (err) {
+            console.error('[garmin webhook] sleep ping fetch failed', ref, err)
+          }
+        }
+      }
+
+      // ── Body composition / weight ─────────────────────────────────────
+      const fullBody: GarminBodyComp[] = []
+      const bodyPings: PingRef[] = []
+      for (const b of bodyComps) {
+        if (hasBodyCompSummary(b)) fullBody.push(b)
+        else if (b.callbackURL) bodyPings.push(b)
+      }
+      if (fullBody.length > 0) await processPushedBodyComps(fullBody)
+      if (bodyPings.length > 0) {
+        const { accessToken } = await getValidAccessToken()
+        for (const ref of bodyPings) {
+          if (!ref.callbackURL) continue
+          try {
+            const fetched = await fetchPingPayload<GarminBodyComp>(ref.callbackURL, accessToken, 'bodyComps')
+            if (fetched.length > 0) await processPushedBodyComps(fetched)
+          } catch (err) {
+            console.error('[garmin webhook] bodyComp ping fetch failed', ref, err)
+          }
+        }
+      }
+
+      await prisma.garminConnection.updateMany({
+        where: { userId: 'default' },
+        data: { lastSyncAt: new Date(), lastError: null, lastErrorAt: null },
+      })
     } catch (err) {
       console.error('[garmin webhook] processing failed', err)
       const message = err instanceof Error ? err.message : String(err)

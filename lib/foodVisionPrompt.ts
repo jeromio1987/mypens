@@ -15,24 +15,28 @@ First set analysisMode:
 - "meal_estimate" for prepared food, plates, restaurant meals, loose produce, or anything that is not primarily packaging.
 
 Return ONLY valid JSON (no markdown fences) with this exact shape:
-{"analysisMode":"meal_estimate"|"nutrition_label"|"packaged_product","dishSummary":"one short sentence","items":[{"name":"string","brand":"string|null","meal":"breakfast"|"lunch"|"dinner"|"snack","kcal":number,"proteinG":number,"carbsG":number,"fatG":number,"fiberG":number,"packGrams":number|null,"assumedGrams":number|null,"portionGrams":number|null}]}
+{"analysisMode":"meal_estimate"|"nutrition_label"|"packaged_product","dishSummary":"one short sentence","items":[{"name":"string","brand":"string|null","meal":"breakfast"|"lunch"|"dinner"|"snack","kcal":number,"proteinG":number,"carbsG":number,"fatG":number,"fiberG":number,"packGrams":number|null,"assumedGrams":number|null,"portionGrams":number|null,"micros":{"sodiumMg":number,"potassiumMg":number,"calciumMg":number,"ironMg":number,"magnesiumMg":number,"vitaminCMg":number,"vitaminDMcg":number,"vitaminB12Mcg":number,"zincMg":number}|null,"tags":["high_protein"|"high_fiber"|"ultra_processed_guess"|"plant_forward"|"dairy"|"contains_alcohol"]|null}]}
 
 Field meanings:
 - brand: supermarket / manufacturer if visible (e.g. "Delhaize", "Kramer"); else null.
 - packGrams: full net weight of the package in grams when printed (1000 for 1 kg, 450 for 450g); else null.
 - assumedGrams: the grams that the kcal/macros you returned apply to (usually one serving from the label, or the whole pack if only per-container values are shown). REQUIRED whenever you return macros (>0).
 - portionGrams: your best guess of how much is being logged right now — default to packGrams for a sealed tub/bowl photo, or assumedGrams for a label-only photo. User will adjust later.
+- micros: optional object of micronutrients in the same portion as macros (mg or mcg as keyed). ONLY include keys that are clearly on a nutrition label; omit the whole field or use null when unknown. Never invent medical claims.
+- tags: optional soft display tags from the list above when obvious; else null. Display-only — not moralizing.
 
 Rules for meal_estimate:
 - 1–8 items: split distinct foods, or one combined line for a single mixed dish.
 - Estimate typical portion sizes; set assumedGrams/portionGrams to that estimate; packGrams usually null.
 - Note uncertainty briefly in dishSummary.
+- Prefer macros only; leave micros null unless a label is visible.
 
 Rules for nutrition_label / packaged_product:
 - Prefer reading brand + product name + net weight from packaging (Belgian/Dutch/French labels OK: netto gewicht, poids net, 1 kg e, Nutri-Score).
 - Prefer the standard "per serving" row for macros; set assumedGrams to that serving size in grams. If only per 100g is visible, return macros for 100g and set assumedGrams=100. If only per container, macros for the whole pack and assumedGrams=packGrams.
 - Usually return exactly 1 item. Name should be like "Delhaize 0% Greek yoghurt" or "Kramer Koolmeesters sauerkraut".
 - Numbers must match the label within rounding; kcal whole, macros up to one decimal.
+- Copy sodium/salt, vitamins, minerals into micros only when printed on the label.
 
 General:
 - Numbers must be non-negative.

@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FlaskConical, ChevronRight } from 'lucide-react'
+import { Camera, FlaskConical, ChevronRight } from 'lucide-react'
 
 type PanelRow = {
   id: string
@@ -19,8 +19,27 @@ type Settings = {
   labsLongevityLensEnabled: boolean
 }
 
+type DraftMarker = {
+  code: string
+  label: string
+  valueNum: number | null
+  valueText: string | null
+  unit: string | null
+  refLow: number | null
+  refHigh: number | null
+}
+
+type PhotoDraft = {
+  drawDate: string | null
+  labName: string | null
+  fasting: boolean | null
+  markers: DraftMarker[]
+  disclaimer?: string
+}
+
 export default function BloodworkClient() {
   const router = useRouter()
+  const fileRef = useRef<HTMLInputElement>(null)
   const [panels, setPanels] = useState<PanelRow[]>([])
   const [loading, setLoading] = useState(true)
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -28,6 +47,9 @@ export default function BloodworkClient() {
   const [labName, setLabName] = useState('')
   const [fasting, setFasting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const [draft, setDraft] = useState<PhotoDraft | null>(null)
 
   const load = () => {
     fetch('/api/bloodwork/panels')
@@ -107,6 +129,72 @@ export default function BloodworkClient() {
     }
   }
 
+  const onPhotoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setAnalyzing(true)
+    setPhotoError(null)
+    setDraft(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/bloodwork/photo-analyze', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Analyze failed')
+      setDraft({
+        drawDate: data.drawDate ?? null,
+        labName: data.labName ?? null,
+        fasting: typeof data.fasting === 'boolean' ? data.fasting : null,
+        markers: Array.isArray(data.markers) ? data.markers : [],
+        disclaimer: data.disclaimer,
+      })
+      if (data.drawDate) setDrawDate(data.drawDate)
+      if (data.labName) setLabName(String(data.labName))
+      if (typeof data.fasting === 'boolean') setFasting(data.fasting)
+    } catch (err: unknown) {
+      setPhotoError(err instanceof Error ? err.message : 'Analyze failed')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  const confirmDraft = async () => {
+    if (!draft || saving) return
+    const date = draft.drawDate && /^\d{4}-\d{2}-\d{2}$/.test(draft.drawDate) ? draft.drawDate : drawDate
+    if (!date) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/bloodwork/panels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          drawDate: date,
+          labName: (draft.labName || labName).trim() || null,
+          fasting: draft.fasting ?? fasting,
+          markers: draft.markers.map((m, i) => ({
+            code: m.code,
+            label: m.label,
+            valueNum: m.valueNum,
+            valueText: m.valueText,
+            unit: m.unit,
+            refLow: m.refLow,
+            refHigh: m.refHigh,
+            sortOrder: i,
+          })),
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error)
+      setDraft(null)
+      router.push(`/bloodwork/${d.id}`)
+    } catch (err: unknown) {
+      setPhotoError(err instanceof Error ? err.message : 'Create failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-pens-deep text-pens-cream pb-24">
       <header className="sticky top-0 z-40 bg-pens-deep/95 backdrop-blur border-b border-pens-muted/20">
@@ -126,7 +214,7 @@ export default function BloodworkClient() {
 
       <div className="max-w-screen-lg mx-auto px-6 py-10 space-y-10">
         <p className="text-sm text-pens-cream/55 leading-relaxed max-w-2xl">
-          Manual lab panels for now. This module is for <strong className="text-pens-cream/80">self-tracking and context</strong> — not diagnosis or
+          Manual entry or photo OCR draft. This module is for <strong className="text-pens-cream/80">self-tracking and context</strong> — not diagnosis or
           treatment. Discuss results with a clinician.
         </p>
 
@@ -162,6 +250,67 @@ export default function BloodworkClient() {
             </label>
           </div>
         )}
+
+        <section className="rounded-2xl border border-rose-500/25 bg-pens-surface/30 p-6 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-widest text-rose-300/90">Photo → draft</h2>
+              <p className="text-xs text-pens-cream/45 mt-1">Upload a lab report photo. Review every value before saving.</p>
+            </div>
+            <button
+              type="button"
+              disabled={analyzing}
+              onClick={() => fileRef.current?.click()}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-800/80 hover:bg-rose-700 text-sm font-semibold disabled:opacity-50"
+            >
+              <Camera size={16} />
+              {analyzing ? 'Reading…' : 'Upload photo'}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPhotoPick} />
+          </div>
+          {photoError && <p className="text-sm text-red-300">{photoError}</p>}
+          {draft && (
+            <div className="space-y-3 border-t border-pens-muted/20 pt-4">
+              <p className="text-xs text-pens-cream/50">
+                Draft · {draft.markers.length} markers
+                {draft.drawDate ? ` · ${draft.drawDate}` : ''}
+                {draft.labName ? ` · ${draft.labName}` : ''}
+              </p>
+              <ul className="max-h-48 overflow-y-auto space-y-1 text-xs text-pens-cream/70">
+                {draft.markers.slice(0, 20).map((m, i) => (
+                  <li key={`${m.code}-${i}`} className="flex justify-between gap-2">
+                    <span className="truncate">{m.label}</span>
+                    <span className="tabular-nums shrink-0">
+                      {m.valueNum != null ? m.valueNum : m.valueText ?? '—'}
+                      {m.unit ? ` ${m.unit}` : ''}
+                    </span>
+                  </li>
+                ))}
+                {draft.markers.length > 20 && (
+                  <li className="text-pens-cream/40">…and {draft.markers.length - 20} more</li>
+                )}
+              </ul>
+              <p className="text-[10px] text-pens-cream/35">{draft.disclaimer}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={saving || draft.markers.length === 0}
+                  onClick={confirmDraft}
+                  className="px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-sm font-semibold disabled:opacity-50"
+                >
+                  {saving ? 'Creating…' : 'Confirm → create panel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraft(null)}
+                  className="px-4 py-2 rounded-lg border border-pens-muted/40 text-sm text-pens-cream/70"
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
 
         <section className="rounded-2xl border border-pens-muted/25 bg-pens-surface/30 p-6">
           <h2 className="text-xs font-bold uppercase tracking-widest text-pens-cream/50 mb-4">New panel</h2>

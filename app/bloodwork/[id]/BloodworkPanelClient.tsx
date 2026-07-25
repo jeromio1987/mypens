@@ -5,6 +5,12 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { FlaskConical, Plus, Trash2, Save } from 'lucide-react'
 import { longevityHintsForCodes } from '@/lib/bloodworkLongevityHints'
+import {
+  FLAG_CHIP,
+  flagRefRange,
+  softBloodworkRead,
+  type RefFlag,
+} from '@/lib/bloodworkFlags'
 
 type Marker = {
   id?: string
@@ -187,6 +193,28 @@ export default function BloodworkPanelClient() {
   }
 
   const hints = longevityOn ? longevityHintsForCodes(rows.map(r => r.code).filter(Boolean)) : []
+  const softRead = softBloodworkRead(
+    rows
+      .filter(r => r.code.trim() || r.label.trim())
+      .map(r => {
+        const vn = r.valueNum === '' ? null : parseFloat(r.valueNum)
+        const rl = r.refLow === '' ? null : parseFloat(r.refLow)
+        const rh = r.refHigh === '' ? null : parseFloat(r.refHigh)
+        return {
+          code: r.code || r.label,
+          label: r.label || r.code,
+          valueNum: vn != null && Number.isFinite(vn) ? vn : null,
+          refLow: rl != null && Number.isFinite(rl) ? rl : null,
+          refHigh: rh != null && Number.isFinite(rh) ? rh : null,
+          flag: flagRefRange(
+            vn != null && Number.isFinite(vn) ? vn : null,
+            rl != null && Number.isFinite(rl) ? rl : null,
+            rh != null && Number.isFinite(rh) ? rh : null,
+          ),
+        }
+      }),
+    hints.map(h => h.title),
+  )
 
   if (loading) {
     return (
@@ -304,6 +332,12 @@ export default function BloodworkPanelClient() {
           <p className="text-xs text-pens-cream/40 border border-pens-muted/20 rounded-lg p-3">{ctx.reason ?? 'Context hidden.'}</p>
         )}
 
+        <section className="rounded-2xl border border-rose-500/20 bg-pens-surface/25 p-5 space-y-2">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-rose-300/90">Soft read</h2>
+          <p className="text-sm text-pens-cream/75 leading-relaxed">{softRead.summary}</p>
+          <p className="text-[10px] text-pens-cream/35 leading-relaxed">{softRead.disclaimer}</p>
+        </section>
+
         {longevityOn && hints.length > 0 && (
           <section className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 p-5 space-y-3">
             <h2 className="text-xs font-bold uppercase tracking-widest text-emerald-300/90">Longevity / prevention lens</h2>
@@ -341,11 +375,22 @@ export default function BloodworkPanelClient() {
                   <th className="p-2 w-16">Unit</th>
                   <th className="p-2 w-16">Ref low</th>
                   <th className="p-2 w-16">Ref hi</th>
+                  <th className="p-2 w-20">Flag</th>
                   <th className="p-2 w-10" />
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {rows.map((r, i) => {
+                  const vn = r.valueNum === '' ? null : parseFloat(r.valueNum)
+                  const rl = r.refLow === '' ? null : parseFloat(r.refLow)
+                  const rh = r.refHigh === '' ? null : parseFloat(r.refHigh)
+                  const flag: RefFlag = flagRefRange(
+                    vn != null && Number.isFinite(vn) ? vn : null,
+                    rl != null && Number.isFinite(rl) ? rl : null,
+                    rh != null && Number.isFinite(rh) ? rh : null,
+                  )
+                  const chip = FLAG_CHIP[flag]
+                  return (
                   <tr key={i} className="border-t border-pens-muted/15">
                     <td className="p-1">
                       <input
@@ -399,6 +444,11 @@ export default function BloodworkPanelClient() {
                         onChange={e => setRows(rs => rs.map((x, j) => (j === i ? { ...x, refHigh: e.target.value } : x)))}
                       />
                     </td>
+                    <td className="p-1">
+                      <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded border ${chip.className}`}>
+                        {chip.label}
+                      </span>
+                    </td>
                     <td className="p-1 text-center">
                       <button
                         type="button"
@@ -410,7 +460,8 @@ export default function BloodworkPanelClient() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

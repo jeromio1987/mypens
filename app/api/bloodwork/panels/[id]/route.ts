@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { normalizeMarkerCode } from '@/lib/bloodworkFlags'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,11 +95,11 @@ export async function PUT(request: Request, ctx: Ctx) {
     const markers = markersRaw
       .map((raw, i) => {
         const m = raw as Record<string, unknown>
-        const code = cleanStr(m.code)?.toLowerCase().replace(/\s+/g, '_')
         const label = cleanStr(m.label)
-        if (!code || !label) return null
+        const codeRaw = cleanStr(m.code) || label
+        if (!codeRaw || !label) return null
         return {
-          code,
+          code: normalizeMarkerCode(codeRaw),
           label,
           valueNum: toNum(m.valueNum) ?? null,
           valueText: cleanStr(m.valueText),
