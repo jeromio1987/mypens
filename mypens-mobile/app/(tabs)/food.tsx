@@ -468,6 +468,8 @@ export default function FoodScreen() {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed')
     }
   }
+
+  const mutation = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw new Error('Enter a food name')
       const payload = {
