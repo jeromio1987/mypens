@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText, Anchor, BookOpen, UtensilsCrossed, FlaskConical } from 'lucide-react'
+import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText, Anchor, BookOpen, UtensilsCrossed, FlaskConical, Cable } from 'lucide-react'
 import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 import NotificationsBadge from '@/components/shared/NotificationsBadge'
 
@@ -45,6 +45,7 @@ const MODULES = [
   { href: '/weight',       label: 'Weight',   icon: Scale },
   { href: '/food',         label: 'Food',     icon: UtensilsCrossed },
   { href: '/sleep',        label: 'Sleep',    icon: Moon },
+  { href: '/integrations', label: 'Sync',     icon: Cable },
   { href: '/anchor',       label: 'Anchor',   icon: Anchor },
   { href: '/measurements', label: 'Body',     icon: Ruler },
   { href: '/bloodwork',    label: 'Labs',     icon: FlaskConical },

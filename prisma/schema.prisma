@@ -200,6 +200,9 @@ model HealthConnectConnection {
   userId      String    @unique @default("default")
   pairingToken String   @unique
   deviceLabel String?
+  // When true, /ingest promotes new sessions straight to TrainingEntry
+  // (skips the review queue on /integrations).
+  autoImportOnIngest Boolean @default(false)
   lastSyncAt  DateTime?
   lastError         String?
   lastErrorAt       DateTime?

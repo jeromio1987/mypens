@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
-import { getDayEnergyBalance, getEnergyBalanceRange } from '@/lib/energyBalance'
+import {
+  getDayEnergyBalance,
+  getEnergyBalanceRange,
+  getWeekEnergyRecap,
+} from '@/lib/energyBalance'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +13,14 @@ export async function GET(request: Request) {
     const date = searchParams.get('date')
     const from = searchParams.get('from')
     const to = searchParams.get('to')
+    const week = searchParams.get('week')
+    const mode = searchParams.get('mode')
+
+    if (week === '1' || mode === 'week') {
+      const asOf = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined
+      const recap = await getWeekEnergyRecap(asOf)
+      return NextResponse.json(recap)
+    }
 
     if (from && to) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {

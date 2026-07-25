@@ -14,6 +14,7 @@ describe('isPublicApiRoute', () => {
     expect(isPublicApiRoute('/api/integrations/garmin/webhook')).toBe(true)
     expect(isPublicApiRoute('/api/integrations/healthkit/ingest')).toBe(true)
     expect(isPublicApiRoute('/api/integrations/healthconnect/ingest')).toBe(true)
+    expect(isPublicApiRoute('/api/integrations/healthconnect/sleep-ingest')).toBe(true)
     expect(isPublicApiRoute('/api/cron/foo')).toBe(true)
     expect(isPublicApiRoute('/api/public/snapshot')).toBe(true)
   })

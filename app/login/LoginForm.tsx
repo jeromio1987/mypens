@@ -91,6 +91,13 @@ export default function LoginForm() {
       >
         {submitting ? 'Signing in…' : 'Sign in'}
       </button>
+
+      <p className="text-[10px] text-pens-cream/40 leading-relaxed">
+        Local gate uses <code className="text-pens-cream/55">OWNER_PASSWORD</code> from the Next{' '}
+        <code className="text-pens-cream/55">.env</code> (exact match). If Sign in flashes and you
+        stay here, open DevTools → Network → <code className="text-pens-cream/55">/api/auth/login</code>{' '}
+        and check status 200 vs 401.
+      </p>
     </form>
   )
 }

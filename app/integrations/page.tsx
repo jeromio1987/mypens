@@ -67,11 +67,11 @@ const PROVIDERS: ProviderConfig[] = [
     initial: 'A',
     color: 'bg-emerald-600',
     description:
-      'Generate a pairing token and use it from the Android companion app to push Health Connect sessions here for review.',
+      'Auto-sync: phone pulls Health Connect (workouts + sleep). Auto-import: web accepts new workouts without review. Sleep nights upsert straight into SleepEntry. Pair once, then let the phone push Garmin → HC → MY PENS.',
     authMode: 'pairing',
     syncLabel: 'Refresh',
     pairingInstructions:
-      'Paste this token into the Android companion app. The app will POST sessions to /api/integrations/healthconnect/ingest with this Bearer token.',
+      'Paste this token into the Android companion app. Workouts POST to /api/integrations/healthconnect/ingest; sleep POST to /api/integrations/healthconnect/sleep-ingest.',
   },
 ]
 
@@ -82,6 +82,10 @@ interface Status {
   scope?: string | null
   deviceLabel?: string | null
   pendingCount?: number
+  /** Pairing providers: how many TrainingEntry rows already imported from this source. */
+  importedCount?: number
+  /** Health Connect only: promote ingest straight to TrainingEntry. */
+  autoImportOnIngest?: boolean
   lastSyncAt: string | null
   /** Pairing providers only: last successful background ingest time. */
   lastIngestAt?: string | null
@@ -159,8 +163,34 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
   const [skippedError, setSkippedError] = useState<string | null>(null)
   const [unskipping, setUnskipping] = useState<Set<string>>(new Set())
   const [skippedSelected, setSkippedSelected] = useState<Set<string>>(new Set())
+  const [savingAutoImport, setSavingAutoImport] = useState(false)
 
   const base = `/api/integrations/${provider.id}`
+
+  const setAutoImportOnIngest = async (on: boolean) => {
+    if (provider.id !== 'healthconnect') return
+    setSavingAutoImport(true)
+    setFlash(null)
+    try {
+      const res = await fetch(`${base}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autoImportOnIngest: on }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to update')
+      setStatus(s => (s ? { ...s, autoImportOnIngest: data.autoImportOnIngest } : s))
+      setFlash(
+        data.autoImportOnIngest
+          ? 'Auto-import on — new HC sessions go straight to Training.'
+          : 'Auto-import off — new HC sessions wait in the review queue.',
+      )
+    } catch (err) {
+      setFlash(err instanceof Error ? err.message : 'Failed to update auto-import')
+    } finally {
+      setSavingAutoImport(false)
+    }
+  }
 
   const loadStatus = useCallback(() => {
     setLoadingStatus(true)
@@ -436,6 +466,9 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
               {typeof status.pendingCount === 'number' && (
                 <div>{status.pendingCount} pending</div>
               )}
+              {typeof status.importedCount === 'number' && status.importedCount > 0 && (
+                <div className="text-pens-cream/60">{status.importedCount} in Training</div>
+              )}
               {provider.id === 'strava' && (
                 <div className={status.webhookActive ? 'text-emerald-400' : 'text-pens-cream/40'}>
                   Webhook: {status.webhookActive ? 'active' : 'inactive'}
@@ -504,6 +537,26 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
           </button>
         )}
       </div>
+
+      {status?.connected && provider.id === 'healthconnect' && (
+        <div className="rounded-lg border border-pens-muted/20 bg-pens-navy/30 px-3 py-3 space-y-2">
+          <p className="text-xs text-pens-cream/60 leading-relaxed">
+            <span className="text-pens-cream/80 font-medium">Auto-sync</span> (phone): pulls Health Connect when you open Training / Sync now.
+            {' '}
+            <span className="text-pens-cream/80 font-medium">Auto-import</span> (web): accepts new drafts without review.
+          </p>
+          <label className="flex items-center gap-2 text-sm text-pens-cream cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="rounded border-pens-muted/40"
+              checked={Boolean(status.autoImportOnIngest)}
+              disabled={savingAutoImport}
+              onChange={e => void setAutoImportOnIngest(e.target.checked)}
+            />
+            Auto-import new Health Connect drafts
+          </label>
+        </div>
+      )}
 
       {status?.connected && provider.authMode === 'pairing' && status.stale && (
         <div className="text-xs bg-amber-900/20 border border-amber-500/30 text-amber-200 rounded-lg px-3 py-2">
@@ -576,7 +629,9 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
           ) : drafts.length === 0 ? (
             <p className="text-sm text-pens-cream/40">
               {provider.authMode === 'pairing'
-                ? 'No workouts pushed yet from the companion app.'
+                ? status?.importedCount && status.importedCount > 0
+                  ? `Queue empty — ${status.importedCount} workouts already imported into Training. Open /training to see them. Phone Sync now only adds new sessions.`
+                  : 'No workouts in the review queue yet. On the phone: Training → Health Connect → Sync now, then tap Refresh here.'
                 : 'No activities found in the recent window.'}
             </p>
           ) : (

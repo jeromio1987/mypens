@@ -3,6 +3,10 @@ import { Platform } from 'react-native'
 
 const TOKEN_KEY = '@mypens/hc_pairing_token'
 const LAST_SYNC_KEY = '@mypens/hc_last_sync_iso'
+const AUTO_SYNC_KEY = '@mypens/hc_auto_sync'
+
+/** Minimum gap between automatic syncs (manual Sync now is always allowed). */
+export const HC_AUTO_SYNC_MIN_INTERVAL_MS = 20 * 60 * 1000
 
 export type HealthConnectExerciseSession = {
   id: string
@@ -32,6 +36,17 @@ export async function getHcLastSyncIso(): Promise<string | null> {
   return AsyncStorage.getItem(LAST_SYNC_KEY)
 }
 
+/** Default ON on Android; persisted once the user toggles. */
+export async function getHcAutoSyncEnabled(): Promise<boolean> {
+  const v = await AsyncStorage.getItem(AUTO_SYNC_KEY)
+  if (v === null) return Platform.OS === 'android'
+  return v === '1'
+}
+
+export async function setHcAutoSyncEnabled(on: boolean): Promise<void> {
+  await AsyncStorage.setItem(AUTO_SYNC_KEY, on ? '1' : '0')
+}
+
 function pensBaseUrl(): string {
   return (process.env.EXPO_PUBLIC_PENS_API_URL ?? '').replace(/\/$/, '')
 }
@@ -47,8 +62,26 @@ export function isAndroidHealthConnectHost(): boolean {
 }
 
 export type HcSyncResult =
-  | { ok: true; stored: number; skipped: number; read: number }
+  | { ok: true; stored: number; skipped: number; read: number; imported?: number; autoImport?: boolean }
   | { ok: false; error: string }
+
+/**
+ * If auto-sync is enabled, a pairing token exists, and the last sync is older
+ * than ~20 min (or never), run a Health Connect pull. Returns null when skipped.
+ */
+export async function maybeAutoSyncHealthConnect(): Promise<HcSyncResult | null> {
+  if (!isAndroidHealthConnectHost()) return null
+  if (!(await getHcAutoSyncEnabled())) return null
+  if (!(await getHcPairingToken())) return null
+
+  const last = await getHcLastSyncIso()
+  if (last) {
+    const age = Date.now() - Date.parse(last)
+    if (Number.isFinite(age) && age < HC_AUTO_SYNC_MIN_INTERVAL_MS) return null
+  }
+
+  return syncHealthConnectSessions()
+}
 
 /**
  * Read recent ExerciseSession records from Health Connect and POST them to
@@ -103,10 +136,8 @@ export async function syncHealthConnectSessions(): Promise<HcSyncResult> {
   }
 
   const end = new Date()
-  const lastIso = await getHcLastSyncIso()
-  const start = lastIso
-    ? new Date(lastIso)
-    : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000)
+  // Always re-read last 14 days; server dedupes by externalId.
+  const start = new Date(end.getTime() - 14 * 24 * 60 * 60 * 1000)
 
   const { records } = await hc.readRecords('ExerciseSession', {
     timeRangeFilter: {
@@ -161,6 +192,8 @@ export async function syncHealthConnectSessions(): Promise<HcSyncResult> {
     ok?: boolean
     stored?: number
     skipped?: number
+    imported?: number
+    autoImport?: boolean
     error?: string
   }
 
@@ -177,5 +210,7 @@ export async function syncHealthConnectSessions(): Promise<HcSyncResult> {
     stored: body.stored ?? 0,
     skipped: body.skipped ?? 0,
     read: sessions.length,
+    imported: body.imported ?? 0,
+    autoImport: body.autoImport ?? false,
   }
 }

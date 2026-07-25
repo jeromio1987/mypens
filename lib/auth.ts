@@ -70,11 +70,14 @@ export async function verifySessionToken(token: string | undefined): Promise<boo
 }
 
 export async function verifyOwnerPassword(submitted: string): Promise<boolean> {
-  const expected = process.env.OWNER_PASSWORD
+  const expected = process.env.OWNER_PASSWORD?.trim()
   if (!expected) return false
   if (typeof submitted !== 'string' || submitted.length === 0) return false
+  // Compare trimmed submitted too — browsers/autofill sometimes add trailing spaces
+  const submittedTrim = submitted.trim()
+  if (!submittedTrim) return false
 
-  const submittedHash = await hmacHex('mp-password-compare', submitted)
+  const submittedHash = await hmacHex('mp-password-compare', submittedTrim)
   const expectedHash = await hmacHex('mp-password-compare', expected)
   return timingSafeEqual(submittedHash, expectedHash)
 }

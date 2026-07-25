@@ -27,6 +27,7 @@ import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
+import { HealthConnectSleepCard } from '@/components/HealthConnectSleepCard'
 
 const MOD = MODULE_COLORS.sleep
 const today = () => {
@@ -260,6 +261,12 @@ export default function SleepScreen() {
           </Text>
         </View>
       ) : null}
+
+      <HealthConnectSleepCard
+        onSynced={() => {
+          void qc.invalidateQueries({ queryKey: ['sleep'] })
+        }}
+      />
 
       {/* Form */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

@@ -14,6 +14,7 @@ export const PUBLIC_API_PREFIXES = [
   '/api/integrations/strava/cron',
   '/api/integrations/healthkit/ingest',
   '/api/integrations/healthconnect/ingest',
+  '/api/integrations/healthconnect/sleep-ingest',
   '/api/cron/',
   '/api/public/',
 ] as const

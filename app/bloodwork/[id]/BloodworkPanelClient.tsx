@@ -4,13 +4,14 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { FlaskConical, Plus, Trash2, Save } from 'lucide-react'
-import { longevityHintsForCodes } from '@/lib/bloodworkLongevityHints'
 import {
   FLAG_CHIP,
   flagRefRange,
   softBloodworkRead,
   type RefFlag,
 } from '@/lib/bloodworkFlags'
+import { schildklierRead } from '@/lib/bloodworkThyroidRead'
+import { longevityHintsForCodes } from '@/lib/bloodworkLongevityHints'
 
 type Marker = {
   id?: string
@@ -216,6 +217,24 @@ export default function BloodworkPanelClient() {
     hints.map(h => h.title),
   )
 
+  const thyroid = schildklierRead(
+    rows
+      .filter(r => r.code.trim() || r.label.trim())
+      .map(r => {
+        const vn = r.valueNum === '' ? null : parseFloat(r.valueNum)
+        const rl = r.refLow === '' ? null : parseFloat(r.refLow)
+        const rh = r.refHigh === '' ? null : parseFloat(r.refHigh)
+        return {
+          code: r.code || r.label,
+          label: r.label || r.code,
+          valueNum: vn != null && Number.isFinite(vn) ? vn : null,
+          refLow: rl != null && Number.isFinite(rl) ? rl : null,
+          refHigh: rh != null && Number.isFinite(rh) ? rh : null,
+          unit: r.unit.trim() || null,
+        }
+      }),
+  )
+
   if (loading) {
     return (
       <main className="min-h-screen bg-pens-deep text-pens-cream p-8">
@@ -337,6 +356,28 @@ export default function BloodworkPanelClient() {
           <p className="text-sm text-pens-cream/75 leading-relaxed">{softRead.summary}</p>
           <p className="text-[10px] text-pens-cream/35 leading-relaxed">{softRead.disclaimer}</p>
         </section>
+
+        {thyroid.present && (
+          <section className="rounded-2xl border border-violet-500/25 bg-violet-950/20 p-5 space-y-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-violet-300/90">{thyroid.title}</h2>
+            <p className="text-sm text-pens-cream/75 leading-relaxed">{thyroid.summary}</p>
+            <ul className="flex flex-wrap gap-2">
+              {thyroid.markers.map(m => {
+                const chip = FLAG_CHIP[m.flag]
+                return (
+                  <li
+                    key={m.code}
+                    className={`text-[10px] px-2 py-1 rounded-md border ${chip.className}`}
+                  >
+                    {m.label}
+                    {m.valueNum != null ? ` · ${m.valueNum}${m.unit ? ` ${m.unit}` : ''}` : ''} · {chip.label}
+                  </li>
+                )
+              })}
+            </ul>
+            <p className="text-[10px] text-pens-cream/35 leading-relaxed">{thyroid.disclaimer}</p>
+          </section>
+        )}
 
         {longevityOn && hints.length > 0 && (
           <section className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 p-5 space-y-3">

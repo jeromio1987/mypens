@@ -1,119 +1,62 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
-  AppState,
   Platform,
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native'
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
-import { useFocusEffect } from '@react-navigation/native'
 
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
 import {
-  getHcAutoSyncEnabled,
-  getHcLastSyncIso,
   getHcPairingToken,
   isAndroidHealthConnectHost,
-  maybeAutoSyncHealthConnect,
-  setHcAutoSyncEnabled,
   setHcPairingToken,
-  syncHealthConnectSessions,
-  type HcSyncResult,
 } from '@/lib/healthConnectSync'
-import { syncHealthConnectSleep, type HcSleepSyncResult } from '@/lib/healthConnectSleepSync'
+import {
+  getHcLastSleepSyncIso,
+  syncHealthConnectSleep,
+} from '@/lib/healthConnectSleepSync'
 
-const MOD = MODULE_COLORS.training
+const MOD = MODULE_COLORS.sleep
 
-function formatWorkoutStatus(result: Extract<HcSyncResult, { ok: true }>): string {
-  if (result.read === 0) {
-    return 'Workouts: no sessions in HC (last 14 days)'
-  }
-  if (result.autoImport) {
-    return `Workouts: ${result.imported ?? result.stored} imported, ${result.skipped} skipped (${result.read} read)`
-  }
-  return `Workouts: ${result.stored} new, ${result.skipped} skipped (${result.read} read) → /integrations`
+type Props = {
+  /** Called after a successful sync so the Sleep list can refetch. */
+  onSynced?: () => void
 }
 
-function formatSleepStatus(result: HcSleepSyncResult): string {
-  if (!result.ok) return `Sleep: ${result.error}`
-  if (result.read === 0) return 'Sleep: no SleepSession in HC'
-  return `Sleep: ${result.stored} new night(s), ${result.skipped} already logged → Sleep tab (not workout queue)`
-}
-
-function combineStatus(workouts: HcSyncResult, sleep: HcSleepSyncResult): string {
-  const parts: string[] = []
-  if (workouts.ok) parts.push(formatWorkoutStatus(workouts))
-  else parts.push(`Workouts: ${workouts.error}`)
-  parts.push(formatSleepStatus(sleep))
-  const anyOk = workouts.ok || sleep.ok
-  return anyOk ? `Synced — ${parts.join('. ')}.` : parts.join(' · ')
-}
-
-export function HealthConnectCard() {
+/**
+ * Sleep-specific Health Connect card.
+ * Sleep lands in SleepEntry immediately — not the workout review queue.
+ */
+export function HealthConnectSleepCard({ onSynced }: Props) {
   const colors = useColors()
   const [token, setToken] = useState('')
   const [saved, setSaved] = useState(false)
   const [lastSync, setLastSync] = useState<string | null>(null)
-  const [autoSync, setAutoSync] = useState(true)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
-  const autoRunning = useRef(false)
 
   const reload = useCallback(async () => {
     setToken(await getHcPairingToken())
-    setLastSync(await getHcLastSyncIso())
+    setLastSync(await getHcLastSleepSyncIso())
     setSaved(Boolean(await getHcPairingToken()))
-    setAutoSync(await getHcAutoSyncEnabled())
   }, [])
 
   useEffect(() => {
     void reload()
   }, [reload])
 
-  const runAutoIfDue = useCallback(async () => {
-    if (autoRunning.current || busy) return
-    autoRunning.current = true
-    try {
-      const workouts = await maybeAutoSyncHealthConnect()
-      if (!workouts) return
-      // Same throttle window as workouts — pull sleep whenever auto-sync fires.
-      const sleep = await syncHealthConnectSleep()
-      setStatus(`Auto-sync: ${combineStatus(workouts, sleep)}`)
-      if (workouts.ok) setLastSync(await getHcLastSyncIso())
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Auto-sync failed')
-    } finally {
-      autoRunning.current = false
-    }
-  }, [busy])
-
-  // Training tab focus — pull HC if preference on and last sync is stale.
-  useFocusEffect(
-    useCallback(() => {
-      void runAutoIfDue()
-    }, [runAutoIfDue]),
-  )
-
-  // App foreground — same throttle as tab focus.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (st) => {
-      if (st === 'active') void runAutoIfDue()
-    })
-    return () => sub.remove()
-  }, [runAutoIfDue])
-
   if (!isAndroidHealthConnectHost()) {
     return (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.eyebrow, { color: MOD.primary }]}>Health Connect</Text>
+        <Text style={[styles.eyebrow, { color: MOD.primary }]}>Health Connect · Sleep</Text>
         <Text style={[styles.body, { color: colors.mutedForeground }]}>
-          Android only. On iPhone use Apple Health instead.
+          Android only. Pair once on the Training tab (or below), then Sync sleep here.
         </Text>
       </View>
     )
@@ -125,16 +68,6 @@ export function HealthConnectCard() {
     setStatus(token.trim() ? 'Token saved on this phone.' : 'Token cleared.')
   }
 
-  const toggleAutoSync = async (on: boolean) => {
-    setAutoSync(on)
-    await setHcAutoSyncEnabled(on)
-    setStatus(
-      on
-        ? 'Auto-sync on — pulls workouts + sleep when you open Training (~20 min gap).'
-        : 'Auto-sync off.',
-    )
-  }
-
   const runSync = async () => {
     setBusy(true)
     setStatus(null)
@@ -143,12 +76,24 @@ export function HealthConnectCard() {
         await setHcPairingToken(token)
         setSaved(true)
       }
-      const workouts = await syncHealthConnectSessions()
-      const sleep = await syncHealthConnectSleep()
-      setStatus(combineStatus(workouts, sleep))
-      if (workouts.ok) setLastSync(await getHcLastSyncIso())
+      const result = await syncHealthConnectSleep()
+      if (result.ok) {
+        if (result.read === 0) {
+          setStatus(
+            'OK — no SleepSession rows in Health Connect (last 14 days). Confirm Garmin writes sleep to HC.',
+          )
+        } else {
+          setStatus(
+            `Sleep synced — ${result.stored} new night(s), ${result.skipped} already logged (${result.read} read). Check Recent below.`,
+          )
+        }
+        setLastSync(await getHcLastSleepSyncIso())
+        onSynced?.()
+      } else {
+        setStatus(result.error)
+      }
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Sync failed')
+      setStatus(err instanceof Error ? err.message : 'Sleep sync failed')
     } finally {
       setBusy(false)
     }
@@ -157,19 +102,21 @@ export function HealthConnectCard() {
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.headerRow}>
-        <MaterialCommunityIcons name="heart-pulse" size={18} color={MOD.primary} />
+        <MaterialCommunityIcons name="sleep" size={18} color={MOD.primary} />
         <View style={{ flex: 1 }}>
-          <Text style={[styles.eyebrow, { color: MOD.primary }]}>Health Connect</Text>
+          <Text style={[styles.eyebrow, { color: MOD.primary }]}>Health Connect · Sleep</Text>
           <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-            Garmin → Health Connect → MY PENS
+            Garmin → Health Connect → Sleep log
           </Text>
         </View>
       </View>
 
       <Text style={[styles.body, { color: colors.mutedForeground }]}>
-        1. Open web /integrations → Health Connect → Pair → copy token{'\n'}
-        2. Paste below → Save{'\n'}
-        3. Sync now (or Auto-sync) — workouts → review/import; sleep nights → Sleep tab directly
+        Sleep is not the workout queue.{'\n'}
+        1. Same pairing token as Training (paste once if needed){'\n'}
+        2. Allow SleepSession in Health Connect{'\n'}
+        3. Sync now — nights go straight into Recent below{'\n'}
+        Quality defaults to 3★ unless HRV is available; edit stars anytime.
       </Text>
 
       <TextInput
@@ -190,21 +137,6 @@ export function HealthConnectCard() {
         ]}
       />
 
-      <View style={styles.autoRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.btnText, { color: colors.foreground }]}>Auto-sync</Text>
-          <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-            Phone pulls workouts + sleep from HC. Web auto-import skips workout review only.
-          </Text>
-        </View>
-        <Switch
-          value={autoSync}
-          onValueChange={(v) => void toggleAutoSync(v)}
-          trackColor={{ false: colors.border, true: MOD.primary }}
-          thumbColor="#fff"
-        />
-      </View>
-
       <View style={styles.row}>
         <Pressable
           onPress={() => void saveToken()}
@@ -224,7 +156,7 @@ export function HealthConnectCard() {
           ) : (
             <>
               <Feather name="refresh-cw" size={14} color="#fff" />
-              <Text style={styles.btnPrimaryText}>Sync now</Text>
+              <Text style={styles.btnPrimaryText}>Sync sleep</Text>
             </>
           )}
         </Pressable>
@@ -232,7 +164,7 @@ export function HealthConnectCard() {
 
       {lastSync && (
         <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-          Last sync: {new Date(lastSync).toLocaleString()}
+          Last sleep sync: {new Date(lastSync).toLocaleString()}
         </Text>
       )}
       {status && (
@@ -241,7 +173,7 @@ export function HealthConnectCard() {
             styles.meta,
             {
               color:
-                status.includes('Synced') || status.includes('Auto-sync: Synced') || status.includes('OK')
+                status.startsWith('Sleep synced') || status.startsWith('OK')
                   ? colors.success
                   : colors.warning,
             },
@@ -265,6 +197,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     gap: 10,
+    marginHorizontal: 16,
     marginBottom: 12,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -283,11 +216,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
-  },
-  autoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
   },
   row: { flexDirection: 'row', gap: 8 },
   btn: {

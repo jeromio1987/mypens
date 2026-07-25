@@ -1,4 +1,15 @@
 import { prisma } from '@/lib/db'
+import {
+  buildWeekEnergyRecap,
+  rolling7Window,
+  type RawDayEnergy,
+  type WeekEnergyRecap,
+} from '@/lib/energyWeek'
+import {
+  calibrateWeekVsWeight,
+  type WeightCalibration,
+  type WeightPoint,
+} from '@/lib/energyWeightCalibration'
 
 export type EnergyActivitySource = {
   id: string
@@ -148,4 +159,123 @@ export async function getEnergyBalanceRange(from: string, to: string): Promise<D
     out.push(await getDayEnergyBalance(date))
   }
   return out
+}
+
+function weightOnOrBefore(
+  date: string,
+  weights: { date: string; scaleKg: number }[],
+): number | null {
+  let best: number | null = null
+  for (const w of weights) {
+    if (w.date <= date) best = w.scaleKg
+  }
+  return best
+}
+
+/**
+ * Rolling 7-day energy recap ending `asOf` (default today), with imputed gaps + optional scale calibration.
+ */
+export async function getWeekEnergyRecap(
+  asOf?: string,
+): Promise<WeekEnergyRecap & { calibration: WeightCalibration | null }> {
+  const day =
+    asOf && /^\d{4}-\d{2}-\d{2}$/.test(asOf)
+      ? asOf
+      : new Date().toISOString().slice(0, 10)
+  const { from, to, dates } = rolling7Window(day)
+
+  // ±1 day for weight endpoints
+  const weightFrom = (() => {
+    const d = new Date(`${from}T12:00:00`)
+    d.setDate(d.getDate() - 1)
+    return d.toISOString().slice(0, 10)
+  })()
+  const weightTo = (() => {
+    const d = new Date(`${to}T12:00:00`)
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().slice(0, 10)
+  })()
+
+  const [foodRows, garminActs, training, weights] = await Promise.all([
+    prisma.foodEntry.groupBy({
+      by: ['date'],
+      where: { date: { gte: from, lte: to } },
+      _sum: { kcal: true },
+    }),
+    prisma.garminActivity.findMany({
+      where: { date: { gte: from, lte: to } },
+      select: { date: true, calories: true },
+    }),
+    prisma.trainingEntry.findMany({
+      where: { date: { gte: from, lte: to } },
+      select: { date: true, notes: true, externalRaw: true, source: true },
+    }),
+    prisma.weightEntry.findMany({
+      where: { date: { gte: weightFrom, lte: weightTo } },
+      select: { date: true, scaleKg: true },
+      orderBy: { date: 'asc' },
+    }),
+  ])
+
+  const foodByDate = new Map<string, number>()
+  for (const r of foodRows) {
+    foodByDate.set(r.date, Math.round(r._sum.kcal ?? 0))
+  }
+
+  const garminByDate = new Map<string, number>()
+  for (const g of garminActs) {
+    if (g.calories != null && g.calories > 0) {
+      garminByDate.set(g.date, (garminByDate.get(g.date) ?? 0) + g.calories)
+    }
+  }
+
+  const trainingByDate = new Map<string, number>()
+  const garminDatesWithCals = new Set(
+    [...garminByDate.entries()].filter(([, v]) => v > 0).map(([d]) => d),
+  )
+  for (const t of training) {
+    if (t.source === 'garmin' && garminDatesWithCals.has(t.date)) continue
+    const extracted = extractKcalFromTraining(t)
+    if (!extracted) continue
+    trainingByDate.set(t.date, (trainingByDate.get(t.date) ?? 0) + extracted.kcal)
+  }
+
+  // Weights sorted for on-or-before lookup; also fetch older weight if none in window
+  let weightSeries = [...weights].sort((a, b) => a.date.localeCompare(b.date))
+  if (weightSeries.length === 0 || weightSeries.every(w => w.date > from)) {
+    const older = await prisma.weightEntry.findFirst({
+      where: { date: { lte: from } },
+      orderBy: { date: 'desc' },
+      select: { date: true, scaleKg: true },
+    })
+    if (older) weightSeries = [older, ...weightSeries]
+  }
+
+  const raw: RawDayEnergy[] = dates.map(date => {
+    const foodKcal = foodByDate.get(date) ?? 0
+    const activityKcal = Math.round(
+      (garminByDate.get(date) ?? 0) + (trainingByDate.get(date) ?? 0),
+    )
+    return {
+      date,
+      foodKcal,
+      activityKcal,
+      weightKg: weightOnOrBefore(date, weightSeries),
+    }
+  })
+
+  const recap = buildWeekEnergyRecap(raw)
+
+  const calibWeights: WeightPoint[] = weights
+    .filter(w => w.date >= from && w.date <= to)
+    .map(w => ({ date: w.date, scaleKg: w.scaleKg }))
+  // If only one in window, try ±1 day already in `weights`
+  const calibPool: WeightPoint[] =
+    calibWeights.length >= 2
+      ? calibWeights
+      : weights.map(w => ({ date: w.date, scaleKg: w.scaleKg }))
+
+  const calibration = calibrateWeekVsWeight(recap.summary.weekNetKcal, calibPool)
+
+  return { ...recap, calibration }
 }

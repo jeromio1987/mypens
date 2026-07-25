@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { bearerFromRequest, verifyToken } from '@/lib/integrations/healthconnect/auth'
 import { mapSessionToDraft } from '@/lib/integrations/healthconnect/mapping'
 import type { HealthConnectExerciseSession } from '@/lib/integrations/healthconnect/api'
+import { importDrafts, type DraftItem } from '@/lib/integrations/_shared/import'
 
 /**
  * POST { sessions: HealthConnectExerciseSession[], clientError?: string | null }
@@ -12,6 +13,10 @@ import type { HealthConnectExerciseSession } from '@/lib/integrations/healthconn
  * when present, is the most recent background-sync failure the companion saw
  * on-device; we store it so the dashboard can warn even when the server side
  * was healthy. Sending `null` clears the previous report.
+ *
+ * When HealthConnectConnection.autoImportOnIngest is true, newly accepted
+ * sessions are promoted straight to TrainingEntry (same path as manual Import)
+ * and never land in the review queue.
  */
 export async function POST(request: Request) {
   try {
@@ -20,23 +25,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid pairing token' }, { status: 401 })
     }
 
-    const body = await request.json()
-    const sessions: HealthConnectExerciseSession[] =
-      Array.isArray(body?.sessions) ? body.sessions : []
-    const clientErrorRaw = body?.clientError
+    const body = await request.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    const rawSessions = (body as { sessions?: unknown }).sessions
+    // Missing key entirely → bad payload. Empty array → heartbeat / nothing new (OK).
+    if (!Array.isArray(rawSessions)) {
+      return NextResponse.json({ error: 'sessions array required' }, { status: 400 })
+    }
+    const sessions = rawSessions as HealthConnectExerciseSession[]
+
+    const clientErrorRaw = (body as { clientError?: unknown }).clientError
     const clientError =
       clientErrorRaw === null || clientErrorRaw === undefined
         ? clientErrorRaw
         : String(clientErrorRaw).slice(0, 500)
 
+    const conn = await prisma.healthConnectConnection.findUnique({
+      where: { pairingToken: token! },
+      select: { autoImportOnIngest: true },
+    })
+    const autoImport = Boolean(conn?.autoImportOnIngest)
+
     if (sessions.length === 0) {
-      // See HealthKit ingest for the rationale: empty + clientError signal
-      // is a deliberate report/clear call and should return 200.
-      if (clientError === undefined) {
-        return NextResponse.json({ error: 'sessions array required' }, { status: 400 })
-      }
       await applyClientError(token, clientError)
-      return NextResponse.json({ ok: true, stored: 0, skipped: 0, clientErrorApplied: true })
+      await prisma.healthConnectConnection.updateMany({
+        where: { pairingToken: token! },
+        data: {
+          lastSyncAt: new Date(),
+          lastError: null,
+          lastErrorAt: null,
+        },
+      })
+      return NextResponse.json({
+        ok: true,
+        stored: 0,
+        skipped: 0,
+        read: 0,
+        imported: 0,
+        autoImport,
+      })
     }
 
     const candidateIds = sessions
@@ -52,6 +82,9 @@ export async function POST(request: Request) {
 
     let stored = 0
     let skipped = 0
+    let imported = 0
+    const autoImportDrafts: DraftItem[] = []
+
     try {
       for (const s of sessions) {
         if (!s?.id || !s.startTime || !s.exerciseType) {
@@ -63,6 +96,21 @@ export async function POST(request: Request) {
           continue
         }
         const draft = mapSessionToDraft(s)
+        if (autoImport) {
+          autoImportDrafts.push({
+            date: draft.date,
+            exercise: draft.exercise,
+            sets: draft.sets,
+            reps: draft.reps,
+            weightKg: draft.weightKg,
+            rpe: draft.rpe,
+            notes: draft.notes,
+            externalId: draft.externalId,
+            externalUrl: draft.externalUrl || undefined,
+            externalRaw: draft.externalRaw,
+          })
+          continue
+        }
         try {
           await prisma.pushedWorkout.create({
             data: {
@@ -83,6 +131,19 @@ export async function POST(request: Request) {
           if (code === 'P2002') skipped++
           else throw e
         }
+      }
+
+      if (autoImport && autoImportDrafts.length > 0) {
+        const result = await importDrafts('healthconnect', autoImportDrafts)
+        imported = result.created
+        skipped += result.skipped
+        // "stored" mirrors non-auto path: newly accepted items this request.
+        stored = result.created
+        // Drop any leftover inbox rows for these ids (e.g. earlier manual-queue pushes).
+        const ids = autoImportDrafts.map(d => d.externalId)
+        await prisma.pushedWorkout.deleteMany({
+          where: { source: 'healthconnect', externalId: { in: ids } },
+        })
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
@@ -107,7 +168,13 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({ ok: true, stored, skipped })
+    return NextResponse.json({
+      ok: true,
+      stored,
+      skipped,
+      imported,
+      autoImport,
+    })
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Failed to ingest' }, { status: 500 })

@@ -14,6 +14,9 @@ export async function GET() {
     const pending = conn
       ? await prisma.pushedWorkout.count({ where: { source: 'healthconnect' } })
       : 0
+    const importedCount = conn
+      ? await prisma.trainingEntry.count({ where: { source: 'healthconnect' } })
+      : 0
 
     let derivedError: string | null = null
     let derivedErrorAt: Date | null = null
@@ -57,12 +60,14 @@ export async function GET() {
       configured: true,
       connected: Boolean(conn),
       deviceLabel: conn?.deviceLabel ?? null,
+      autoImportOnIngest: conn?.autoImportOnIngest ?? false,
       lastSyncAt: lastIngestAt,
       lastIngestAt,
       hoursSinceLastIngest,
       staleThresholdHours,
       stale,
       pendingCount: pending,
+      importedCount,
       lastError: derivedError,
       lastErrorAt: derivedErrorAt,
       lastServerError: conn?.lastError ?? null,
@@ -73,5 +78,38 @@ export async function GET() {
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Failed to fetch status' }, { status: 500 })
+  }
+}
+
+/** PATCH { autoImportOnIngest: boolean } — owner-only preference for HC ingest. */
+export async function PATCH(request: Request) {
+  const authError = await requireOwner()
+  if (authError) return authError
+
+  try {
+    const conn = await getConnection()
+    if (!conn) {
+      return NextResponse.json({ error: 'Not connected' }, { status: 400 })
+    }
+
+    const body = await request.json().catch(() => null)
+    if (!body || typeof body !== 'object' || typeof (body as { autoImportOnIngest?: unknown }).autoImportOnIngest !== 'boolean') {
+      return NextResponse.json(
+        { error: 'autoImportOnIngest boolean required' },
+        { status: 400 },
+      )
+    }
+
+    const autoImportOnIngest = (body as { autoImportOnIngest: boolean }).autoImportOnIngest
+    const updated = await prisma.healthConnectConnection.update({
+      where: { userId: 'default' },
+      data: { autoImportOnIngest },
+      select: { autoImportOnIngest: true },
+    })
+
+    return NextResponse.json({ ok: true, autoImportOnIngest: updated.autoImportOnIngest })
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 })
   }
 }

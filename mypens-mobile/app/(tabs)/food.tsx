@@ -53,7 +53,7 @@ interface FoodEntry {
   proteinG: number
   carbsG: number
   fatG: number
-  fiberG: number
+  fiberG?: number
   notes?: string
 }
 
@@ -145,6 +145,13 @@ export default function FoodScreen() {
     incompleteCapture: boolean
     sources: Array<{ label: string; kcal: number; detail?: string }>
   } | null>(null)
+  const [weekEnergy, setWeekEnergy] = useState<{
+    weekNetKcal: number
+    daysTracked: number
+    daysImputed: number
+    from: string
+    to: string
+  } | null>(null)
 
   useEffect(() => {
     AsyncStorage.getItem(TARGETS_KEY).then((raw) => {
@@ -177,25 +184,45 @@ export default function FoodScreen() {
   useEffect(() => {
     if (!isPensApiConfigured()) {
       setEnergy(null)
+      setWeekEnergy(null)
       return
     }
     let cancelled = false
     void (async () => {
       try {
-        const res = await pensFetch(`/api/energy-balance?date=${encodeURIComponent(selectedDate)}`)
-        if (!res.ok) return
-        const j = await res.json()
-        if (!cancelled) {
-          setEnergy({
-            foodKcal: j.foodKcal ?? 0,
-            activityKcal: j.activityKcal ?? 0,
-            delta: j.delta ?? 0,
-            incompleteCapture: Boolean(j.incompleteCapture),
-            sources: Array.isArray(j.sources) ? j.sources : [],
-          })
+        const [dayRes, weekRes] = await Promise.all([
+          pensFetch(`/api/energy-balance?date=${encodeURIComponent(selectedDate)}`),
+          pensFetch(`/api/energy-balance?week=1&date=${encodeURIComponent(selectedDate)}`),
+        ])
+        if (dayRes.ok) {
+          const j = await dayRes.json()
+          if (!cancelled) {
+            setEnergy({
+              foodKcal: j.foodKcal ?? 0,
+              activityKcal: j.activityKcal ?? 0,
+              delta: j.delta ?? 0,
+              incompleteCapture: Boolean(j.incompleteCapture),
+              sources: Array.isArray(j.sources) ? j.sources : [],
+            })
+          }
+        }
+        if (weekRes.ok) {
+          const w = await weekRes.json()
+          if (!cancelled) {
+            setWeekEnergy({
+              weekNetKcal: w.summary?.weekNetKcal ?? 0,
+              daysTracked: w.summary?.daysTracked ?? 0,
+              daysImputed: w.summary?.daysImputed ?? 0,
+              from: w.window?.from ?? '',
+              to: w.window?.to ?? '',
+            })
+          }
         }
       } catch {
-        if (!cancelled) setEnergy(null)
+        if (!cancelled) {
+          setEnergy(null)
+          setWeekEnergy(null)
+        }
       }
     })()
     return () => {
@@ -282,7 +309,165 @@ export default function FoodScreen() {
     enabled: isPensApiConfigured(),
   })
 
-  const mutation = useMutation({
+  type RotationPreset = {
+    id: string
+    name: string
+    data: string
+    usedCount: number
+  }
+
+  const { data: rotationPresets = [] } = useQuery<RotationPreset[]>({
+    queryKey: ['food-presets'],
+    queryFn: async () => {
+      const res = await pensFetch('/api/presets?module=food')
+      if (!res.ok) return []
+      const data = await res.json()
+      return Array.isArray(data) ? (data as RotationPreset[]).slice(0, 10) : []
+    },
+    enabled: isPensApiConfigured(),
+  })
+
+  /** Unique frequent foods from history — tap once to log again. */
+  const frequentFoods = (() => {
+    const counts = new Map<string, { entry: FoodEntry; n: number }>()
+    for (const e of chartEntries) {
+      const key = e.name.trim().toLowerCase()
+      if (!key) continue
+      const prev = counts.get(key)
+      if (prev) prev.n += 1
+      else counts.set(key, { entry: e, n: 1 })
+    }
+    return [...counts.values()]
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 12)
+      .map((x) => x.entry)
+  })()
+
+  const [quickLogging, setQuickLogging] = useState(false)
+
+  const logFoodPayload = async (payload: {
+    date: string
+    meal: FoodEntry['meal']
+    name: string
+    kcal: number
+    proteinG: number
+    carbsG: number
+    fatG: number
+    fiberG: number
+    notes?: string
+  }) => {
+    if (!online) {
+      await enqueueOp({ type: 'food_post', payload })
+      return
+    }
+    try {
+      const res = await pensFetch('/api/food', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Save failed')
+    } catch {
+      await enqueueOp({ type: 'food_post', payload })
+    }
+  }
+
+  const quickLogEntry = async (e: FoodEntry) => {
+    if (!checkApiOrAlert()) return
+    setQuickLogging(true)
+    try {
+      await logFoodPayload({
+        date: selectedDate,
+        meal: selectedMeal,
+        name: e.name,
+        kcal: e.kcal,
+        proteinG: e.proteinG,
+        carbsG: e.carbsG,
+        fatG: e.fatG,
+        fiberG: e.fiberG ?? 0,
+        notes: e.notes,
+      })
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      await flushOfflineQueue()
+      await refreshQueue()
+      qc.invalidateQueries({ queryKey: ['food'] })
+      qc.invalidateQueries({ queryKey: ['food-chart'] })
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed')
+    } finally {
+      setQuickLogging(false)
+    }
+  }
+
+  const quickLogPreset = async (preset: RotationPreset) => {
+    if (!checkApiOrAlert()) return
+    setQuickLogging(true)
+    try {
+      const data = JSON.parse(preset.data) as Record<string, unknown>
+      await logFoodPayload({
+        date: selectedDate,
+        meal: (typeof data.meal === 'string' && MEAL_OPTIONS.includes(data.meal as FoodEntry['meal'])
+          ? data.meal
+          : selectedMeal) as FoodEntry['meal'],
+        name: String(data.name ?? preset.name),
+        kcal: Number(data.kcal) || 0,
+        proteinG: Number(data.proteinG) || 0,
+        carbsG: Number(data.carbsG) || 0,
+        fatG: Number(data.fatG) || 0,
+        fiberG: Number(data.fiberG) || 0,
+      })
+      void pensFetch('/api/presets', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: preset.id }),
+      }).catch(() => {})
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      await flushOfflineQueue()
+      await refreshQueue()
+      qc.invalidateQueries({ queryKey: ['food'] })
+      qc.invalidateQueries({ queryKey: ['food-chart'] })
+      qc.invalidateQueries({ queryKey: ['food-presets'] })
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed')
+    } finally {
+      setQuickLogging(false)
+    }
+  }
+
+  const saveCurrentAsPreset = async () => {
+    if (!checkApiOrAlert()) return
+    if (!name.trim()) {
+      Alert.alert('Name required', 'Fill the food name (and macros) first, then save to rotation.')
+      return
+    }
+    try {
+      const res = await pensFetch('/api/presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          module: 'food',
+          name: name.trim().slice(0, 40),
+          data: {
+            meal: selectedMeal,
+            name: name.trim(),
+            kcal: parseInt(kcal, 10) || 0,
+            proteinG: parseFloat(proteinG) || 0,
+            carbsG: parseFloat(carbsG) || 0,
+            fatG: parseFloat(fatG) || 0,
+            fiberG: parseFloat(fiberG) || 0,
+          },
+        }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Save failed')
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      qc.invalidateQueries({ queryKey: ['food-presets'] })
+      Alert.alert('Saved', 'Added to My Rotation — tap it next time to log in one go.')
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed')
+    }
+  }
     mutationFn: async () => {
       if (!name.trim()) throw new Error('Enter a food name')
       const payload = {
@@ -709,6 +894,23 @@ export default function FoodScreen() {
         </View>
       )}
 
+      {apiOk && weekEnergy && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: `${MOD.primary}40` }]}>
+          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>7-day ledger</Text>
+          <Text style={[styles.readVerdict, { color: colors.foreground, fontSize: 18 }]}>
+            {weekEnergy.weekNetKcal >= 0 ? '+' : ''}
+            {weekEnergy.weekNetKcal} kcal
+          </Text>
+          <Text style={[styles.readCause, { color: colors.mutedForeground }]}>
+            {weekEnergy.from} → {weekEnergy.to} · {weekEnergy.daysTracked} tracked
+            {weekEnergy.daysImputed ? ` · ${weekEnergy.daysImputed} imputed` : ''}
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 8 }}>
+            Food − (activity + BMR stub). Imputed days use tracked averages.
+          </Text>
+        </View>
+      )}
+
       {showTargets && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Day cues (soft)</Text>
@@ -737,6 +939,61 @@ export default function FoodScreen() {
           <Pressable onPress={saveTargets} style={[styles.submitBtn, { backgroundColor: MOD.primary }]}>
             <Text style={styles.submitText}>Save cues</Text>
           </Pressable>
+        </View>
+      )}
+
+      {apiOk && (rotationPresets.length > 0 || frequentFoods.length > 0) && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: `${MOD.primary}55` }]}>
+          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Tap to log</Text>
+          <Text style={[styles.dateHint, { color: colors.mutedForeground, marginBottom: 10 }]}>
+            One tap logs for {selectedDate} · {selectedMeal}. Lowest friction.
+          </Text>
+          {rotationPresets.length > 0 && (
+            <>
+              <Text style={[styles.dateHint, { color: colors.mutedForeground, marginBottom: 6 }]}>My Rotation</Text>
+              <View style={styles.chipRow}>
+                {rotationPresets.map((p) => (
+                  <Pressable
+                    key={p.id}
+                    disabled={quickLogging}
+                    onPress={() => void quickLogPreset(p)}
+                    style={[styles.chip, { backgroundColor: accentBg, borderColor: MOD.primary }]}
+                  >
+                    <Text style={[styles.chipText, { color: MOD.primary }]} numberOfLines={1}>
+                      {p.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+          {frequentFoods.length > 0 && (
+            <>
+              <Text style={[styles.dateHint, { color: colors.mutedForeground, marginTop: 10, marginBottom: 6 }]}>
+                Often logged
+              </Text>
+              <View style={styles.chipRow}>
+                {frequentFoods.map((e) => (
+                  <Pressable
+                    key={e.id}
+                    disabled={quickLogging}
+                    onPress={() => void quickLogEntry(e)}
+                    style={[styles.chip, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+                  >
+                    <Text style={[styles.chipText, { color: colors.foreground }]} numberOfLines={1}>
+                      {e.name.length > 28 ? `${e.name.slice(0, 26)}…` : e.name}
+                    </Text>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 10 }}>
+                      {Math.round(e.kcal)} kcal
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+          {quickLogging && (
+            <ActivityIndicator color={MOD.primary} style={{ marginTop: 10 }} />
+          )}
         </View>
       )}
 
@@ -1121,6 +1378,20 @@ export default function FoodScreen() {
             <Text style={styles.submitText}>Save item</Text>
           )}
         </Pressable>
+        <Pressable
+          onPress={() => void saveCurrentAsPreset()}
+          disabled={!isPensApiConfigured() || !name.trim()}
+          style={({ pressed }) => [
+            styles.secondaryBtn,
+            {
+              borderColor: colors.border,
+              marginTop: 8,
+              opacity: pressed || !name.trim() ? 0.5 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.secondaryBtnText, { color: MOD.primary }]}>Save to My Rotation</Text>
+        </Pressable>
       </View>
 
       
@@ -1228,4 +1499,13 @@ const styles = StyleSheet.create({
   readEyebrow: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   readVerdict: { fontSize: 20, fontFamily: 'Inter_600SemiBold', marginBottom: 10, lineHeight: 26 },
   readCause: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    maxWidth: '100%',
+  },
+  chipText: { fontSize: 13, fontFamily: 'Inter_500Medium', maxWidth: 220 },
 })

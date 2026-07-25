@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import TrainingEntry, { type ProgrammeExerciseQueueItem } from '@/components/training/TrainingEntry'
 import TrainingLog from '@/components/training/TrainingLog'
 import EnergyBalanceCard from '@/components/food/EnergyBalanceCard'
+import WeekEnergyRecapCard from '@/components/food/WeekEnergyRecapCard'
 
 interface ExerciseAggregate {
   exercise: string
@@ -198,10 +199,10 @@ export default function TrainingPage() {
             </Link>
             <Link
               href="/integrations"
-              className="text-xs text-pens-gold hover:text-pens-cream border border-pens-gold/40 hover:border-pens-gold/70 rounded-lg px-2.5 py-2 transition-colors"
-              title="Integrations & Strava sync"
+              className="text-xs font-semibold text-pens-gold hover:text-pens-cream border border-pens-gold/40 hover:border-pens-gold/70 rounded-lg px-2.5 py-2 transition-colors"
+              title="Health Connect, Garmin, Strava"
             >
-              Strava ↗
+              Integrations
             </Link>
             <input
               type="date"
@@ -233,6 +234,7 @@ export default function TrainingPage() {
         )}
 
         <EnergyBalanceCard date={date} refresh={refresh} />
+        <WeekEnergyRecapCard asOf={date} refresh={refresh} compact />
         <TrainingEntry
           date={date}
           programmeQueue={queue.length ? queue : undefined}

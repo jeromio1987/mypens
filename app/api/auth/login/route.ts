@@ -42,13 +42,25 @@ export async function POST(request: Request) {
     )
   }
 
+  // Secure cookies only on HTTPS — local HTTP (localhost / LAN IP) must stay non-secure
+  // or the browser silently drops the session and login looks like a no-op.
+  const proto = request.headers.get('x-forwarded-proto')
+  const urlHttps = (() => {
+    try {
+      return new URL(request.url).protocol === 'https:'
+    } catch {
+      return false
+    }
+  })()
+  const secure = proto === 'https' || urlHttps
+
   const res = NextResponse.json({ ok: true })
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',
     maxAge: SESSION_MAX_AGE,
-    secure: process.env.NODE_ENV === 'production',
+    secure,
   })
   return res
 }
