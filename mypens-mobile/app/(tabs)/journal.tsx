@@ -25,6 +25,8 @@ import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured, pensApiBaseUrl } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
+import { DateNavBar } from '@/components/DateNavBar'
+import { useLocalSearchParams } from 'expo-router'
 
 const MOD = MODULE_COLORS.journal
 const today = () => {
@@ -170,6 +172,14 @@ export default function JournalScreen() {
   const [content, setContent] = useState('')
   const [mood, setMood] = useState<number | undefined>(undefined)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [entryDate, setEntryDate] = useState(today())
+  const params = useLocalSearchParams<{ date?: string }>()
+
+  useEffect(() => {
+    if (typeof params.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) {
+      setEntryDate(params.date)
+    }
+  }, [params.date])
 
   const { data: entries = [], isLoading, refetch, isRefetching } = useQuery<JournalEntry[]>({
     queryKey: ['journal', useApi ? 'api' : 'supabase'],
@@ -198,7 +208,7 @@ export default function JournalScreen() {
     mutationFn: async () => {
       if (!content.trim()) throw new Error('Write something before saving')
       const payload: Record<string, unknown> = {
-        date: today(),
+        date: entryDate,
         content: content.trim(),
       }
       if (title.trim()) payload.title = title.trim()
@@ -230,7 +240,7 @@ export default function JournalScreen() {
 
       const { error } = await supabase.from('JournalEntry').upsert({
         id: generateId(),
-        date: today(),
+        date: entryDate,
         title: title.trim() || null,
         content: content.trim(),
         mood: mood && mood > 0 ? mood : null,
@@ -322,6 +332,15 @@ export default function JournalScreen() {
           </Text>
         </View>
       ) : null}
+
+      <View style={{ marginHorizontal: 16, marginBottom: 4 }}>
+        <DateNavBar
+          date={entryDate}
+          onChange={setEntryDate}
+          accent={MOD.primary}
+          recentDates={entries.map((e) => e.date)}
+        />
+      </View>
 
       {/* New entry form */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

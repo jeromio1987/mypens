@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Newsreader, Barlow_Condensed } from "next/font/google";
+import { Geist, Geist_Mono, Newsreader, Barlow_Condensed, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegistrar from "@/components/pwa/ServiceWorkerRegistrar";
 
@@ -24,6 +24,13 @@ const barlowCondensed = Barlow_Condensed({
   variable: "--font-barlow",
   subsets: ["latin"],
   weight: ["400", "700", "800", "900"],
+});
+
+// Instrumentation face for P.E.N.S. metric labels — cold contrast to Newsreader.
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "700"],
 });
 
 export const metadata: Metadata = {
@@ -60,7 +67,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${barlowCondensed.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${barlowCondensed.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         {children}

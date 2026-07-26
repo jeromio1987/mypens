@@ -75,6 +75,22 @@ function RootLayoutNav() {
         name="weekly-feedback"
         options={{ title: "Weekly Feedback", headerShown: true }}
       />
+      <Stack.Screen name="audit" options={{ headerShown: false, title: "Audit" }} />
+      <Stack.Screen name="verdict" options={{ headerShown: false, title: "Verdict" }} />
+      <Stack.Screen
+        name="dopamine-debt"
+        options={{ headerShown: false, title: "Dopamine debt" }}
+      />
+      <Stack.Screen name="bloodwork" options={{ headerShown: false, title: "Bloodwork" }} />
+      <Stack.Screen name="planner" options={{ headerShown: false, title: "Planner" }} />
+      <Stack.Screen
+        name="period-review"
+        options={{ headerShown: false, title: "Period review" }}
+      />
+      <Stack.Screen
+        name="journal-log"
+        options={{ headerShown: false, title: "Journal log" }}
+      />
     </Stack>
   );
 }

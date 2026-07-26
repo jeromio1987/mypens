@@ -29,6 +29,8 @@ import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { PlannerWeekCard } from '@/components/PlannerWeekCard'
+import { GarminPullCard } from '@/components/GarminPullCard'
+import { OrphanActivitiesBanner } from '@/components/OrphanActivitiesBanner'
 import { TrainingReviewCard } from '@/components/TrainingReviewCard'
 import { HealthConnectCard } from '@/components/HealthConnectCard'
 
@@ -317,6 +319,8 @@ export default function TrainingScreen() {
       </View>
 
       <HealthConnectCard />
+      <OrphanActivitiesBanner />
+      <GarminPullCard days={7} />
       <TrainingReviewCard defaultDays={14} />
       <PlannerWeekCard />
 

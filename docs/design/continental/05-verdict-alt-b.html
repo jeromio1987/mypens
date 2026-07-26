@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Auditor's Verdict | The Continental P.E.N.S.</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Space+Grotesk:wght@300..700&amp;family=Work+Sans:wght@300;400;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#283646",
+                        "tertiary-container": "#550000",
+                        "surface-container-high": "#1e2b3b",
+                        "surface-tint": "#c6c7c3",
+                        "outline": "#8f9097",
+                        "error": "#ffb4ab",
+                        "primary-fixed": "#e2e3df",
+                        "on-primary-container": "#8c8e8a",
+                        "on-tertiary": "#690000",
+                        "on-surface-variant": "#c5c6cd",
+                        "on-primary-fixed": "#1a1c1a",
+                        "on-secondary": "#263046",
+                        "surface-dim": "#061423",
+                        "on-tertiary-fixed": "#410000",
+                        "inverse-primary": "#5d5f5c",
+                        "on-surface": "#d6e4f9",
+                        "surface-container-highest": "#283646",
+                        "error-container": "#93000a",
+                        "tertiary-fixed-dim": "#ffb4a8",
+                        "surface": "#061423",
+                        "primary": "#c6c7c3",
+                        "background": "#061423",
+                        "on-secondary-fixed": "#101b30",
+                        "primary-container": "#242724",
+                        "secondary-fixed": "#d7e2ff",
+                        "outline-variant": "#45474d",
+                        "on-tertiary-container": "#f05c49",
+                        "on-secondary-container": "#adb8d3",
+                        "secondary": "#bbc6e2",
+                        "primary-fixed-dim": "#c6c7c3",
+                        "surface-container-low": "#0f1c2c",
+                        "secondary-fixed-dim": "#bbc6e2",
+                        "inverse-surface": "#d6e4f9",
+                        "on-tertiary-fixed-variant": "#8e140b",
+                        "on-primary-fixed-variant": "#454745",
+                        "on-error": "#690005",
+                        "surface-bright": "#2d3a4a",
+                        "surface-container": "#132030",
+                        "tertiary-fixed": "#ffdad4",
+                        "surface-container-lowest": "#020f1e",
+                        "tertiary": "#ffb4a8",
+                        "on-primary": "#2f312e",
+                        "on-error-container": "#ffdad6",
+                        "secondary-container": "#3e4960",
+                        "on-background": "#d6e4f9",
+                        "inverse-on-surface": "#243141",
+                        "on-secondary-fixed-variant": "#3c475d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Newsreader", "serif"],
+                        "display": ["Newsreader", "serif"],
+                        "body": ["Work Sans", "sans-serif"],
+                        "label": ["Space Grotesk", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #061423;
+            color: #d6e4f9;
+        }
+        .editorial-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .glass-panel {
+            background: rgba(40, 54, 70, 0.7);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="font-body selection:bg-tertiary selection:text-on-tertiary min-h-screen pb-24 md:pb-0">
+<!-- TopAppBar -->
+<nav class="bg-surface-container-lowest flex justify-between items-center px-6 py-4 w-full sticky top-0 z-50">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary cursor-pointer active:opacity-80">menu</span>
+<span class="font-headline text-2xl font-bold text-primary uppercase tracking-widest">The Continental P.E.N.S.</span>
+</div>
+<div class="flex items-center gap-6">
+<div class="hidden md:flex gap-8 items-center">
+<a class="font-label text-label-sm uppercase tracking-tighter text-on-surface-variant hover:text-tertiary transition-colors duration-300" href="#">Performance</a>
+<a class="font-label text-label-sm uppercase tracking-tighter text-on-surface-variant hover:text-tertiary transition-colors duration-300" href="#">Endurance</a>
+<a class="font-label text-label-sm uppercase tracking-tighter text-on-surface-variant hover:text-tertiary transition-colors duration-300" href="#">Nutrition</a>
+<a class="font-label text-label-sm uppercase tracking-tighter text-on-surface-variant hover:text-tertiary transition-colors duration-300" href="#">Sleep</a>
+<a class="font-label text-label-sm uppercase tracking-tighter text-tertiary font-bold" href="#">Audit</a>
+</div>
+<div class="w-10 h-10 bg-surface-variant overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A high-contrast, moody close-up portrait of a stern auditor in a dark charcoal suit, standing in a dimly lit, wood-paneled library. The lighting is dramatic, highlighting sharp facial features and a cold, analytical gaze. The color palette is dominated by deep blues, blacks, and subtle cream highlights, fitting a premium, stoic editorial aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGworXi7ayavjTSyPauhXUB5Kz9yb9w2-Kp7R1sipKSa4PNcPtdiB68HqgGZMJjQWB6Lh2sv7ZbY4-0cjLPoj0RWhDTU49lgLOf0zoFAtJppn7VIwaePJt00UY3rzzcvoNRAAdkDTvdEdHcodftrRXG7KI_VqJEs8UXR4Zk5KLI6wgPwZwsQATCl5wxchM0ned6ghfcEVi21uFRLAuQxmaoeG64NkwahQK_riPeBG1gmzxzEKY6bk9cThe8psPARu7-7JAJgj2Skw"/>
+</div>
+</div>
+</nav>
+<main class="max-w-7xl mx-auto px-6 pt-12 lg:pt-20">
+<!-- Hero Section: Asymmetric Editorial Layout -->
+<div class="editorial-grid mb-24">
+<header class="col-span-12 lg:col-span-8">
+<p class="font-label text-tertiary uppercase tracking-[0.3em] mb-4">WEEK 42 RECONCILIATION</p>
+<h1 class="font-display text-7xl md:text-9xl font-bold tracking-tighter leading-none mb-8">The Auditor's Verdict.</h1>
+<div class="h-1 w-32 bg-tertiary mb-12"></div>
+<p class="font-headline text-2xl md:text-3xl text-on-surface-variant leading-relaxed italic max-w-2xl">
+                    "The body keeps a ledger that no clever accounting can hide. This week, your debt reached a critical threshold."
+                </p>
+</header>
+<div class="col-span-12 lg:col-span-4 mt-12 lg:mt-0 flex flex-col justify-end">
+<div class="bg-surface-container-high p-8 border-l-4 border-tertiary">
+<h3 class="font-label text-sm uppercase tracking-widest text-on-surface-variant mb-2">Primary Deficit</h3>
+<p class="font-display text-4xl text-primary mb-4">Biological Overdraft</p>
+<p class="font-body text-on-surface-variant text-sm leading-relaxed">
+                        Significant withdrawals from the metabolic reserve. Recovery windows missed for 3 consecutive cycles.
+                    </p>
+</div>
+</div>
+</div>
+<!-- The Weekly Reckoning Card: High Contrast Image & Glass Overlay -->
+<section class="editorial-grid mb-32">
+<div class="col-span-12 lg:col-span-7 relative h-[600px] overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-t from-background to-transparent z-10 opacity-40"></div>
+<div class="w-full h-full bg-cover bg-center grayscale-[0.2] transition-transform duration-700 group-hover:scale-105" data-alt="A top-down, high-contrast atmospheric shot of a heavily scarred dark wooden desk. In the center sits a single, heavy crystal glass half-empty with golden-brown whiskey, casting a sharp shadow. To the side, a crumpled, yellowed thermal receipt and a vintage silver fountain pen. The mood is cinematic, lonely, and stoic, with deep blacks and rich amber tones." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBsHhL5GwHfMLYZ9QVwW21xOultT1osbI-cGad619__CxRDSp6IgEaCZTYM4NtZOmI5zmsEGs0coGDWutgWiVVHEXkUFL4pGDE2dVEh2Rgh0q4-aIkX1EG9BpX_y3naIIG0LRJnlXBw2zMbv_r3IMQKroCq6fKzaEmlBa_Dh_DYoW8iaGUrqNQlKqOYKSR4nFd_9RwMQ_-3T1HZjc5ELqOwBvgS72fQEO1Ik3VT6zKgp5R6UtoiiyC3tPPZgeq-G8xVbb8NF_b243s')"></div>
+<!-- Floating Glass Stat -->
+<div class="absolute bottom-12 right-0 left-12 lg:left-24 glass-panel p-10 z-20 border-l border-white/10">
+<h2 class="font-display text-4xl text-on-surface mb-6 italic">Weekly Reckoning</h2>
+<div class="grid grid-cols-2 gap-8">
+<div>
+<span class="font-label text-xs uppercase text-tertiary block mb-1">Status</span>
+<span class="font-label text-xl text-primary">Insolvent</span>
+</div>
+<div>
+<span class="font-label text-xs uppercase text-on-surface-variant block mb-1">Interest Accrued</span>
+<span class="font-label text-xl text-primary">+12.4% Cortisol</span>
+</div>
+</div>
+</div>
+</div>
+<div class="col-span-12 lg:col-span-5 flex flex-col justify-center space-y-12 lg:pl-12 mt-16 lg:mt-0">
+<div class="space-y-4">
+<h4 class="font-label text-xs uppercase tracking-[0.4em] text-on-surface-variant">The Audit Summary</h4>
+<p class="font-body text-lg text-on-surface-variant leading-relaxed">
+                        Performance metrics indicate a systematic failure to adhere to the recovery protocol. The endurance floor has dropped, and nutrition compliance is fluctuating near the survival threshold.
+                    </p>
+</div>
+<!-- P.E.N.S. Breakdown -->
+<div class="space-y-6">
+<!-- Performance -->
+<div class="flex items-center justify-between py-4 border-b border-outline-variant/20">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary">speed</span>
+<span class="font-label text-sm uppercase tracking-widest">Performance</span>
+</div>
+<span class="font-label text-tertiary">Deficit -18%</span>
+</div>
+<!-- Endurance -->
+<div class="flex items-center justify-between py-4 border-b border-outline-variant/20">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary">timer</span>
+<span class="font-label text-sm uppercase tracking-widest">Endurance</span>
+</div>
+<span class="font-label text-on-surface-variant">Stable</span>
+</div>
+<!-- Nutrition -->
+<div class="flex items-center justify-between py-4 border-b border-outline-variant/20">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary">restaurant</span>
+<span class="font-label text-sm uppercase tracking-widest">Nutrition</span>
+</div>
+<span class="font-label text-tertiary">Alert: Sodium Spike</span>
+</div>
+<!-- Sleep -->
+<div class="flex items-center justify-between py-4 border-b border-outline-variant/20">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary">bedtime</span>
+<span class="font-label text-sm uppercase tracking-widest">Sleep</span>
+</div>
+<span class="font-label text-tertiary">Critical: 4.2h Avg</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Final Verdict Section -->
+<section class="bg-surface-container-low p-12 lg:p-24 mb-32 relative overflow-hidden">
+<!-- Subtle Background Texture/Shader -->
+<div class="absolute inset-0 opacity-10 pointer-events-none">
+
+</div>
+<div class="relative z-10 max-w-4xl">
+<span class="font-label text-xs uppercase tracking-widest text-tertiary block mb-6">Execution Notice</span>
+<h2 class="font-display text-5xl md:text-7xl font-bold mb-12 leading-tight">The verdict is final: <br/><span class="text-tertiary">Rest is no longer optional.</span></h2>
+<div class="flex flex-col md:flex-row gap-12 items-start">
+<div class="flex-1 space-y-6">
+<p class="font-body text-xl text-on-surface-variant leading-relaxed">
+                            Your biological ledger shows a total overdraft of 42,000 metabolic units. Continued operation at this frequency will result in a forced system shutdown. 
+                        </p>
+<p class="font-body text-xl text-on-surface-variant leading-relaxed font-bold italic">
+                            The Auditor demands a 48-hour cessation of all high-impact activity.
+                        </p>
+</div>
+<button class="bg-primary text-on-primary font-label text-sm uppercase tracking-[0.3em] px-12 py-6 hover:bg-tertiary hover:text-on-tertiary transition-all duration-500 active:scale-95 shrink-0">
+                        Acknowledge Debt
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-stretch bg-surface-container-high">
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-3 hover:bg-surface-variant transition-all duration-200 active:scale-95" href="#">
+<span class="material-symbols-outlined">speed</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Performance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-3 hover:bg-surface-variant transition-all duration-200 active:scale-95" href="#">
+<span class="material-symbols-outlined">timer</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Endurance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-3 hover:bg-surface-variant transition-all duration-200 active:scale-95" href="#">
+<span class="material-symbols-outlined">restaurant</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Nutrition</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-3 hover:bg-surface-variant transition-all duration-200 active:scale-95" href="#">
+<span class="material-symbols-outlined">bedtime</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Sleep</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary text-on-primary p-3 active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assignment_turned_in</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Audit</span>
+</a>
+</nav>
+<script>
+        // Simple scroll reveal for editorial punch
+        const observerOptions = {
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('opacity-100', 'translate-y-0');
+                    entry.target.classList.remove('opacity-0', 'translate-y-12');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('section, header').forEach(el => {
+            el.classList.add('transition-all', 'duration-1000', 'ease-out', 'opacity-0', 'translate-y-12');
+            observer.observe(el);
+        });
+
+        // Hover effect for the whiskey glass interaction
+        const glassCard = document.querySelector('.glass-panel');
+        if (glassCard) {
+            glassCard.addEventListener('mousemove', (e) => {
+                const rect = glassCard.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                glassCard.style.setProperty('--mouse-x', `${x}px`);
+                glassCard.style.setProperty('--mouse-y', `${y}px`);
+            });
+        }
+    </script>
+</body></html>

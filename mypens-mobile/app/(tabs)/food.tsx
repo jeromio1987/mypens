@@ -36,6 +36,8 @@ import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { usePensSync } from '@/hooks/usePensSync'
 import { defaultEatenGrams, scalePortion } from '@/lib/foodPortion'
 import { fuelingRead } from '@/lib/fuelingRead'
+import { DateNavBar, shiftIso } from '@/components/DateNavBar'
+import { FoodIncompleteMobile } from '@/components/FoodIncompleteMobile'
 
 const MOD = MODULE_COLORS.food
 const TARGETS_KEY = '@mypens/food_targets'
@@ -138,6 +140,20 @@ export default function FoodScreen() {
   const [productSearchError, setProductSearchError] = useState<string | null>(null)
   const [showManualAdd, setShowManualAdd] = useState(false)
   const [showNumbers, setShowNumbers] = useState(false)
+  const [energyTick, setEnergyTick] = useState(0)
+  const [copySource, setCopySource] = useState(() => shiftIso(today(), -1))
+  const [copyingMeal, setCopyingMeal] = useState<FoodEntry['meal'] | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<{
+    date: string
+    meal: FoodEntry['meal']
+    name: string
+    kcal: string
+    proteinG: string
+    carbsG: string
+    fatG: string
+    fiberG: string
+  } | null>(null)
   const [energy, setEnergy] = useState<{
     foodKcal: number
     activityKcal: number
@@ -147,6 +163,7 @@ export default function FoodScreen() {
     estimatedOut: number
     delta: number
     incompleteCapture: boolean
+    foodIncomplete?: boolean
     neatDetail?: string
     steps: number | null
     deviceTotal: number | null
@@ -223,6 +240,7 @@ export default function FoodScreen() {
               estimatedOut: j.estimatedOut ?? 0,
               delta: j.delta ?? 0,
               incompleteCapture: Boolean(j.incompleteCapture),
+              foodIncomplete: Boolean(j.foodIncomplete),
               neatDetail: typeof j.neatDetail === 'string' ? j.neatDetail : undefined,
               steps: j.deviceRef?.steps ?? null,
               deviceTotal: j.deviceRef?.totalKcal ?? null,
@@ -266,7 +284,7 @@ export default function FoodScreen() {
     return () => {
       cancelled = true
     }
-  }, [selectedDate])
+  }, [selectedDate, energyTick])
 
   useEffect(() => {
     if (!isPensApiConfigured() || name.trim().length < 2) {
@@ -582,6 +600,118 @@ export default function FoodScreen() {
     },
   })
 
+  const startEdit = (e: FoodEntry) => {
+    setEditingId(e.id)
+    setEditForm({
+      date: e.date,
+      meal: e.meal,
+      name: e.name,
+      kcal: String(e.kcal ?? 0),
+      proteinG: String(e.proteinG ?? 0),
+      carbsG: String(e.carbsG ?? 0),
+      fatG: String(e.fatG ?? 0),
+      fiberG: String(e.fiberG ?? 0),
+    })
+  }
+
+  const saveEdit = async () => {
+    if (!editingId || !editForm) return
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(editForm.date)) {
+      Alert.alert('Invalid date', 'Use yyyy-mm-dd')
+      return
+    }
+    const payload = {
+      id: editingId,
+      date: editForm.date,
+      meal: editForm.meal,
+      name: editForm.name.trim() || 'Untitled',
+      kcal: parseFloat(editForm.kcal) || 0,
+      proteinG: parseFloat(editForm.proteinG) || 0,
+      carbsG: parseFloat(editForm.carbsG) || 0,
+      fatG: parseFloat(editForm.fatG) || 0,
+      fiberG: parseFloat(editForm.fiberG) || 0,
+    }
+    try {
+      if (!online) {
+        await enqueueOp({ type: 'food_patch', payload })
+      } else {
+        try {
+          const res = await pensFetch('/api/food', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          const j = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Update failed')
+        } catch {
+          await enqueueOp({ type: 'food_patch', payload })
+        }
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      setEditingId(null)
+      setEditForm(null)
+      await flushOfflineQueue()
+      await refreshQueue()
+      qc.invalidateQueries({ queryKey: ['food'] })
+      qc.invalidateQueries({ queryKey: ['food-chart'] })
+      setEnergyTick((t) => t + 1)
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed')
+    }
+  }
+
+  const copyMealFromSource = async (meal: FoodEntry['meal']) => {
+    if (!checkApiOrAlert()) return
+    const source = /^\d{4}-\d{2}-\d{2}$/.test(copySource) ? copySource : shiftIso(selectedDate, -1)
+    setCopyingMeal(meal)
+    try {
+      const res = await pensFetch(`/api/food?date=${encodeURIComponent(source)}`)
+      const all = (await res.json()) as FoodEntry[]
+      if (!Array.isArray(all)) throw new Error('Could not load source day')
+      const mealEntries = all.filter((e) => e.meal === meal)
+      if (mealEntries.length === 0) {
+        Alert.alert('Nothing to copy', `No ${meal} on ${source}`)
+        return
+      }
+      for (const e of mealEntries) {
+        const payload = {
+          date: selectedDate,
+          meal: e.meal,
+          name: e.name,
+          kcal: e.kcal,
+          proteinG: e.proteinG,
+          carbsG: e.carbsG,
+          fatG: e.fatG,
+          fiberG: e.fiberG ?? 0,
+          notes: e.notes,
+        }
+        if (!online) {
+          await enqueueOp({ type: 'food_post', payload })
+        } else {
+          const post = await pensFetch('/api/food', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!post.ok) {
+            const j = await post.json().catch(() => ({}))
+            throw new Error((j as { error?: string }).error ?? 'Copy failed')
+          }
+        }
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      await flushOfflineQueue()
+      await refreshQueue()
+      qc.invalidateQueries({ queryKey: ['food'] })
+      qc.invalidateQueries({ queryKey: ['food-chart'] })
+      setEnergyTick((t) => t + 1)
+    } catch (err) {
+      Alert.alert('Copy meal', err instanceof Error ? err.message : 'Failed')
+    } finally {
+      setCopyingMeal(null)
+    }
+  }
+
   const checkApiOrAlert = () => {
     if (!isPensApiConfigured()) {
       Alert.alert('API not configured', 'Set EXPO_PUBLIC_PENS_API_URL and EXPO_PUBLIC_PENS_API_TOKEN in mypens-mobile/.env, then restart Expo.')
@@ -858,6 +988,18 @@ export default function FoodScreen() {
         </Pressable>
       </View>
 
+      <View style={{ marginHorizontal: 16, marginBottom: 4 }}>
+        <DateNavBar
+          date={selectedDate}
+          onChange={setSelectedDate}
+          accent={MOD.primary}
+          recentDates={last14.map(([d]) => d).reverse()}
+        />
+        {apiOk ? (
+          <FoodIncompleteMobile date={selectedDate} onChanged={() => setEnergyTick((t) => t + 1)} />
+        ) : null}
+      </View>
+
       {(!isPensApiConfigured() || (apiProbe && apiProbe.status !== 'ok')) && (
         <View style={[styles.warnCard, { borderColor: '#f59e0b', backgroundColor: colors.card }]}>
           <Text style={[styles.warnTitle, { color: colors.foreground }]}>
@@ -920,8 +1062,13 @@ export default function FoodScreen() {
           </Text>
           <Text style={[styles.readCause, { color: colors.mutedForeground }]}>
             Food {energy.foodKcal} · BMR {energy.bmrKcal} · EAT {energy.eatKcal} · NEAT {energy.neatKcal}
-            {energy.incompleteCapture ? ' · incomplete session kcal' : ''}
+            {energy.incompleteCapture && !energy.foodIncomplete ? ' · incomplete session kcal' : ''}
           </Text>
+          {energy.foodIncomplete ? (
+            <Text style={[styles.readCause, { color: '#f59e0b', marginTop: 6 }]}>
+              Food marked incomplete — treat energy delta as provisional.
+            </Text>
+          ) : null}
           {energy.steps != null || energy.neatDetail ? (
             <Text style={[styles.readCause, { color: colors.mutedForeground, marginTop: 4 }]}>
               {energy.steps != null ? `Steps ${energy.steps.toLocaleString()}` : 'Steps —'}
@@ -1080,17 +1227,8 @@ export default function FoodScreen() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Capture</Text>
         <Text style={[styles.dateHint, { color: colors.mutedForeground, marginBottom: 10 }]}>
-          One photo of the pack or plate — adjust grams if needed. Not a food diary.
+          One photo of the pack or plate — adjust grams if needed. Not a food diary. Logging for {selectedDate}.
         </Text>
-        <Text style={[styles.dateHint, { color: colors.mutedForeground }]}>Date (yyyy-mm-dd)</Text>
-        <TextInput
-          value={selectedDate}
-          onChangeText={setSelectedDate}
-          placeholder="2026-05-13"
-          placeholderTextColor={colors.mutedForeground}
-          autoCapitalize="none"
-          style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary, marginBottom: 12 }]}
-        />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable
             onPress={() => void takeAndScan()}
@@ -1480,28 +1618,145 @@ export default function FoodScreen() {
 {isPensApiConfigured() && isLoading ? (
         <ActivityIndicator color={MOD.primary} style={{ marginTop: 8 }} />
       ) : (
-        MEAL_OPTIONS.map((meal) =>
+        <>
+          {apiOk ? (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Copy meal into {selectedDate}</Text>
+              <Text style={[styles.dateHint, { color: colors.mutedForeground, marginBottom: 8 }]}>
+                Source day (yyyy-mm-dd) · tap a meal to copy all items
+              </Text>
+              <TextInput
+                value={copySource}
+                onChangeText={setCopySource}
+                placeholder="2026-07-25"
+                placeholderTextColor={colors.mutedForeground}
+                autoCapitalize="none"
+                style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+              />
+              <View style={styles.mealRow}>
+                {MEAL_OPTIONS.map((meal) => (
+                  <Pressable
+                    key={meal}
+                    onPress={() => void copyMealFromSource(meal)}
+                    disabled={copyingMeal === meal}
+                    style={[
+                      styles.mealChip,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: colors.secondary,
+                        opacity: copyingMeal === meal ? 0.5 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.mealChipText, { color: colors.foreground }]}>
+                      {copyingMeal === meal ? '…' : meal}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+          {MEAL_OPTIONS.map((meal) =>
           grouped[meal].length > 0 ? (
             <View key={meal} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.mealHeader, { color: MOD.primary }]}>
                 {meal.charAt(0).toUpperCase() + meal.slice(1)}
               </Text>
               {grouped[meal].map((e) => (
-                <View key={e.id} style={styles.entryRow}>
-                  <View style={styles.entryInfo}>
-                    <Text style={[styles.entryName, { color: colors.foreground }]}>{e.name}</Text>
-                    <Text style={[styles.entrySub, { color: colors.mutedForeground }]}>
-                      {e.kcal} kcal · {e.proteinG}g P
-                    </Text>
-                  </View>
-                  <Pressable onPress={() => deleteMutation.mutate(e.id)} hitSlop={12}>
-                    <Feather name="trash-2" size={16} color={colors.mutedForeground} />
-                  </Pressable>
+                <View key={e.id} style={{ borderTopWidth: 1, borderTopColor: '#e2e8f010', paddingVertical: 8 }}>
+                  {editingId === e.id && editForm ? (
+                    <View style={{ gap: 8 }}>
+                      <TextInput
+                        value={editForm.name}
+                        onChangeText={(v) => setEditForm((f) => (f ? { ...f, name: v } : f))}
+                        style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary, marginBottom: 0 }]}
+                      />
+                      <Text style={[styles.macroInputLabel, { color: colors.mutedForeground }]}>Move to date</Text>
+                      <TextInput
+                        value={editForm.date}
+                        onChangeText={(v) => setEditForm((f) => (f ? { ...f, date: v } : f))}
+                        placeholder="yyyy-mm-dd"
+                        placeholderTextColor={colors.mutedForeground}
+                        autoCapitalize="none"
+                        style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary, marginBottom: 0 }]}
+                      />
+                      <View style={styles.mealRow}>
+                        {MEAL_OPTIONS.map((m) => (
+                          <Pressable
+                            key={m}
+                            onPress={() => setEditForm((f) => (f ? { ...f, meal: m } : f))}
+                            style={[
+                              styles.mealChip,
+                              {
+                                borderColor: editForm.meal === m ? MOD.primary : colors.border,
+                                backgroundColor: editForm.meal === m ? `${MOD.primary}22` : colors.secondary,
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.mealChipText, { color: colors.foreground }]}>{m}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                      <View style={styles.macroInputRow}>
+                        {(
+                          [
+                            ['kcal', 'kcal'],
+                            ['proteinG', 'P'],
+                            ['carbsG', 'C'],
+                            ['fatG', 'F'],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <View key={key} style={styles.macroInput}>
+                            <Text style={[styles.macroInputLabel, { color: colors.mutedForeground }]}>{label}</Text>
+                            <TextInput
+                              value={editForm[key]}
+                              onChangeText={(v) => setEditForm((f) => (f ? { ...f, [key]: v } : f))}
+                              keyboardType="decimal-pad"
+                              style={[styles.macroInputField, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                            />
+                          </View>
+                        ))}
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Pressable
+                          onPress={() => void saveEdit()}
+                          style={[styles.submitBtn, { flex: 1, backgroundColor: MOD.primary, marginTop: 0, height: 40 }]}
+                        >
+                          <Text style={styles.submitText}>Save</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            setEditingId(null)
+                            setEditForm(null)
+                          }}
+                          style={[styles.secondaryBtn, { flex: 1, borderColor: colors.border, height: 40 }]}
+                        >
+                          <Text style={[styles.secondaryBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.entryRow}>
+                      <View style={styles.entryInfo}>
+                        <Text style={[styles.entryName, { color: colors.foreground }]}>{e.name}</Text>
+                        <Text style={[styles.entrySub, { color: colors.mutedForeground }]}>
+                          {e.kcal} kcal · {e.proteinG}g P
+                        </Text>
+                      </View>
+                      <Pressable onPress={() => startEdit(e)} hitSlop={12} style={{ marginRight: 12 }}>
+                        <Feather name="edit-2" size={16} color={colors.mutedForeground} />
+                      </Pressable>
+                      <Pressable onPress={() => deleteMutation.mutate(e.id)} hitSlop={12}>
+                        <Feather name="trash-2" size={16} color={colors.mutedForeground} />
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
           ) : null,
-        )
+        )}
+        </>
       )}
 
       {barData.length > 1 && (
@@ -1566,7 +1821,7 @@ const styles = StyleSheet.create({
   macroBarBg: { height: 6, borderRadius: 3, overflow: 'hidden' },
   macroBarFill: { height: 6, borderRadius: 3 },
   mealHeader: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginBottom: 8, textTransform: 'capitalize' },
-  entryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#e2e8f010' },
+  entryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 0 },
   entryInfo: { flex: 1 },
   entryName: { fontSize: 14, fontFamily: 'Inter_500Medium' },
   entrySub: { fontSize: 12, fontFamily: 'Inter_400Regular' },

@@ -21,6 +21,26 @@
   --color-pens-cream:   #F5E6D3;
   --color-pens-gold:    #C9A84C;
 
+  /* ── Continental Editorial (Stitch "Modern Clubroom") ──
+     Surface tiers replace borders: depth = contrast, never a 1px line.
+     Source: docs/design/continental/DESIGN.md */
+  --color-ct-lowest:   #020F1E;
+  --color-ct-low:      #0F1C2C;
+  --color-ct-high:     #1E2B3B;
+  --color-ct-highest:  #283646;
+  --color-ct-bright:   #2D3A4A;
+  --color-ct-primary:  #C6C7C3;
+  --color-ct-on:       #2F312E;
+  --color-ct-second:   #BBC6E2;
+  --color-ct-secondc:  #3E4960;
+  /* Oxblood — surgical tool, not a paint bucket */
+  --color-ct-blood:    #FFB4A8;
+  --color-ct-bloodc:   #550000;
+  --color-ct-bloodon:  #F05C49;
+  --color-ct-outline:  #45474D;
+
+  --font-grotesk: var(--font-space-grotesk);
+
   /* ── Raw Editorial palette ── */
   --color-raw-bg:      #0E0B09;
   --color-raw-surface: #1C1713;

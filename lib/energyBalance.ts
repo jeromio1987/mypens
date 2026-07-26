@@ -58,6 +58,8 @@ export type DayEnergyBalance = {
   delta: number
   estimatedOut: number
   incompleteCapture: boolean
+  /** User marked this calendar day as food-incomplete (late entry / partial log). */
+  foodIncomplete: boolean
   sources: EnergyActivitySource[]
   neatDetail: string
   neatSource: string
@@ -138,7 +140,7 @@ async function loadDeviceDayMetrics(date: string): Promise<DeviceDayRef | null> 
 }
 
 export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalance> {
-  const [foodAgg, garminActs, training, pushed, profile, weightKg, deviceRef] = await Promise.all([
+  const [foodAgg, garminActs, training, pushed, profile, weightKg, deviceRef, dayEntry] = await Promise.all([
     prisma.foodEntry.aggregate({
       where: { date },
       _sum: { kcal: true },
@@ -176,7 +178,16 @@ export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalanc
     loadBmrProfile(),
     weightOnDate(date),
     loadDeviceDayMetrics(date),
+    prisma.dayEntry.findUnique({ where: { date }, select: { tags: true } }),
   ])
+
+  let foodIncomplete = false
+  try {
+    const tags = JSON.parse(dayEntry?.tags || '[]')
+    foodIncomplete = Array.isArray(tags) && tags.includes('food_incomplete')
+  } catch {
+    foodIncomplete = false
+  }
 
   const foodKcal = roundKcal(foodAgg._sum.kcal ?? 0)
   const sources: EnergyActivitySource[] = []
@@ -279,6 +290,7 @@ export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalanc
   }
 
   const incompleteCapture =
+    foodIncomplete ||
     (sessionCount > 0 && eatKcal === 0) ||
     (sessionsMissingKcal > 0 && eatKcal === 0)
 
@@ -294,6 +306,7 @@ export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalanc
     delta,
     estimatedOut,
     incompleteCapture,
+    foodIncomplete,
     sources,
     neatDetail: neat.detail,
     neatSource: neat.source,

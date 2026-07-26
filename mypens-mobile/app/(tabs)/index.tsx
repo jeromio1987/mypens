@@ -16,12 +16,14 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { LineChart } from 'react-native-gifted-charts'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
 
 import { IntegrationStatusStrip } from '@/components/IntegrationStatusStrip'
 import { EngineReadCard } from '@/components/EngineReadCard'
+import { DateNavBar } from '@/components/DateNavBar'
 import { useColors } from '@/hooks/useColors'
 import { usePensSync } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
@@ -107,6 +109,7 @@ export default function WeightScreen() {
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const qc = useQueryClient()
+  const router = useRouter()
   const useApi = isPensApiConfigured()
   const { pending, online, refresh: refreshQueue } = usePensSync()
 
@@ -379,6 +382,38 @@ export default function WeightScreen() {
       ) : null}
 
       <IntegrationStatusStrip />
+
+      <Pressable
+        onPress={() => router.push('/audit' as never)}
+        style={{
+          marginHorizontal: 16,
+          marginBottom: 12,
+          paddingVertical: 14,
+          paddingHorizontal: 14,
+          backgroundColor: isDark ? '#0F1C2C' : '#1E2B3B',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <Feather name="shield" size={18} color="#C6C7C3" />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: '#C6C7C3', fontSize: 15, fontWeight: '600' }}>The Audit</Text>
+          <Text style={{ color: 'rgba(198,199,195,0.55)', fontSize: 12, marginTop: 2 }}>
+            Verdict · bloodwork · planner · period review
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={18} color="rgba(198,199,195,0.45)" />
+      </Pressable>
+
+      <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+        <DateNavBar
+          date={form.date}
+          onChange={(d) => setForm((f) => ({ ...f, date: d }))}
+          accent={MOD.primary}
+          recentDates={entries.slice(-14).map((e) => e.date).reverse()}
+        />
+      </View>
 
       <EngineReadCard defaultDays={7} />
 

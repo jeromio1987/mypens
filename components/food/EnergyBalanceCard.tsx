@@ -29,6 +29,7 @@ type Balance = {
   estimatedOut: number
   delta: number
   incompleteCapture: boolean
+  foodIncomplete?: boolean
   sources: Source[]
   neatDetail?: string
   deviceRef: DeviceRef | null
@@ -121,7 +122,9 @@ export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string;
 
       {data.incompleteCapture && (
         <p className="text-xs text-amber-200/80 bg-amber-900/20 border border-amber-500/20 rounded-lg px-3 py-2">
-          Activities exist for this day but no session kcal was found — capture may be incomplete. Re-sync Garmin/HC after the workout finishes processing.
+          {data.foodIncomplete
+            ? 'Food log marked incomplete for this date — treat energy delta as provisional until you finish logging.'
+            : 'Activities exist for this day but no session kcal was found — capture may be incomplete. Re-sync Garmin/HC after the workout finishes processing.'}
         </p>
       )}
 

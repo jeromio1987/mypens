@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Gravity Reckoning | The Continental P.E.N.S.</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Space+Grotesk:wght@300..700&amp;family=Work+Sans:wght@300..600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#283646",
+                        "tertiary-container": "#550000",
+                        "surface-container-high": "#1e2b3b",
+                        "surface-tint": "#c6c7c3",
+                        "outline": "#8f9097",
+                        "error": "#ffb4ab",
+                        "primary-fixed": "#e2e3df",
+                        "on-primary-container": "#8c8e8a",
+                        "on-tertiary": "#690000",
+                        "on-surface-variant": "#c5c6cd",
+                        "on-primary-fixed": "#1a1c1a",
+                        "on-secondary": "#263046",
+                        "surface-dim": "#061423",
+                        "on-tertiary-fixed": "#410000",
+                        "inverse-primary": "#5d5f5c",
+                        "on-surface": "#d6e4f9",
+                        "surface-container-highest": "#283646",
+                        "error-container": "#93000a",
+                        "tertiary-fixed-dim": "#ffb4a8",
+                        "surface": "#061423",
+                        "primary": "#c6c7c3",
+                        "background": "#061423",
+                        "on-secondary-fixed": "#101b30",
+                        "primary-container": "#242724",
+                        "secondary-fixed": "#d7e2ff",
+                        "outline-variant": "#45474d",
+                        "on-tertiary-container": "#f05c49",
+                        "on-secondary-container": "#adb8d3",
+                        "secondary": "#bbc6e2",
+                        "primary-fixed-dim": "#c6c7c3",
+                        "surface-container-low": "#0f1c2c",
+                        "secondary-fixed-dim": "#bbc6e2",
+                        "inverse-surface": "#d6e4f9",
+                        "on-tertiary-fixed-variant": "#8e140b",
+                        "on-primary-fixed-variant": "#454745",
+                        "on-error": "#690005",
+                        "surface-bright": "#2d3a4a",
+                        "surface-container": "#132030",
+                        "tertiary-fixed": "#ffdad4",
+                        "surface-container-lowest": "#020f1e",
+                        "tertiary": "#ffb4a8",
+                        "on-primary": "#2f312e",
+                        "on-error-container": "#ffdad6",
+                        "secondary-container": "#3e4960",
+                        "on-background": "#d6e4f9",
+                        "inverse-on-surface": "#243141",
+                        "on-secondary-fixed-variant": "#3c475d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Newsreader", "serif"],
+                        "display": ["Newsreader", "serif"],
+                        "body": ["Work Sans", "sans-serif"],
+                        "label": ["Space Grotesk", "monospace"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #061423;
+            color: #d6e4f9;
+            font-family: 'Work Sans', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .editorial-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background selection:bg-tertiary selection:text-on-tertiary">
+<!-- TopAppBar -->
+<header class="bg-surface-container-lowest fixed top-0 w-full z-[60] flex justify-between items-center px-6 py-4">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary cursor-pointer active:opacity-80">menu</span>
+<h1 class="font-headline text-2xl font-bold text-primary uppercase tracking-widest">The Continental P.E.N.S.</h1>
+</div>
+<div class="w-10 h-10 bg-surface-container-highest border border-outline-variant flex items-center justify-center overflow-hidden">
+<img class="object-cover w-full h-full" data-alt="A gritty, high-contrast black and white portrait of a stern, middle-aged man in a sharp tuxedo, his eyes showing a cynical intelligence. The lighting is dramatic, casting deep shadows across his face, evoking an elite, noir clubroom atmosphere. The aesthetic is monochromatic and sharp, matching the architectural and stoic design of the app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAr7mat05ksEu1fPPl9G0vS8Y9J2kLwnjAHaMS3-xBsgjfwtGPpOCTpw-O2C70PvSrCsgt1GON1H2bvU2L2YLLYOGkRKnhEcaPvGo1v3dFoSYctVWZ_PV-7ZZHF6g70TP-YR5IlV1T6oZtXHGo4Sb0BwwfMkPxqEKljkzU8E5ma-ebzq_iLdE2jwC6OXEsSU-WzpMkXEFIHMx-4LyT9honXdsYPY8dg_fSQQ4ayBnc7XU660dJzBj4Xlxn-IJ7SaLZu2QpWDZUy8yQ"/>
+</div>
+</header>
+<main class="pt-24 pb-32 max-w-7xl mx-auto px-6 lg:px-12">
+<!-- Hero Section: The Gravity Reckoning -->
+<section class="editorial-grid mb-24 items-end">
+<div class="col-span-12 md:col-span-7 mb-12 md:mb-0">
+<h2 class="font-display text-headline-lg md:text-[5rem] leading-none tracking-tighter mb-6 text-primary">
+                    The Gravity <br/> Reckoning
+                </h2>
+<p class="font-body text-on-surface-variant max-w-md leading-relaxed text-lg">
+                    The scale is a liar, but gravity is absolute. We strip away the fluctuation of water and salt to reveal the metabolic truth you’ve been hiding from yourself.
+                </p>
+</div>
+<div class="col-span-12 md:col-span-5 relative group">
+<div class="aspect-[4/5] bg-surface-container-low overflow-hidden relative border border-outline-variant/10">
+<img class="w-full h-full object-cover filter grayscale contrast-125 opacity-80 group-hover:opacity-100 transition-opacity duration-700" data-alt="Visceral black and white photography of bare feet standing on a cracked, weathered concrete floor next to a heavy, vintage mechanical floor scale. The lighting is harsh and overhead, highlighting every texture of the concrete and the metallic sheen of the scale. The mood is honest, cynical, and raw, stripping away modern digital comforts." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNGwkx8F2Qjrv0Fop4DGXDUt_6BqZWfcb8k9ytq5kG_t426kHjUtrtT_LL8PvltEOYhNtOeg6gjbAtmuYrf7Mc1WwxzQMzwthBJ51_nDg4i06tY7SVDpd7ytnpqegJL_pkJYDx6jfIIlsZqNtR4ZIynSriPpsueRr6RsViF3vrdZdtwYyFTjXYLv_fB5Sy7g6OV0WePxK778XxuuzakhPVRZ9SeuL5rhly1GtZkLDs1zVLKaEGKPTknqyDG5pJRt0x5l_lGFVZiMk"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="absolute bottom-6 left-6">
+<span class="font-label text-label-sm text-tertiary bg-tertiary-container px-3 py-1 uppercase tracking-widest">Subject 0912: Metabolic Suppression</span>
+</div>
+</div>
+</div>
+</section>
+<!-- P.E.N.S. Reconciliation Ledger -->
+<section class="mb-24">
+<div class="flex flex-col md:flex-row justify-between items-baseline mb-12 gap-4">
+<h3 class="font-headline text-3xl italic text-on-surface">The Insulin Ledger</h3>
+<div class="font-label text-label-sm text-on-surface-variant uppercase tracking-tighter flex gap-8">
+<span>ID: CR-084-LX</span>
+<span>Status: Active Reconciliation</span>
+</div>
+</div>
+<div class="bg-surface-container-low border-l-4 border-primary p-1 md:p-0">
+<!-- Ledger Header -->
+<div class="grid grid-cols-12 font-label text-label-sm text-on-surface-variant border-b border-outline-variant/10 px-8 py-4 bg-surface-container-high/50">
+<div class="col-span-4">Metric Class</div>
+<div class="col-span-3 text-right">Raw Scale Value</div>
+<div class="col-span-3 text-right">Adjustment Factor</div>
+<div class="col-span-2 text-right text-primary">True Reality</div>
+</div>
+<!-- Ledger Rows -->
+<div class="divide-y divide-outline-variant/5">
+<!-- Row 1 -->
+<div class="grid grid-cols-12 px-8 py-10 items-center hover:bg-surface-container-high transition-colors">
+<div class="col-span-4">
+<p class="font-headline text-xl text-on-surface">Base Mass Index</p>
+<p class="font-body text-xs text-on-surface-variant uppercase">Static Load Capacity</p>
+</div>
+<div class="col-span-3 text-right font-label text-lg">192.4 <span class="text-xs opacity-50">LBS</span></div>
+<div class="col-span-3 text-right font-label text-on-surface-variant italic">—</div>
+<div class="col-span-2 text-right font-label text-xl text-primary">192.4</div>
+</div>
+<!-- Row 2 -->
+<div class="grid grid-cols-12 px-8 py-10 items-center hover:bg-surface-container-high transition-colors">
+<div class="col-span-4">
+<p class="font-headline text-xl text-tertiary">Water Weight Liability</p>
+<p class="font-body text-xs text-on-surface-variant uppercase">Sodium-Induced Noise</p>
+</div>
+<div class="col-span-3 text-right font-label text-lg">+4.2 <span class="text-xs opacity-50">LBS</span></div>
+<div class="col-span-3 text-right font-label text-tertiary">(-4.2)</div>
+<div class="col-span-2 text-right font-label text-xl text-tertiary">0.0</div>
+</div>
+<!-- Row 3 -->
+<div class="grid grid-cols-12 px-8 py-10 items-center bg-surface-container-high/20 border-y border-outline-variant/10">
+<div class="col-span-4">
+<p class="font-headline text-xl text-on-surface">Metabolic Suppression</p>
+<p class="font-body text-xs text-on-surface-variant uppercase">Glucagon Inefficiency</p>
+</div>
+<div class="col-span-3 text-right font-label text-lg">—</div>
+<div class="col-span-3 text-right font-label text-on-surface-variant">+0.8 <span class="text-xs opacity-50">LBS/WK</span></div>
+<div class="col-span-2 text-right font-label text-xl text-primary">+0.8</div>
+</div>
+</div>
+<!-- Ledger Footer -->
+<div class="bg-surface-container-highest px-8 py-8 flex flex-col md:flex-row justify-between items-center gap-6">
+<div>
+<p class="font-label text-label-sm text-on-surface-variant uppercase">Final Reconciliation</p>
+<p class="font-headline text-4xl text-primary">188.2 <span class="text-lg">LBS</span></p>
+</div>
+<div class="flex gap-4">
+<button class="bg-secondary-container text-on-secondary px-8 py-3 font-label text-sm uppercase tracking-widest active:scale-95 transition-all">Export Audit</button>
+<button class="bg-primary text-on-primary px-8 py-3 font-label text-sm uppercase tracking-widest active:scale-95 transition-all">Accept Reality</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Asymmetric Data Grid -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-12 mb-24">
+<div class="md:col-span-2">
+<div class="bg-surface-container-low p-10 h-full border border-outline-variant/5">
+<div class="flex justify-between items-start mb-12">
+<h4 class="font-headline text-2xl italic">Metabolic Trajectory</h4>
+<span class="material-symbols-outlined text-primary">speed</span>
+</div>
+<!-- Mock Graph -->
+<div class="h-64 flex items-end gap-1">
+<div class="flex-1 bg-surface-container-highest" style="height: 60%"></div>
+<div class="flex-1 bg-surface-container-highest" style="height: 65%"></div>
+<div class="flex-1 bg-surface-container-highest" style="height: 55%"></div>
+<div class="flex-1 bg-tertiary" style="height: 85%"></div>
+<div class="flex-1 bg-surface-container-highest" style="height: 70%"></div>
+<div class="flex-1 bg-surface-container-highest" style="height: 40%"></div>
+<div class="flex-1 bg-primary" style="height: 50%"></div>
+</div>
+<div class="flex justify-between font-label text-[10px] text-on-surface-variant mt-4 uppercase tracking-tighter">
+<span>Day 01</span>
+<span>The Reckoning</span>
+<span>Day 07</span>
+</div>
+<p class="font-body text-sm text-on-surface-variant mt-8 max-w-sm leading-relaxed italic">
+                        The spike in red indicates a 'Water Weight Liability' event. Likely the result of a dietary lapse or systemic inflammation.
+                    </p>
+</div>
+</div>
+<div class="bg-tertiary-container text-tertiary p-10 flex flex-col justify-between">
+<div>
+<span class="material-symbols-outlined text-4xl mb-6">warning</span>
+<h4 class="font-headline text-3xl mb-4">Liability Alert</h4>
+<p class="font-body text-on-tertiary-container leading-relaxed">
+                        Your current glycemic variability is masking the effects of your endurance protocol. The weight on the scale is irrelevant until the noise is dampened.
+                    </p>
+</div>
+<div class="font-label text-sm uppercase border-t border-tertiary/20 pt-6 mt-6">
+                    Priority: Extreme
+                </div>
+</div>
+</section>
+<!-- Audit Log -->
+<section class="mb-12">
+<h5 class="font-label text-label-sm text-on-surface-variant uppercase tracking-[0.2em] mb-8">Recent Biological Audits</h5>
+<div class="space-y-4">
+<div class="bg-surface-container p-6 flex justify-between items-center group cursor-pointer hover:bg-surface-container-high transition-all">
+<div class="flex items-center gap-6">
+<span class="font-label text-on-surface-variant">02:44 AM</span>
+<span class="font-headline text-xl text-on-surface group-hover:text-primary transition-colors">The Ethanol Tax</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="font-label text-xs bg-surface-variant px-2 py-1">REJECTED</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+</div>
+<div class="bg-surface-container p-6 flex justify-between items-center group cursor-pointer hover:bg-surface-container-high transition-all border-l-2 border-tertiary">
+<div class="flex items-center gap-6">
+<span class="font-label text-on-surface-variant">06:12 AM</span>
+<span class="font-headline text-xl text-on-surface group-hover:text-primary transition-colors">The Gravity Reckoning</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="font-label text-xs bg-tertiary-container text-tertiary px-2 py-1">CRITICAL</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+</div>
+<div class="bg-surface-container p-6 flex justify-between items-center group cursor-pointer hover:bg-surface-container-high transition-all">
+<div class="flex items-center gap-6">
+<span class="font-label text-on-surface-variant">08:00 AM</span>
+<span class="font-headline text-xl text-on-surface group-hover:text-primary transition-colors">The Synaptic Misfire</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="font-label text-xs bg-surface-variant px-2 py-1">RESOLVED</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- NavigationDrawer (Hidden by default, semantic map) -->
+<aside class="fixed inset-y-0 left-0 w-80 bg-surface-container-low z-[70] transform -translate-x-full transition-transform duration-300 pointer-events-none" id="nav-drawer">
+<div class="flex flex-col h-full py-8 gap-6 px-8">
+<h2 class="font-headline text-2xl text-on-surface uppercase tracking-widest mb-4">Biological Audits</h2>
+<nav class="flex flex-col gap-4">
+<a class="text-on-surface-variant pl-4 hover:bg-surface-container-highest transition-colors py-2 flex items-center gap-3" href="#">
+<span class="material-symbols-outlined">wine_bar</span> The Ethanol Tax
+                </a>
+<a class="text-tertiary border-l-4 border-tertiary pl-4 py-2 flex items-center gap-3" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">monitor_weight</span> The Gravity Reckoning
+                </a>
+<a class="text-on-surface-variant pl-4 hover:bg-surface-container-highest transition-colors py-2 flex items-center gap-3" href="#">
+<span class="material-symbols-outlined">nights_stay</span> The Synaptic Misfire
+                </a>
+<a class="text-on-surface-variant pl-4 hover:bg-surface-container-highest transition-colors py-2 flex items-center gap-3" href="#">
+<span class="material-symbols-outlined">receipt_long</span> The Insulin Ledger
+                </a>
+</nav>
+</div>
+</aside>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-stretch bg-surface-container-high">
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-3 hover:bg-surface-variant active:scale-95 transition-all">
+<span class="material-symbols-outlined">speed</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Performance</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-3 hover:bg-surface-variant active:scale-95 transition-all">
+<span class="material-symbols-outlined">timer</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Endurance</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-3 hover:bg-surface-variant active:scale-95 transition-all">
+<span class="material-symbols-outlined">restaurant</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Nutrition</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-3 hover:bg-surface-variant active:scale-95 transition-all">
+<span class="material-symbols-outlined">bedtime</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Sleep</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-primary text-on-primary p-3 active:scale-95 transition-all">
+<span class="material-symbols-outlined">assignment_turned_in</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Audit</span>
+</div>
+</nav>
+<!-- Atmospheric Glow -->
+<div class="fixed top-1/4 -left-20 w-64 h-64 bg-primary/5 rounded-full blur-[100px] pointer-events-none z-0"></div>
+<div class="fixed bottom-1/4 -right-20 w-96 h-96 bg-tertiary/5 rounded-full blur-[120px] pointer-events-none z-0"></div>
+<script>
+        // Simple Interaction logic
+        const menuBtn = document.querySelector('header .material-symbols-outlined');
+        const drawer = document.getElementById('nav-drawer');
+        let isOpen = false;
+
+        menuBtn.addEventListener('click', () => {
+            isOpen = !isOpen;
+            if (isOpen) {
+                drawer.style.transform = 'translateX(0)';
+                drawer.style.pointerEvents = 'auto';
+            } else {
+                drawer.style.transform = 'translateX(-100%)';
+                drawer.style.pointerEvents = 'none';
+            }
+        });
+        
+        // Auto-scroll reveal effects could go here
+    </script>
+</body></html>

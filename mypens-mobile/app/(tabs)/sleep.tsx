@@ -28,6 +28,7 @@ import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { HealthConnectSleepCard } from '@/components/HealthConnectSleepCard'
+import { DateNavBar } from '@/components/DateNavBar'
 
 const MOD = MODULE_COLORS.sleep
 const today = () => {
@@ -267,6 +268,15 @@ export default function SleepScreen() {
           void qc.invalidateQueries({ queryKey: ['sleep'] })
         }}
       />
+
+      <View style={{ marginHorizontal: 16, marginBottom: 4 }}>
+        <DateNavBar
+          date={date}
+          onChange={setDate}
+          accent={MOD.primary}
+          recentDates={entries.map((e) => e.date)}
+        />
+      </View>
 
       {/* Form */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Operational Directive | Planner</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Space+Grotesk:wght@300..700&amp;family=Work+Sans:wght@300;400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-dim": "#061423",
+                    "primary": "#c6c7c3",
+                    "on-error": "#690005",
+                    "tertiary-container": "#550000",
+                    "on-tertiary-fixed": "#410000",
+                    "surface-variant": "#283646",
+                    "on-tertiary-fixed-variant": "#8e140b",
+                    "surface-container-lowest": "#020f1e",
+                    "outline": "#8f9097",
+                    "tertiary": "#ffb4a8",
+                    "surface-bright": "#2d3a4a",
+                    "inverse-surface": "#d6e4f9",
+                    "tertiary-fixed": "#ffdad4",
+                    "on-secondary": "#263046",
+                    "on-primary-container": "#8c8e8a",
+                    "background": "#061423",
+                    "primary-container": "#242724",
+                    "on-error-container": "#ffdad6",
+                    "on-surface": "#d6e4f9",
+                    "error-container": "#93000a",
+                    "surface-container-high": "#1e2b3b",
+                    "on-primary-fixed-variant": "#454745",
+                    "error": "#ffb4ab",
+                    "tertiary-fixed-dim": "#ffb4a8",
+                    "secondary-fixed": "#d7e2ff",
+                    "on-primary-fixed": "#1a1c1a",
+                    "secondary": "#bbc6e2",
+                    "inverse-primary": "#5d5f5c",
+                    "primary-fixed": "#e2e3df",
+                    "surface-container-low": "#0f1c2c",
+                    "on-background": "#d6e4f9",
+                    "secondary-fixed-dim": "#bbc6e2",
+                    "on-tertiary-container": "#f05c49",
+                    "on-tertiary": "#690000",
+                    "surface-tint": "#c6c7c3",
+                    "inverse-on-surface": "#243141",
+                    "on-secondary-container": "#adb8d3",
+                    "surface-container": "#132030",
+                    "secondary-container": "#3e4960",
+                    "primary-fixed-dim": "#c6c7c3",
+                    "on-surface-variant": "#c5c6cd",
+                    "surface-container-highest": "#283646",
+                    "surface": "#061423",
+                    "on-secondary-fixed": "#101b30",
+                    "on-secondary-fixed-variant": "#3c475d",
+                    "outline-variant": "#45474d",
+                    "on-primary": "#2f312e"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0px",
+                    "lg": "0px",
+                    "xl": "0px",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Newsreader"],
+                    "display": ["Newsreader"],
+                    "body": ["Work Sans"],
+                    "label": ["Space Grotesk"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #061423;
+            color: #d6e4f9;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(40, 54, 70, 0.7);
+            backdrop-filter: blur(20px);
+        }
+        /* Custom scrollbar for high-density planner */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #020f1e; }
+        ::-webkit-scrollbar-thumb { background: #45474d; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body selection:bg-tertiary selection:text-on-tertiary">
+<!-- Top Navigation Bar (JSON Anchor Mapping) -->
+<header class="fixed top-0 z-50 w-full flex justify-between items-center px-6 py-4 bg-surface-container-low">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 bg-primary-container flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover grayscale opacity-80" data-alt="A macro portrait of a stern, middle-aged executive with sharp features, wearing dark rimless glasses. The lighting is dramatic and low-key, typical of a high-end editorial shoot, with deep shadows and metallic blue highlights. The overall aesthetic is cold, clinical, and authoritative, matching a dark navy and charcoal UI theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAx_8FXU2zxgF4v33W5YqaN7e5vHFIq5H1RHQE3Yoe3QB03GrXOviIOoxEHlHFVFJ4Eqn40o2tLkkMBYMoMGemVHbyd2NV-IOHPwf1YYmhyu11p7RAps8qKO5LnXQXyLbSBvmpRjP5eO9yqx6mRa-nf9GhG09-zWUqU7mB00sppDc5U_3H-HyjBl7-U5FbCQNeObxm6svoHeKLUwzLRIh6q1yYR1_kQbjGmwL-KD5AMMkVDE63QHs1w06ta8DJFW4KDyT2UE_QYF0A"/>
+</div>
+<h1 class="font-headline text-headline-lg uppercase tracking-tighter text-primary">THE AUDIT</h1>
+</div>
+<div class="flex items-center gap-6">
+<div class="hidden md:flex gap-8">
+<span class="font-label text-[10px] tracking-widest text-on-surface-variant cursor-pointer hover:bg-surface-bright transition-colors px-2 py-1">PERFORMANCE</span>
+<span class="font-label text-[10px] tracking-widest text-on-surface-variant cursor-pointer hover:bg-surface-bright transition-colors px-2 py-1">ENDURANCE</span>
+<span class="font-label text-[10px] tracking-widest text-tertiary font-bold px-2 py-1">AUDIT</span>
+</div>
+<span class="material-symbols-outlined text-primary cursor-pointer active:opacity-80">monitoring</span>
+</div>
+</header>
+<main class="pt-24 pb-32 px-6 max-w-7xl mx-auto min-h-screen">
+<!-- Hero Section: Editorial Header -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-end mb-20">
+<div class="lg:col-span-7">
+<p class="font-label text-tertiary uppercase tracking-[0.3em] text-xs mb-4">Strategic Framework 04-A</p>
+<h2 class="font-display text-6xl md:text-8xl font-bold leading-[0.9] tracking-tighter text-primary">
+                    The Operational <br/> Directive
+                </h2>
+<div class="mt-8 flex gap-4">
+<div class="bg-secondary-container px-4 py-2 flex items-center gap-3">
+<span class="font-label text-[10px] text-on-secondary-container uppercase">Cycle: Alpha-Prime</span>
+</div>
+<div class="bg-surface-container-highest px-4 py-2 flex items-center gap-3">
+<span class="font-label text-[10px] text-on-surface-variant uppercase">Status: Directive Active</span>
+</div>
+</div>
+</div>
+<div class="lg:col-span-5 relative group">
+<div class="aspect-[4/5] overflow-hidden border border-outline-variant/15">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A high-contrast, black and white macro photograph of an expensive mechanical watch movement. The gears, escapement, and tiny springs are exposed, showing intricate craftsmanship and complex engineering. The lighting creates sharp, metallic reflections and deep, pitch-black shadows. The style is clinical and precise, evoking an atmosphere of high-stakes time management and technical elite sophistication." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCWQ8a1ha20wnAVijDCfJXfHzmAcNhwc71REjIi0bzxnu3wVNWNvGXmew3DM0xkv_KClE9Q0mG1Fg1buLhdS-torTVFD-bb4dhs0ffRaH4eC6ZkwHlTy0QLVJ-_3VTKYKp1AaIZQEGZv9HySF6kIui_zhpt88940TAYOq2DVP6M4RuFkKZB9eiSlbNrPkVe-60iln5LuKl4W1jT3WgFhVSp8HXtiWaoiGOyTrDzIUq8d5Ub-yCp_Flfrjl9dmfoiT8mkZhyufL23_0"/>
+</div>
+<div class="absolute -bottom-6 -left-6 glass-panel p-6 max-w-[240px]">
+<span class="font-label text-[10px] text-tertiary uppercase block mb-2">Internal Clock</span>
+<p class="font-headline text-lg italic text-primary leading-tight">"Precision is the only objective metric of success."</p>
+</div>
+</div>
+</section>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-16">
+<!-- Left Column: Priority Interventions -->
+<aside class="lg:col-span-4 space-y-12">
+<div>
+<h3 class="font-label text-xs tracking-widest text-on-surface-variant uppercase mb-6 flex items-center gap-2">
+<span class="w-2 h-2 bg-tertiary"></span> Priority Interventions
+                    </h3>
+<div class="space-y-4">
+<!-- Intervention Card -->
+<div class="bg-surface-container-low p-6 border-l-4 border-tertiary transition-colors hover:bg-surface-container-high">
+<p class="font-label text-[10px] text-tertiary uppercase mb-1">Critical Recovery</p>
+<h4 class="font-headline text-2xl text-primary mb-3">Forced Recovery Window</h4>
+<p class="text-sm text-on-surface-variant leading-relaxed mb-4">Mandatory 90-minute parasympathetic dominance protocol. No external inputs. Zero digital latency.</p>
+<div class="flex justify-between items-center">
+<span class="font-label text-xs text-outline">14:00 — 15:30</span>
+<span class="material-symbols-outlined text-tertiary" style="font-variation-settings: 'FILL' 1;">bedtime</span>
+</div>
+</div>
+<!-- Intervention Card -->
+<div class="bg-surface-container-low p-6 border-l-4 border-primary transition-colors hover:bg-surface-container-high">
+<p class="font-label text-[10px] text-primary uppercase mb-1">System Audit</p>
+<h4 class="font-headline text-2xl text-primary mb-3">High-Intensity Audit</h4>
+<p class="text-sm text-on-surface-variant leading-relaxed mb-4">Complete review of P.E.N.S. biometrics. Recalibration of endurance thresholds for the next 48-hour sprint.</p>
+<div class="flex justify-between items-center">
+<span class="font-label text-xs text-outline">08:00 — 09:30</span>
+<span class="material-symbols-outlined text-primary">analytics</span>
+</div>
+</div>
+<!-- Intervention Card -->
+<div class="bg-surface-container-low p-6 border-l-4 border-outline transition-colors hover:bg-surface-container-high">
+<p class="font-label text-[10px] text-outline uppercase mb-1">Bio-Fueling</p>
+<h4 class="font-headline text-2xl text-primary mb-3">Macro Recalibration</h4>
+<p class="text-sm text-on-surface-variant leading-relaxed mb-4">Adjusted glucose-to-protein ratio based on current output levels. Eliminate systemic inflammation spikes.</p>
+<div class="flex justify-between items-center">
+<span class="font-label text-xs text-outline">12:30 — 13:00</span>
+<span class="material-symbols-outlined text-outline">restaurant</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Secondary Data Visualization -->
+<div class="bg-surface-container-lowest border border-outline-variant/10 p-8">
+<h3 class="font-label text-[10px] tracking-widest text-on-surface-variant uppercase mb-8">Baseline Flux</h3>
+<div class="h-40 flex items-end gap-1">
+<div class="flex-1 bg-tertiary/20 group relative h-[40%] hover:bg-tertiary/40 transition-all">
+<div class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 font-label text-[8px] text-tertiary">04:00</div>
+</div>
+<div class="flex-1 bg-tertiary/30 h-[60%]"></div>
+<div class="flex-1 bg-tertiary/60 h-[85%]"></div>
+<div class="flex-1 bg-tertiary h-[70%]"></div>
+<div class="flex-1 bg-tertiary/40 h-[50%]"></div>
+<div class="flex-1 bg-primary/20 h-[30%]"></div>
+<div class="flex-1 bg-primary/40 h-[45%]"></div>
+<div class="flex-1 bg-primary/60 h-[65%]"></div>
+<div class="flex-1 bg-primary h-[90%]"></div>
+<div class="flex-1 bg-primary/50 h-[55%]"></div>
+</div>
+<div class="flex justify-between mt-4 font-label text-[9px] text-outline uppercase tracking-widest">
+<span>Endurance Peak</span>
+<span>Sleep Cycle Start</span>
+</div>
+</div>
+</aside>
+<!-- Right Column: High-Density Schedule -->
+<section class="lg:col-span-8">
+<div class="flex justify-between items-end mb-12 border-b border-outline-variant/15 pb-6">
+<div>
+<h3 class="font-label text-xs tracking-widest text-on-surface-variant uppercase mb-2">Timeline</h3>
+<p class="font-headline text-4xl text-primary">T-Minus 12:00 Cycle</p>
+</div>
+<button class="bg-primary text-on-primary px-8 py-3 font-label text-xs tracking-[0.2em] uppercase hover:opacity-90 transition-opacity">
+                        Execute Schedule
+                    </button>
+</div>
+<div class="space-y-12">
+<!-- Schedule Block -->
+<div class="grid grid-cols-12 gap-8 items-start group">
+<div class="col-span-2 pt-2">
+<span class="font-label text-xl text-primary tracking-tighter">06:00</span>
+<span class="block font-label text-[10px] text-outline uppercase">Phase 1</span>
+</div>
+<div class="col-span-10 bg-surface-container-high p-8 border-r border-tertiary/0 group-hover:border-tertiary/50 transition-all duration-500">
+<div class="flex justify-between mb-4">
+<h4 class="font-headline text-3xl text-primary">Endurance Initialization</h4>
+<span class="bg-tertiary-container text-tertiary text-[10px] font-label px-2 py-1 flex items-center">HIGH STAKES</span>
+</div>
+<p class="text-on-surface-variant leading-relaxed max-w-2xl mb-6">
+                                Cold-exposure immersion (42°F) followed by zone-2 aerobic load. Objective: Systemic priming and norepinephrine spike for cognitive clarity.
+                            </p>
+<div class="flex gap-6">
+<div class="flex flex-col">
+<span class="font-label text-[9px] text-outline uppercase">Metric</span>
+<span class="font-label text-sm text-primary">VO2 MAX STRETCH</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label text-[9px] text-outline uppercase">Duration</span>
+<span class="font-label text-sm text-primary">75 MIN</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Schedule Block -->
+<div class="grid grid-cols-12 gap-8 items-start group opacity-60 hover:opacity-100 transition-opacity">
+<div class="col-span-2 pt-2">
+<span class="font-label text-xl text-primary tracking-tighter">09:30</span>
+<span class="block font-label text-[10px] text-outline uppercase">Phase 2</span>
+</div>
+<div class="col-span-10 bg-surface-container-lowest p-8 border border-outline-variant/10">
+<div class="flex justify-between mb-4">
+<h4 class="font-headline text-3xl text-primary">The Tactical Audit</h4>
+<span class="bg-surface-container-highest text-on-surface-variant text-[10px] font-label px-2 py-1 flex items-center">STANDARD</span>
+</div>
+<p class="text-on-surface-variant leading-relaxed max-w-2xl">
+                                Strategic review of active project directives. Resource allocation optimization and bottleneck identification.
+                            </p>
+</div>
+</div>
+<!-- Schedule Block -->
+<div class="grid grid-cols-12 gap-8 items-start group">
+<div class="col-span-2 pt-2 text-tertiary">
+<span class="font-label text-xl tracking-tighter">14:00</span>
+<span class="block font-label text-[10px] uppercase">Phase 3</span>
+</div>
+<div class="col-span-10 bg-surface-container-high p-8 relative overflow-hidden">
+<!-- Subtle Shader background for 'Directive' state -->
+<div class="absolute inset-0 opacity-10 pointer-events-none">
+<div class="w-full h-full bg-gradient-to-br from-tertiary-container to-transparent"></div>
+</div>
+<div class="relative z-10">
+<div class="flex justify-between mb-4">
+<h4 class="font-headline text-3xl text-tertiary">Forced Recovery Window</h4>
+<span class="material-symbols-outlined text-tertiary" style="font-variation-settings: 'FILL' 1;">lock</span>
+</div>
+<p class="text-on-surface-variant leading-relaxed max-w-2xl mb-6">
+                                    Biometric sync. Mandatory sensory deprivation. The system requires cooling before the final PM output surge.
+                                </p>
+<div class="flex gap-4">
+<button class="bg-tertiary-container border border-tertiary/20 text-tertiary px-6 py-2 font-label text-[10px] uppercase tracking-widest">Acknowledge</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Schedule Block (Late Night) -->
+<div class="grid grid-cols-12 gap-8 items-start group opacity-40 hover:opacity-100 transition-opacity">
+<div class="col-span-2 pt-2">
+<span class="font-label text-xl text-primary tracking-tighter">21:00</span>
+<span class="block font-label text-[10px] text-outline uppercase">Phase 4</span>
+</div>
+<div class="col-span-10 bg-surface-container-low p-8">
+<h4 class="font-headline text-3xl text-primary mb-4">Sleep Architecture Prep</h4>
+<p class="text-on-surface-variant leading-relaxed max-w-2xl">
+                                Blue-light filtration. Magnesium load. Dark-room thermal regulation (65°F).
+                            </p>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Bottom Navigation Bar (JSON Anchor Mapping) -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center bg-surface-container-lowest border-t border-outline-variant/15 py-2">
+<div class="flex flex-col items-center justify-center text-outline pt-2 pb-3 px-2 opacity-60 cursor-pointer hover:text-primary transition-all">
+<span class="material-symbols-outlined mb-1">speed</span>
+<span class="font-label text-[10px] tracking-widest uppercase">PERFORMANCE</span>
+</div>
+<div class="flex flex-col items-center justify-center text-outline pt-2 pb-3 px-2 opacity-60 cursor-pointer hover:text-primary transition-all">
+<span class="material-symbols-outlined mb-1">timer</span>
+<span class="font-label text-[10px] tracking-widest uppercase">ENDURANCE</span>
+</div>
+<div class="flex flex-col items-center justify-center text-outline pt-2 pb-3 px-2 opacity-60 cursor-pointer hover:text-primary transition-all">
+<span class="material-symbols-outlined mb-1">restaurant</span>
+<span class="font-label text-[10px] tracking-widest uppercase">NUTRITION</span>
+</div>
+<div class="flex flex-col items-center justify-center text-outline pt-2 pb-3 px-2 opacity-60 cursor-pointer hover:text-primary transition-all">
+<span class="material-symbols-outlined mb-1">bedtime</span>
+<span class="font-label text-[10px] tracking-widest uppercase">SLEEP</span>
+</div>
+<div class="flex flex-col items-center justify-center text-tertiary border-t-2 border-tertiary pt-2 pb-3 px-2 cursor-pointer transition-all">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-label text-[10px] tracking-widest uppercase font-bold">AUDIT</span>
+</div>
+</nav>
+<!-- Contextual HUD / Micro-interactions -->
+<div class="fixed right-6 top-1/2 -translate-y-1/2 hidden xl:flex flex-col gap-8">
+<div class="flex flex-col items-end">
+<span class="font-label text-[10px] text-outline uppercase tracking-widest">Efficiency</span>
+<span class="font-label text-2xl text-primary">98.2%</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label text-[10px] text-outline uppercase tracking-widest">HRV Base</span>
+<span class="font-label text-2xl text-tertiary">114ms</span>
+</div>
+<div class="w-px h-24 bg-outline-variant/30 self-end"></div>
+<div class="rotate-90 origin-right translate-x-2">
+<span class="font-label text-[10px] text-outline uppercase tracking-[0.5em] whitespace-nowrap">Operational Superiority</span>
+</div>
+</div>
+<script>
+        // Micro-interactions for Directive Execution
+        document.querySelector('button')?.addEventListener('click', function() {
+            this.textContent = 'EXECUTING...';
+            this.classList.add('bg-tertiary', 'text-on-tertiary');
+            setTimeout(() => {
+                this.textContent = 'ACTIVE';
+                this.classList.remove('bg-tertiary');
+                this.classList.add('bg-surface-bright');
+            }, 1200);
+        });
+
+        // Horizontal scroll animation for Baseline Flux bars
+        const bars = document.querySelectorAll('.bg-tertiary, .bg-primary');
+        bars.forEach((bar, index) => {
+            bar.style.transitionDelay = `${index * 50}ms`;
+        });
+    </script>
+</body></html>

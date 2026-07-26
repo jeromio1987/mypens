@@ -2,22 +2,34 @@
 
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import FoodEntry from '@/components/food/FoodEntry'
 import FoodLog from '@/components/food/FoodLog'
+import FoodRecentFeed from '@/components/food/FoodRecentFeed'
+import FoodIncompleteToggle from '@/components/food/FoodIncompleteToggle'
 import MacroTargets from '@/components/food/MacroTargets'
 import EnergyBalanceCard from '@/components/food/EnergyBalanceCard'
 import WeekEnergyRecapCard from '@/components/food/WeekEnergyRecapCard'
 import NutrientCard from '@/components/food/NutrientCard'
 import { DEFAULT_TARGETS, type DailyTargets } from '@/lib/foodModels'
 
+function todayStr() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function shiftDate(iso: string, days: number) {
+  const d = new Date(iso + 'T12:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 export default function FoodPage() {
-  const today = new Date().toISOString().split('T')[0]
-  const [date, setDate] = useState(today)
+  const [date, setDate] = useState(todayStr)
   const [refresh, setRefresh] = useState(0)
   const [targets, setTargets] = useState<DailyTargets>(DEFAULT_TARGETS)
 
   const bump = useCallback(() => setRefresh(r => r + 1), [])
+  const isToday = date === todayStr()
 
   return (
     <main className="min-h-screen bg-pens-deep px-4 py-8">
@@ -35,13 +47,45 @@ export default function FoodPage() {
               </p>
             </div>
           </div>
-          <input
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            className="bg-pens-navy border border-pens-muted/40 rounded-lg px-3 py-2 text-sm text-pens-cream focus:outline-none focus:border-pens-cream/30 shrink-0"
-          />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              aria-label="Previous day"
+              onClick={() => setDate(d => shiftDate(d, -1))}
+              className="p-2 rounded-lg bg-pens-navy border border-pens-muted/40 text-pens-cream hover:border-pens-cream/40 transition-colors"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <input
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="bg-pens-navy border border-pens-muted/40 rounded-lg px-2.5 py-2 text-sm text-pens-cream focus:outline-none focus:border-pens-cream/30"
+            />
+            <button
+              type="button"
+              aria-label="Next day"
+              disabled={isToday}
+              onClick={() => setDate(d => shiftDate(d, 1))}
+              className="p-2 rounded-lg bg-pens-navy border border-pens-muted/40 text-pens-cream hover:border-pens-cream/40 transition-colors disabled:opacity-30"
+            >
+              <ChevronRight size={18} />
+            </button>
+            {!isToday && (
+              <button
+                type="button"
+                onClick={() => setDate(todayStr())}
+                className="px-2.5 py-2 rounded-lg text-xs font-medium bg-pens-gold/15 text-pens-gold border border-pens-gold/30 hover:bg-pens-gold/25 transition-colors"
+              >
+                Today
+              </button>
+            )}
+          </div>
         </div>
+
+        <FoodRecentFeed refresh={refresh} selectedDate={date} onSelectDate={setDate} onChanged={bump} />
+
+        <FoodIncompleteToggle date={date} refresh={refresh} onChanged={bump} />
 
         <MacroTargets onTargetsChange={setTargets} />
         <EnergyBalanceCard date={date} refresh={refresh} />

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Continental P.E.N.S. | Command Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Space+Grotesk:wght@300..700&amp;family=Work+Sans:wght@300;400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary": "#bbc6e2",
+                    "on-primary-fixed-variant": "#454745",
+                    "on-tertiary-container": "#f05c49",
+                    "tertiary": "#ffb4a8",
+                    "on-tertiary": "#690000",
+                    "outline-variant": "#45474d",
+                    "surface-variant": "#283646",
+                    "inverse-on-surface": "#243141",
+                    "secondary-fixed-dim": "#bbc6e2",
+                    "on-secondary-fixed": "#101b30",
+                    "on-error-container": "#ffdad6",
+                    "surface-container-highest": "#283646",
+                    "surface-bright": "#2d3a4a",
+                    "surface-container-lowest": "#020f1e",
+                    "on-tertiary-fixed": "#410000",
+                    "surface-container": "#132030",
+                    "tertiary-fixed": "#ffdad4",
+                    "primary-fixed": "#e2e3df",
+                    "secondary-fixed": "#d7e2ff",
+                    "tertiary-fixed-dim": "#ffb4a8",
+                    "tertiary-container": "#550000",
+                    "primary": "#c6c7c3",
+                    "surface-dim": "#061423",
+                    "on-surface-variant": "#c5c6cd",
+                    "on-secondary-fixed-variant": "#3c475d",
+                    "on-secondary-container": "#adb8d3",
+                    "on-primary": "#2f312e",
+                    "inverse-primary": "#5d5f5c",
+                    "primary-fixed-dim": "#c6c7c3",
+                    "surface-container-low": "#0f1c2c",
+                    "on-tertiary-fixed-variant": "#8e140b",
+                    "primary-container": "#242724",
+                    "inverse-surface": "#d6e4f9",
+                    "on-primary-fixed": "#1a1c1a",
+                    "error-container": "#93000a",
+                    "on-error": "#690005",
+                    "on-secondary": "#263046",
+                    "on-surface": "#d6e4f9",
+                    "error": "#ffb4ab",
+                    "surface-container-high": "#1e2b3b",
+                    "secondary-container": "#3e4960",
+                    "surface-tint": "#c6c7c3",
+                    "outline": "#8f9097",
+                    "on-primary-container": "#8c8e8a",
+                    "on-background": "#d6e4f9",
+                    "surface": "#061423",
+                    "background": "#061423"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0px",
+                    "lg": "0px",
+                    "xl": "0px",
+                    "full": "0px"
+            },
+            "fontFamily": {
+                    "headline": ["Newsreader"],
+                    "display": ["Newsreader"],
+                    "body": ["Work Sans"],
+                    "label": ["Space Grotesk"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #020F1E;
+            color: #d6e4f9;
+            font-family: 'Work Sans', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .font-headline { font-family: 'Newsreader', serif; }
+        .font-label { font-family: 'Space Grotesk', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar for high-end feel */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #020F1E; }
+        ::-webkit-scrollbar-thumb { background: #3e4960; }
+        
+        .asymmetric-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr 1fr;
+            gap: 2.75rem;
+        }
+
+        @media (max-width: 1024px) {
+            .asymmetric-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .glass-panel {
+            background: rgba(40, 54, 70, 0.7);
+            backdrop-filter: blur(20px);
+        }
+        
+        .metric-heavy {
+            letter-spacing: -0.05em;
+            font-weight: 800;
+        }
+    </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface selection:bg-tertiary selection:text-on-tertiary">
+<!-- TopAppBar -->
+<header class="bg-surface-container-lowest text-primary flex justify-between items-center px-6 py-4 w-full sticky top-0 z-[60]">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined cursor-pointer active:opacity-80">menu</span>
+<h1 class="font-headline text-2xl font-bold text-primary uppercase tracking-widest">The Continental P.E.N.S.</h1>
+</div>
+<nav class="hidden md:flex gap-8 items-center font-label text-label-sm uppercase tracking-tighter">
+<a class="text-on-surface-variant hover:text-tertiary transition-colors duration-300" href="#">Performance</a>
+<a class="text-on-surface-variant hover:text-tertiary transition-colors duration-300" href="#">Endurance</a>
+<a class="text-on-surface-variant hover:text-tertiary transition-colors duration-300" href="#">Nutrition</a>
+<a class="text-on-surface-variant hover:text-tertiary transition-colors duration-300" href="#">Sleep</a>
+<a class="text-tertiary font-bold hover:text-tertiary transition-colors duration-300" href="#">Audit</a>
+</nav>
+<div class="w-10 h-10 border border-outline-variant/30 flex items-center justify-center grayscale hover:grayscale-0 transition-all cursor-pointer">
+<img class="w-full h-full object-cover" data-alt="A stern, high-contrast black and white portrait of a meticulous auditor in a charcoal suit, sharp lighting highlighting facial features, cold and professional atmosphere, cinematic lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBsB9iX2acNDKPszETgtfNaBrfMBKEBdYtxJGQ3eziXLysjUxeiArJz0RQWHFyZ7DfWOyn9DtmSvd28YwcK22oq9BY_w_4smyDj3ApJ-B6-naxY6Q2bb5w8PD9JzHJwWjBw2fQn3stSoGU4juUnmewZ25YmN-XV-q09CwoJCEfXR-LfExPQI3S3Unnc0LpIQy3GBvW8xNhf8IBp6xWsPEoogL9K5MDAOryYMufW0ubzrvX9F2Nc-MNJiv-88jqYbhWVNedg2Syp41I"/>
+</div>
+</header>
+<main class="max-w-[1600px] mx-auto px-6 pt-12 pb-32">
+<!-- Biological Status: Visceral Numbers -->
+<section class="mb-16">
+<h2 class="font-headline text-headline-lg tracking-tighter italic mb-8 border-l-2 border-tertiary pl-4">BIOLOGICAL STATUS</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-0 border border-outline-variant/20">
+<div class="p-8 bg-surface-container-low flex flex-col justify-between h-64 hover:bg-surface-container transition-colors border-r border-outline-variant/20">
+<span class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant">Metric: RECOVERY</span>
+<div class="flex items-baseline gap-2">
+<span class="font-headline metric-heavy text-8xl text-primary">84</span>
+<span class="font-label text-tertiary text-xl">%</span>
+</div>
+<p class="font-body text-sm text-on-surface-variant leading-relaxed max-w-[200px]">Parasympathetic dominance confirmed. System integrity optimal for load.</p>
+</div>
+<div class="p-8 bg-surface-container-low flex flex-col justify-between h-64 hover:bg-surface-container transition-colors border-r border-outline-variant/20">
+<span class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant">Metric: FATIGUE</span>
+<div class="flex items-baseline gap-2">
+<span class="font-headline metric-heavy text-8xl text-tertiary">12</span>
+<span class="font-label text-tertiary text-xl">HRS</span>
+</div>
+<p class="font-body text-sm text-on-surface-variant leading-relaxed max-w-[200px]">Accumulated systemic stress within tolerable limits. Metabolic clearance active.</p>
+</div>
+<div class="p-8 bg-surface-container-low flex flex-col justify-between h-64 hover:bg-surface-container transition-colors">
+<span class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant">Metric: READINESS</span>
+<div class="flex items-baseline gap-2">
+<span class="font-headline metric-heavy text-8xl text-primary">9.1</span>
+<span class="font-label text-tertiary text-xl">/10</span>
+</div>
+<p class="font-body text-sm text-on-surface-variant leading-relaxed max-w-[200px]">Full operational capacity. Proceed with high-intensity synaptic demands.</p>
+</div>
+</div>
+</section>
+<!-- Main Content Asymmetric Grid -->
+<div class="asymmetric-grid items-start">
+<!-- Left: Disruptions Ledger -->
+<aside class="flex flex-col gap-8 order-2 lg:order-1">
+<div class="bg-surface-container-low p-8 border-t-4 border-tertiary">
+<div class="flex justify-between items-end mb-10">
+<h3 class="font-headline text-2xl font-bold tracking-tight">DISRUPTIONS</h3>
+<span class="font-label text-xs text-tertiary tracking-widest">72H WINDOW</span>
+</div>
+<div class="space-y-12">
+<div class="relative pl-6 border-l border-outline-variant/30">
+<span class="font-label text-[10px] text-tertiary-fixed-dim absolute -left-[5px] top-0">●</span>
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-label text-sm font-bold uppercase tracking-wider">Late Night (Cognitive)</h4>
+<span class="font-label text-[10px] text-on-surface-variant">02:14 AM</span>
+</div>
+<p class="font-body text-xs text-on-surface-variant leading-relaxed">Exposure to blue light beyond circadian threshold. Sleep latency increased by 42 minutes.</p>
+</div>
+<div class="relative pl-6 border-l border-outline-variant/30">
+<span class="font-label text-[10px] text-tertiary absolute -left-[5px] top-0">●</span>
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-label text-sm font-bold uppercase tracking-wider">Ethanol Toxicity</h4>
+<span class="font-label text-[10px] text-on-surface-variant">22:30 PM</span>
+</div>
+<p class="font-body text-xs text-on-surface-variant leading-relaxed">Ingestion of high-congener spirit. Heart rate variability suppressed by 15ms overnight.</p>
+</div>
+<div class="relative pl-6 border-l border-outline-variant/30">
+<span class="font-label text-[10px] text-primary absolute -left-[5px] top-0">●</span>
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-label text-sm font-bold uppercase tracking-wider">Training Load Peak</h4>
+<span class="font-label text-[10px] text-on-surface-variant">Yesterday</span>
+</div>
+<p class="font-body text-xs text-on-surface-variant leading-relaxed">Central nervous system strain recorded at 450 TSS. Structural repair in progress.</p>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-high p-8">
+<h3 class="font-headline text-lg mb-4 italic">AUDITOR'S NOTE</h3>
+<p class="font-body text-sm text-on-surface-variant leading-loose">
+                        The current delta between Fatigue and Readiness suggests a temporary "overreach" state. 
+                        While metabolically sound, the Insulin Ledger shows signs of variance due to the ethanol disruption. 
+                        Recommendation: Fasting window extension +4 hours.
+                    </p>
+</div>
+</aside>
+<!-- Center: Metabolic Truth & Chart -->
+<section class="flex flex-col gap-10 order-1 lg:order-2">
+<div class="bg-surface-container-high relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-48 h-48 opacity-10 grayscale group-hover:grayscale-0 transition-all duration-700 pointer-events-none">
+<img alt="PENS Crest" class="w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLsUEkUmiCok19BPtv5RROWrg6Ne6GR8US8VyaFa9Xx7PZiqL3bAswonE71S2efIEU2G5_vR7p-hTEyryyHtCHlEJCOo7IOfyq6ljyULn-FDT7qlOaoYsrQjTPjHRGE_d2ry6d0Elm8UgwWfvZT23TcKYATNiTrSdVbxLf0uDWSV0v3ikcExlMP5KSDHZdtFbJALD9d3zKthVAWO3iXOuhRCBCUN7eAABNrWh7PlLcr1bAdHO-N3Iz5OPw"/>
+</div>
+<div class="p-10 relative z-10">
+<div class="flex items-center gap-6 mb-12">
+<div class="w-24 h-24 border border-outline-variant/20 flex items-center justify-center bg-surface-container-lowest">
+<img alt="PENS Division" class="w-20 h-20" src="https://lh3.googleusercontent.com/aida/AP1WRLsUEkUmiCok19BPtv5RROWrg6Ne6GR8US8VyaFa9Xx7PZiqL3bAswonE71S2efIEU2G5_vR7p-hTEyryyHtCHlEJCOo7IOfyq6ljyULn-FDT7qlOaoYsrQjTPjHRGE_d2ry6d0Elm8UgwWfvZT23TcKYATNiTrSdVbxLf0uDWSV0v3ikcExlMP5KSDHZdtFbJALD9d3zKthVAWO3iXOuhRCBCUN7eAABNrWh7PlLcr1bAdHO-N3Iz5OPw"/>
+</div>
+<div>
+<h3 class="font-headline text-4xl font-bold tracking-tighter">METABOLIC TRUTH</h3>
+<p class="font-label text-xs uppercase tracking-[0.3em] text-tertiary">Session 1567-P</p>
+</div>
+</div>
+<!-- Chart Component -->
+<div class="h-64 w-full relative mb-12">
+<div class="absolute inset-0 flex flex-col justify-between opacity-10 pointer-events-none">
+<div class="border-t border-on-surface w-full"></div>
+<div class="border-t border-on-surface w-full"></div>
+<div class="border-t border-on-surface w-full"></div>
+<div class="border-t border-on-surface w-full"></div>
+<div class="border-t border-on-surface w-full"></div>
+</div>
+<!-- Simplified Chart Drawing via SVG -->
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 400 150">
+<!-- Scale Noise -->
+<path d="M0,100 L40,80 L80,110 L120,70 L160,95 L200,60 L240,85 L280,50 L320,75 L360,40 L400,65" fill="none" stroke="#3e4960" stroke-dasharray="4,2" stroke-width="1.5"></path>
+<!-- True Weight -->
+<path d="M0,100 C100,98 200,85 300,82 400,80" fill="none" stroke="#c6c7c3" stroke-width="3"></path>
+<!-- Highlight Peak -->
+<circle cx="300" cy="82" fill="#ffb4a8" r="4"></circle>
+</svg>
+<div class="absolute bottom-0 left-0 w-full flex justify-between font-label text-[10px] text-on-surface-variant pt-4">
+<span>T-30D</span>
+<span>T-15D</span>
+<span>CURRENT</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-8 border-t border-outline-variant/10 pt-8">
+<div>
+<h4 class="font-label text-xs text-on-surface-variant mb-1">TRUE WEIGHT</h4>
+<p class="font-headline text-3xl font-bold">81.4 <span class="text-sm font-label uppercase">kg</span></p>
+</div>
+<div>
+<h4 class="font-label text-xs text-on-surface-variant mb-1">VARIANCE</h4>
+<p class="font-headline text-3xl font-bold text-tertiary">-1.2 <span class="text-sm font-label uppercase">kg</span></p>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-low p-10 flex items-center justify-between">
+<div>
+<h4 class="font-headline text-xl mb-1">SYNAPTIC MISFIRE RISK</h4>
+<p class="font-body text-sm text-on-surface-variant">Audited probability of decision-making fatigue.</p>
+</div>
+<div class="text-right">
+<span class="font-label text-xs uppercase tracking-widest block mb-1">Status</span>
+<span class="font-headline text-2xl text-primary">NOMINAL</span>
+</div>
+</div>
+</section>
+<!-- Right: Performance Assets (Visual Balance) -->
+<aside class="flex flex-col gap-6 order-3">
+<div class="bg-surface-container-high aspect-square grayscale border border-outline-variant/10 group overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" data-alt="A macro photograph of high-end mechanical watch gears in motion, cold steel aesthetic, shallow depth of field, deep navy and charcoal tones, symbolizing precision and metabolic timing." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJME98DO_MDuI80LyunE50pWZ0wnapP349LPUk001t4pxe9CIQKgACAa1qsMUwTSbw_UhMgUN0eTwxnvYvzgEwpIU-prKds5pP3rpgDpO5IEowWNr4OKO11-oT58eWzbFDoorJfR96YR0YGXTW-N1sZ-TuxgnTdyJbm75uiNmvuDUyYGFfNs1F-yPVhSYc0MJJ5I-rbnM8Kl_TMECXt9yhFw29wL3xPpvS9Nsxz6BzNiZHwQOmwwz7B_oms9-XyUel8ayIjumQuSg"/>
+</div>
+<div class="bg-surface-container-low p-6">
+<h4 class="font-label text-xs font-bold mb-4 uppercase tracking-[0.2em] text-on-surface-variant">Active Subscriptions</h4>
+<ul class="font-label text-sm space-y-4">
+<li class="flex justify-between items-center pb-2 border-b border-outline-variant/10">
+<span>The Ethanol Tax</span>
+<span class="material-symbols-outlined text-xs">wine_bar</span>
+</li>
+<li class="flex justify-between items-center pb-2 border-b border-outline-variant/10">
+<span>Gravity Reckoning</span>
+<span class="material-symbols-outlined text-xs">monitor_weight</span>
+</li>
+<li class="flex justify-between items-center pb-2 border-b border-outline-variant/10">
+<span>Insulin Ledger</span>
+<span class="material-symbols-outlined text-xs">receipt_long</span>
+</li>
+</ul>
+</div>
+<button class="bg-tertiary text-on-tertiary font-label text-sm font-bold py-6 uppercase tracking-[0.3em] hover:bg-tertiary/90 active:scale-[0.98] transition-all">
+                    Initiate Audit
+                </button>
+</aside>
+</div>
+</main>
+<!-- BottomNavBar (Mobile only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 bg-surface-container-high flex justify-around items-stretch">
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-3 active:scale-95 transition-all">
+<span class="material-symbols-outlined">speed</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Performance</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-3 active:scale-95 transition-all">
+<span class="material-symbols-outlined">timer</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Endurance</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-3 active:scale-95 transition-all">
+<span class="material-symbols-outlined">restaurant</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Nutrition</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-3 active:scale-95 transition-all">
+<span class="material-symbols-outlined">bedtime</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Sleep</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-primary text-on-primary p-3 active:scale-95 transition-all">
+<span class="material-symbols-outlined">assignment_turned_in</span>
+<span class="font-label text-[10px] uppercase tracking-tighter mt-1">Audit</span>
+</div>
+</nav>
+<!-- Micro-interaction Script -->
+<script>
+        // Simple ambient subtle movement for the metrics
+        document.addEventListener('mousemove', (e) => {
+            const metrics = document.querySelectorAll('.metric-heavy');
+            const x = (window.innerWidth / 2 - e.pageX) / 100;
+            const y = (window.innerHeight / 2 - e.pageY) / 100;
+            
+            metrics.forEach(m => {
+                m.style.textShadow = `${x}px ${y}px 0px rgba(255, 180, 168, 0.1)`;
+            });
+        });
+    </script>
+</body></html>

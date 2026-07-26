@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Auditor's Log | P.E.N.S. System</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Space+Grotesk:wght@300..700&amp;family=Work+Sans:wght@300;400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#061423",
+                        "primary": "#c6c7c3",
+                        "on-error": "#690005",
+                        "tertiary-container": "#550000",
+                        "on-tertiary-fixed": "#410000",
+                        "surface-variant": "#283646",
+                        "on-tertiary-fixed-variant": "#8e140b",
+                        "surface-container-lowest": "#020f1e",
+                        "outline": "#8f9097",
+                        "tertiary": "#ffb4a8",
+                        "surface-bright": "#2d3a4a",
+                        "inverse-surface": "#d6e4f9",
+                        "tertiary-fixed": "#ffdad4",
+                        "on-secondary": "#263046",
+                        "on-primary-container": "#8c8e8a",
+                        "background": "#061423",
+                        "primary-container": "#242724",
+                        "on-error-container": "#ffdad6",
+                        "on-surface": "#d6e4f9",
+                        "error-container": "#93000a",
+                        "surface-container-high": "#1e2b3b",
+                        "on-primary-fixed-variant": "#454745",
+                        "error": "#ffb4ab",
+                        "tertiary-fixed-dim": "#ffb4a8",
+                        "secondary-fixed": "#d7e2ff",
+                        "on-primary-fixed": "#1a1c1a",
+                        "secondary": "#bbc6e2",
+                        "inverse-primary": "#5d5f5c",
+                        "primary-fixed": "#e2e3df",
+                        "surface-container-low": "#0f1c2c",
+                        "on-background": "#d6e4f9",
+                        "secondary-fixed-dim": "#bbc6e2",
+                        "on-tertiary-container": "#f05c49",
+                        "on-tertiary": "#690000",
+                        "surface-tint": "#c6c7c3",
+                        "inverse-on-surface": "#243141",
+                        "on-secondary-container": "#adb8d3",
+                        "surface-container": "#132030",
+                        "secondary-container": "#3e4960",
+                        "primary-fixed-dim": "#c6c7c3",
+                        "on-surface-variant": "#c5c6cd",
+                        "surface-container-highest": "#283646",
+                        "surface": "#061423",
+                        "on-secondary-fixed": "#101b30",
+                        "on-secondary-fixed-variant": "#3c475d",
+                        "outline-variant": "#45474d",
+                        "on-primary": "#2f312e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Newsreader", "serif"],
+                        "display": ["Newsreader", "serif"],
+                        "body": ["Work Sans", "sans-serif"],
+                        "label": ["Space Grotesk", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .text-bleed {
+            letter-spacing: -0.05em;
+        }
+        .ledger-line {
+            background-image: linear-gradient(to right, rgba(143, 144, 151, 0.1) 1px, transparent 1px);
+            background-size: 40px 100%;
+        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #020f1e; }
+        ::-webkit-scrollbar-thumb { background: #3c475d; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-dim text-on-surface font-body selection:bg-tertiary/30">
+<!-- Top Navigation Anchor -->
+<header class="w-full top-0 z-50 bg-surface-container-low flex justify-between items-center px-6 py-4">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="account_circle">account_circle</span>
+</div>
+<h1 class="font-headline text-headline-lg uppercase tracking-tighter text-primary">THE AUDITOR</h1>
+</div>
+<nav class="hidden md:flex gap-8 items-center">
+<span class="font-label text-xs tracking-widest uppercase text-on-surface-variant hover:text-primary transition-colors cursor-pointer">PERFORMANCE</span>
+<span class="font-label text-xs tracking-widest uppercase text-on-surface-variant hover:text-primary transition-colors cursor-pointer">ENDURANCE</span>
+<span class="font-label text-xs tracking-widest uppercase text-tertiary font-bold cursor-pointer border-b border-tertiary">AUDIT</span>
+<span class="material-symbols-outlined text-primary cursor-pointer" data-icon="monitoring">monitoring</span>
+</nav>
+</header>
+<main class="min-h-screen pb-24">
+<!-- Hero Section: The Anchor -->
+<section class="relative w-full h-[530px] flex items-end px-6 md:px-12 pb-12 overflow-hidden">
+<div class="absolute inset-0 z-0">
+<div class="absolute inset-0 bg-gradient-to-t from-surface-dim via-surface-dim/60 to-transparent z-10"></div>
+<img class="w-full h-full object-cover grayscale opacity-50" data-alt="A high-contrast, moody black and white photograph of a heavy leather-bound open notebook resting on a dark oak desk. The paper is stained with ink and age, showing a handwritten ledger style. The lighting is dramatic and low-key, casting long shadows. The overall aesthetic is stoic, elite, and architectural, consistent with a modern clubroom editorial feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDYUCGlaimqYkdWTowCZT1bEn8BzIKkpoRZstwHiasnthkMF8pyHMboJOFUAEgQAEdwbx41FhTCIbMAvkWQ17oJgjNG1FdsQz3oPayJ36Xa4GDd94VOXtAkVLIlCkMgBYBgAqgfNx57ZEkqecDd3A8wZIcawUBoCJR9zZ5l8BJ5tkukwmWCAovvwREv71nP02hBFUucJRjJOPSdRFRk9VQIpiLYACpRgX6eyytecrFKNd3H4ZQjDgN3j3eQ_n0T6mMfRztkig2a3WE"/>
+</div>
+<div class="relative z-20 max-w-4xl">
+<p class="font-label text-tertiary text-sm tracking-[0.2em] uppercase mb-4">Internal Documentation // Chronological</p>
+<h2 class="font-display text-6xl md:text-8xl leading-none text-primary italic font-light tracking-tighter">The Auditor's Log</h2>
+<div class="mt-8 flex gap-12">
+<div>
+<span class="font-label text-[10px] text-outline block uppercase mb-1">Status</span>
+<span class="font-body text-xl font-light">CALIBRATING</span>
+</div>
+<div>
+<span class="font-label text-[10px] text-outline block uppercase mb-1">Session</span>
+<span class="font-body text-xl font-light">#842-DELTA</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Content Canvas -->
+<section class="px-6 md:px-12 py-20 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-16">
+<!-- Sidebar: Technical Metadata -->
+<aside class="md:col-span-3 space-y-12">
+<div class="bg-surface-container-low p-6">
+<h3 class="font-label text-xs tracking-widest uppercase text-outline mb-6">Aggregate Metrics</h3>
+<div class="space-y-4">
+<div class="flex justify-between items-end border-b border-outline-variant/15 pb-2">
+<span class="font-label text-[10px] text-on-surface-variant">MEAN DRIFT</span>
+<span class="font-label text-lg text-tertiary">0.24</span>
+</div>
+<div class="flex justify-between items-end border-b border-outline-variant/15 pb-2">
+<span class="font-label text-[10px] text-on-surface-variant">LUCIDITY SCORE</span>
+<span class="font-label text-lg text-primary">88%</span>
+</div>
+<div class="flex justify-between items-end border-b border-outline-variant/15 pb-2">
+<span class="font-label text-[10px] text-on-surface-variant">STOIC INDEX</span>
+<span class="font-label text-lg">HIGH</span>
+</div>
+</div>
+</div>
+<div class="p-6 border border-outline-variant/10">
+<h3 class="font-label text-xs tracking-widest uppercase text-outline mb-4 italic">The Protocol</h3>
+<p class="font-body text-sm leading-relaxed text-on-surface-variant">
+                        "The log is not for sentiment. It is a record of deviations from the baseline. Record the drift, observe the pulse, return to center."
+                    </p>
+</div>
+</aside>
+<!-- Main Ledger: Journal Entries -->
+<div class="md:col-span-9 space-y-24">
+<!-- Entry 01 -->
+<article class="group">
+<div class="flex flex-col md:flex-row gap-6 md:gap-12">
+<div class="md:w-32 flex-shrink-0 pt-2">
+<p class="font-label text-xl text-primary leading-none">OCT 24</p>
+<p class="font-label text-[10px] text-outline uppercase tracking-widest mt-1">04:12 AM</p>
+</div>
+<div class="flex-grow space-y-6">
+<div class="flex items-center gap-4">
+<h4 class="font-display text-3xl italic text-on-surface">Observations on Resilience</h4>
+<div class="h-[1px] flex-grow bg-outline-variant/20"></div>
+<span class="bg-secondary-container px-3 py-1 font-label text-[10px] text-on-secondary-container uppercase">Subjective Drift: 0.12</span>
+</div>
+<p class="font-headline text-2xl leading-snug text-on-surface-variant font-light max-w-3xl">
+                                The morning silence is clinical. Waking heart rate stabilized at 54bpm. There is a persistent weight in the left temple—not pain, but a presence. Performance metrics remain within standard deviation, yet the "felt" resistance to focus is palpable. I am observing the observer.
+                            </p>
+<div class="pt-4 flex gap-4">
+<span class="text-[10px] font-label text-outline uppercase tracking-[0.2em] border border-outline-variant/30 px-2 py-1">Sleep: 7h 12m</span>
+<span class="text-[10px] font-label text-outline uppercase tracking-[0.2em] border border-outline-variant/30 px-2 py-1">Nutrition: Keto-Optimal</span>
+</div>
+</div>
+</div>
+</article>
+<!-- Entry 02 (Asymmetric Shift) -->
+<article class="group pl-0 md:pl-24">
+<div class="bg-surface-container-high p-8 md:p-12">
+<div class="flex flex-col md:flex-row gap-8">
+<div class="md:w-32 flex-shrink-0">
+<p class="font-label text-xl text-tertiary leading-none">OCT 22</p>
+<p class="font-label text-[10px] text-outline uppercase tracking-widest mt-1">11:45 PM</p>
+</div>
+<div class="flex-grow space-y-6">
+<div class="flex items-center gap-4">
+<h4 class="font-display text-3xl italic text-primary">The Oxblood Threshold</h4>
+<span class="bg-tertiary-container px-3 py-1 font-label text-[10px] text-tertiary uppercase">Subjective Drift: 0.88</span>
+</div>
+<p class="font-headline text-2xl leading-snug text-on-surface font-light italic">
+                                    Significant deviation tonight. Social exposure lasted longer than the projected capacity. The "drift" is a static hum behind the eyes. Stoicism is failing. I feel the urge to explain myself—a clear indicator of structural weakness. Silence must be re-established as the primary operating system.
+                                </p>
+<div class="bg-surface-dim p-4 border-l-2 border-tertiary">
+<p class="font-label text-[10px] text-tertiary uppercase tracking-widest mb-1">CORRECTIVE ACTION</p>
+<p class="font-body text-sm text-on-surface-variant">Immediate sensory deprivation. 20 minutes Box Breathing. No digital inputs for 8 hours.</p>
+</div>
+</div>
+</div>
+</div>
+</article>
+<!-- Entry 03 -->
+<article class="group">
+<div class="flex flex-col md:flex-row gap-6 md:gap-12">
+<div class="md:w-32 flex-shrink-0 pt-2">
+<p class="font-label text-xl text-primary leading-none">OCT 21</p>
+<p class="font-label text-[10px] text-outline uppercase tracking-widest mt-1">08:00 AM</p>
+</div>
+<div class="flex-grow space-y-6">
+<div class="flex items-center gap-4">
+<h4 class="font-display text-3xl italic text-on-surface">Baseline Restored</h4>
+<div class="h-[1px] flex-grow bg-outline-variant/20"></div>
+<span class="bg-secondary-container px-3 py-1 font-label text-[10px] text-on-secondary-container uppercase">Subjective Drift: 0.04</span>
+</div>
+<p class="font-headline text-2xl leading-snug text-on-surface-variant font-light max-w-3xl">
+                                Cold immersion successful. The nervous system has ceased its protest. Thoughts are now distinct, geometric, and functional. There is no sentiment in today's entry because there is no sentiment in the system. The audit is complete. The architect is present.
+                            </p>
+</div>
+</div>
+</article>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Shell -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center bg-surface-container-lowest border-t border-outline-variant/15 md:hidden">
+<div class="flex flex-col items-center justify-center text-outline pt-2 pb-3 px-2 opacity-60">
+<span class="material-symbols-outlined" data-icon="speed">speed</span>
+<span class="font-label text-[10px] tracking-widest uppercase">PERFORMANCE</span>
+</div>
+<div class="flex flex-col items-center justify-center text-outline pt-2 pb-3 px-2 opacity-60">
+<span class="material-symbols-outlined" data-icon="timer">timer</span>
+<span class="font-label text-[10px] tracking-widest uppercase">ENDURANCE</span>
+</div>
+<div class="flex flex-col items-center justify-center text-outline pt-2 pb-3 px-2 opacity-60">
+<span class="material-symbols-outlined" data-icon="restaurant">restaurant</span>
+<span class="font-label text-[10px] tracking-widest uppercase">NUTRITION</span>
+</div>
+<div class="flex flex-col items-center justify-center text-outline pt-2 pb-3 px-2 opacity-60">
+<span class="material-symbols-outlined" data-icon="bedtime">bedtime</span>
+<span class="font-label text-[10px] tracking-widest uppercase">SLEEP</span>
+</div>
+<div class="flex flex-col items-center justify-center text-tertiary border-t-2 border-tertiary pt-2 pb-3 px-2">
+<span class="material-symbols-outlined" data-icon="analytics" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-label text-[10px] tracking-widest uppercase">AUDIT</span>
+</div>
+</nav>
+<!-- Floating Action: New Log -->
+<button class="fixed bottom-8 right-8 w-16 h-16 bg-primary text-on-primary flex items-center justify-center shadow-2xl hover:bg-surface-bright transition-all active:scale-95 z-40">
+<span class="material-symbols-outlined text-3xl" data-icon="edit_note">edit_note</span>
+</button>
+<script>
+        // Subtle micro-interaction for entry hover
+        document.querySelectorAll('article').forEach(entry => {
+            entry.addEventListener('mouseenter', () => {
+                entry.style.transform = 'translateX(8px)';
+                entry.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            });
+            entry.addEventListener('mouseleave', () => {
+                entry.style.transform = 'translateX(0)';
+            });
+        });
+    </script>
+</body></html>

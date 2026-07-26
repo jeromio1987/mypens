@@ -3,7 +3,14 @@ import type { NextRequest } from 'next/server'
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 import { isPublicApiRoute } from '@/lib/publicApiRoutes'
 
-const PUBLIC_PAGES = new Set<string>(['/login', '/welcome', '/design', '/snapshot'])
+const PUBLIC_PAGES = new Set<string>([
+  '/login',
+  '/welcome',
+  '/design',
+  // Static design specimen — renders no user data.
+  '/design/continental',
+  '/snapshot',
+])
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl

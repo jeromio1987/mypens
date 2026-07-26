@@ -34,6 +34,7 @@ interface EditForm {
   fatG: string
   fiberG: string
   notes: string
+  date: string
 }
 
 interface Props {
@@ -79,6 +80,7 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSa
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
   const [copying, setCopying] = useState<MealType | null>(null)
+  const [copySource, setCopySource] = useState('')
 
   const load = () => {
     setLoading(true)
@@ -89,6 +91,12 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSa
   }
 
   useEffect(load, [date, refresh])
+
+  useEffect(() => {
+    const y = new Date(date + 'T12:00:00')
+    y.setDate(y.getDate() - 1)
+    setCopySource(y.toISOString().slice(0, 10))
+  }, [date])
 
   const handleDelete = async (id: string) => {
     setDeleting(id)
@@ -115,6 +123,7 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSa
       fatG: String(e.fatG),
       fiberG: String(e.fiberG),
       notes: e.notes ?? '',
+      date: e.date || date,
     })
   }
 
@@ -132,6 +141,7 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id,
+          date: editForm.date,
           meal: editForm.meal,
           name: editForm.name,
           kcal: parseFloat(editForm.kcal) || 0,
@@ -143,22 +153,29 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSa
         }),
       })
       if (res.ok) {
-        const updated = await res.json()
-        setEntries(prev => prev.map(e => e.id === id ? updated : e))
+        const updated = await res.json() as FoodEntryRow
+        if (updated.date && updated.date !== date) {
+          setEntries(prev => prev.filter(e => e.id !== id))
+        } else {
+          setEntries(prev => prev.map(e => (e.id === id ? updated : e)))
+        }
         cancelEdit()
+        onSaved?.()
       }
     } finally {
       setSaving(false)
     }
   }
 
-  const copyFromYesterday = async (meal: MealType) => {
+  const copyFromSource = async (meal: MealType) => {
+    const source = copySource || (() => {
+      const y = new Date(date + 'T12:00:00')
+      y.setDate(y.getDate() - 1)
+      return y.toISOString().slice(0, 10)
+    })()
     setCopying(meal)
     try {
-      const yesterday = new Date(date + 'T00:00:00')
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayStr = yesterday.toISOString().slice(0, 10)
-      const res = await fetch(`/api/food?date=${yesterdayStr}`)
+      const res = await fetch(`/api/food?date=${source}`)
       const all: FoodEntryRow[] = await res.json()
       const mealEntries = all.filter(e => e.meal === meal)
       if (mealEntries.length === 0) return
@@ -166,7 +183,17 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSa
         await fetch('/api/food', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date, meal: e.meal, name: e.name, kcal: e.kcal, proteinG: e.proteinG, carbsG: e.carbsG, fatG: e.fatG, fiberG: e.fiberG, notes: e.notes }),
+          body: JSON.stringify({
+            date,
+            meal: e.meal,
+            name: e.name,
+            kcal: e.kcal,
+            proteinG: e.proteinG,
+            carbsG: e.carbsG,
+            fatG: e.fatG,
+            fiberG: e.fiberG,
+            notes: e.notes,
+          }),
         })
       }
       load()
@@ -205,14 +232,20 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSa
         )}
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        <span className="text-[10px] uppercase tracking-wide text-pens-cream/30 self-center mr-1">Copy from yesterday</span>
+      <div className="flex flex-wrap gap-1.5 items-center">
+        <span className="text-[10px] uppercase tracking-wide text-pens-cream/30 self-center mr-1">Copy meal from</span>
+        <input
+          type="date"
+          value={copySource}
+          onChange={e => setCopySource(e.target.value)}
+          className="bg-pens-navy border border-pens-muted/40 rounded-lg px-2 py-1 text-xs text-pens-cream"
+        />
         {MEAL_ORDER.map(meal => (
           <button
             key={meal}
             type="button"
             disabled={copying === meal}
-            onClick={() => void copyFromYesterday(meal)}
+            onClick={() => void copyFromSource(meal)}
             className="px-2.5 py-1 rounded-lg text-xs text-pens-cream/50 border border-pens-muted/30 hover:border-pens-muted/60 hover:text-pens-cream/80 disabled:opacity-40 transition-colors"
           >
             {copying === meal ? '…' : MEAL_LABELS[meal]}
@@ -246,6 +279,15 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSa
                               placeholder="Item name"
                               value={editForm.name}
                               onChange={ev => setEditForm(f => f ? { ...f, name: ev.target.value } : f)}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-pens-cream/40 uppercase">Move to date</label>
+                            <input
+                              type="date"
+                              className={inputCls}
+                              value={editForm.date}
+                              onChange={ev => setEditForm(f => f ? { ...f, date: ev.target.value } : f)}
                             />
                           </div>
                           <select

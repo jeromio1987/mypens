@@ -143,8 +143,12 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json()
-    const { id, meal, name, kcal, proteinG, carbsG, fatG, fiberG, notes } = body
+    const { id, meal, name, kcal, proteinG, carbsG, fatG, fiberG, notes, date } = body
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+    if (date !== undefined && (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date))) {
+      return NextResponse.json({ error: 'date must be yyyy-mm-dd' }, { status: 400 })
+    }
 
     const micros = body.micros !== undefined || body.microsJson !== undefined
       ? coerceMicros(body.micros ?? body.microsJson)
@@ -156,6 +160,7 @@ export async function PATCH(request: Request) {
     const entry = await prisma.foodEntry.update({
       where: { id },
       data: {
+        ...(date      !== undefined && { date }),
         ...(meal      !== undefined && { meal }),
         ...(name      !== undefined && { name }),
         ...(kcal      !== undefined && { kcal:     Number(kcal) }),
