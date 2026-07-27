@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { Camera, X } from 'lucide-react'
 import QuickToggle from '@/components/shared/QuickToggle'
 import PresetPicker from '@/components/shared/PresetPicker'
+import { today } from '@/lib/timeWindow'
 
 interface Props {
   onSaved?: () => void
@@ -26,7 +27,7 @@ const labelCls = 'block text-sm font-medium text-pens-cream/80 mb-1'
 const labelSmCls = 'block text-xs font-medium text-pens-cream/50 mb-1'
 
 export default function MeasurementsEntry({ onSaved }: Props) {
-  const today = new Date().toISOString().split('T')[0]
+  const todayStr = today()
   const [quick, setQuick] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -36,7 +37,7 @@ export default function MeasurementsEntry({ onSaved }: Props) {
   const photoInputRef = useRef<HTMLInputElement>(null)
 
   const blank = Object.fromEntries(FIELDS.map(f => [f.key, '']))
-  const [form, setForm] = useState<Record<string, string>>({ date: today, notes: '', ...blank })
+  const [form, setForm] = useState<Record<string, string>>({ date: todayStr, notes: '', ...blank })
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 

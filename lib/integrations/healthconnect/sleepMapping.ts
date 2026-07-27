@@ -1,8 +1,11 @@
 import type { HealthConnectSleepSession } from './api'
 
-/** Same coarse bands as Garmin sleep sync — tracking aid, not a clinical score. */
-export function hrvToQuality(hrv?: number | null): number {
-  if (hrv == null || !Number.isFinite(hrv)) return 3
+/**
+ * Coarse HRV → 1–5 quality bands (tracking aid, not clinical).
+ * Returns null when HRV is missing — never invent a 3 (P2 / WP 0.2).
+ */
+export function hrvToQuality(hrv?: number | null): number | null {
+  if (hrv == null || !Number.isFinite(hrv)) return null
   if (hrv < 30) return 1
   if (hrv < 45) return 2
   if (hrv < 60) return 3
@@ -53,10 +56,11 @@ export type MappedSleepEntry = {
   bedtime: string
   wakeTime: string
   hours: number
-  quality: number
+  quality: number | null
   hrv: number | null
   notes: string | null
   externalId: string
+  source: 'healthconnect'
 }
 
 export function mapSleepSession(s: HealthConnectSleepSession): MappedSleepEntry | null {
@@ -102,5 +106,6 @@ export function mapSleepSession(s: HealthConnectSleepSession): MappedSleepEntry 
     hrv,
     notes: notes.slice(0, 500),
     externalId: s.id,
+    source: 'healthconnect',
   }
 }

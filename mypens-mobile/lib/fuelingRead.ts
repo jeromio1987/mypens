@@ -4,18 +4,28 @@ export type FuelingRead = {
   verdict: string
   cause: string
   oneMove: string
-  coverage: 'none' | 'thin' | 'ok'
+  coverage: 'none' | 'thin' | 'ok' | 'pending' | 'error'
 }
 
 export function fuelingRead(input: {
   kcal: number
   proteinG: number
+  /** Pass -1 while food list is loading / failed so we never fake “no meals”. */
   entryCount: number
   targets: { kcal: number; proteinG: number }
   hour?: number
 }): FuelingRead {
   const hour = input.hour ?? new Date().getHours()
   const { kcal, proteinG, entryCount, targets } = input
+
+  if (entryCount < 0) {
+    return {
+      verdict: 'Loading fueling…',
+      cause: 'Waiting for MY PENS food list — not treating missing data as an empty day.',
+      oneMove: 'If this hangs, open /api/health on the phone browser and restart Next on the PC.',
+      coverage: 'pending',
+    }
+  }
 
   if (entryCount === 0) {
     return {

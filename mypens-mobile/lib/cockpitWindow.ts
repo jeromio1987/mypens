@@ -1,21 +1,26 @@
-/** Date helpers for live cockpit windows on mobile. */
+/** Date helpers for live cockpit windows on mobile — reads P9 timeWindow. */
+
+import { rollingWindow, shiftDateStr, today } from './timeWindow'
 
 export function isoToday(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return today()
 }
 
 export function isoDaysAgo(days: number, from: Date = new Date()): string {
-  const d = new Date(from)
-  d.setDate(d.getDate() - days)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return shiftDateStr(today(from), -days)
 }
 
 export type CockpitWindowDays = 7 | 30 | 90
 
-export function cockpitRange(days: CockpitWindowDays): { from: string; to: string } {
-  const to = isoToday()
-  return { from: isoDaysAgo(days - 1), to }
+/** Rolling inclusive window (label: rolling). Same bounds as web verdict/dashboard. */
+export function cockpitRange(days: CockpitWindowDays): {
+  from: string
+  to: string
+  label: 'rolling'
+  days: number
+} {
+  const w = rollingWindow(days)
+  return { from: w.from, to: w.to, label: 'rolling', days: w.days }
 }
 
 export type TheReadPayload = {

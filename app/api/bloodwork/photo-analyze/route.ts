@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import type { Model } from '@anthropic-ai/sdk/resources/messages/messages'
+import type { BetaImageBlockParam } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import { consume } from '@/lib/rateLimit'
 import { BLOODWORK_VISION_SYSTEM_BLOCKS } from '@/lib/bloodworkVisionPrompt'
 import { normalizeMarkerCode } from '@/lib/bloodworkFlags'
 import { parseJsonFromAssistant } from '@/lib/foodPhotoJson'
+import { BLOODWORK_VISION_SCHEMA } from '@/lib/aiSchemas'
+import { AiResponseError, callClaude, getAnthropicClient } from '@/lib/aiCall'
 
 export const runtime = 'nodejs'
 
@@ -156,50 +158,47 @@ export async function POST(req: Request) {
     }
 
     const mediaType = extToMediaType(ext)
-    const client = new Anthropic({ apiKey })
+    const client = getAnthropicClient(apiKey)
     const userLine =
       'Extract lab markers from the attached report image. Reply with JSON only (schema in system instructions).'
+
+    const paramsFor = (image: BetaImageBlockParam) => ({
+      model: VISION_MODEL,
+      max_tokens: 2500,
+      betas: [FILES_BETA],
+      system: BLOODWORK_VISION_SYSTEM_BLOCKS,
+      output_config: {
+        format: { type: 'json_schema' as const, schema: BLOODWORK_VISION_SCHEMA },
+      },
+      messages: [
+        {
+          role: 'user' as const,
+          content: [{ type: 'text' as const, text: userLine }, image],
+        },
+      ],
+    })
 
     let text: string
     try {
       const uint8 = new Uint8Array(imageBuf)
       const uploadable = new File([uint8], filenameForExt(ext), { type: mediaType })
       const uploaded = await client.beta.files.upload({ file: uploadable, betas: [FILES_BETA] })
-      const msg = await client.beta.messages.create({
-        model: VISION_MODEL,
-        max_tokens: 2500,
-        betas: [FILES_BETA],
-        system: BLOODWORK_VISION_SYSTEM_BLOCKS,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: userLine },
-              { type: 'image', source: { type: 'file', file_id: uploaded.id } },
-            ],
-          },
-        ],
-      })
-      text = msg.content.map(b => (b.type === 'text' ? b.text : '')).join('').trim()
+      const res = await callClaude(
+        client,
+        'bloodwork.photo-analyze',
+        paramsFor({ type: 'image', source: { type: 'file', file_id: uploaded.id } }),
+      )
+      text = res.text
     } catch (fileErr) {
+      if (fileErr instanceof AiResponseError) throw fileErr
       console.error('bloodwork photo Files API path failed, falling back to base64', fileErr)
       const b64 = imageBuf.toString('base64')
-      const msg = await client.beta.messages.create({
-        model: VISION_MODEL,
-        max_tokens: 2500,
-        betas: [FILES_BETA],
-        system: BLOODWORK_VISION_SYSTEM_BLOCKS,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: userLine },
-              { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-            ],
-          },
-        ],
-      })
-      text = msg.content.map(b => (b.type === 'text' ? b.text : '')).join('').trim()
+      const res = await callClaude(
+        client,
+        'bloodwork.photo-analyze',
+        paramsFor({ type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } }),
+      )
+      text = res.text
     }
 
     const parsed = parseJsonFromAssistant(text)
@@ -209,6 +208,10 @@ export async function POST(req: Request) {
       disclaimer: 'Draft from photo OCR — review every value before saving. Not medical advice.',
     })
   } catch (err) {
+    if (err instanceof AiResponseError) {
+      console.error('[bloodwork/photo-analyze]', err.message)
+      return NextResponse.json({ error: err.message }, { status: 502 })
+    }
     console.error('[bloodwork/photo-analyze]', err)
     return NextResponse.json({ error: 'Photo analyze failed' }, { status: 500 })
   }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { calculateConfidence, estimateSodiumRetention, estimateHardTrainingRetention, assessTanitaReliability } from '@/lib/retentionModels'
 import type { ConfidenceLevel } from '@/lib/retentionModels'
+import { rollingWindow, windowWhere } from '@/lib/timeWindow'
 
 export interface StructuredInsight {
   id: string
@@ -18,7 +19,7 @@ function generateInsights(data: {
     creatineRetentionKg: number; alcoholRetentionKg: number; glycogenRetentionKg: number
     highSodium: boolean; restaurantMeal: boolean; flightDay: boolean; illnessDay: boolean
   }[]
-  sleepEntries: { hours: number; quality: number; hrv: number | null }[]
+  sleepEntries: { hours: number; quality: number | null; hrv: number | null }[]
   trainingEntries: { date: string; volume: number }[]
   foodEntries: { kcal: number; date: string }[]
   activeEvents: { type: string; label: string; startDate: string; endDate: string }[]
@@ -93,11 +94,14 @@ function generateInsights(data: {
   // Sleep
   if (sleepEntries.length >= 3) {
     const avgSleep = sleepEntries.reduce((s, e) => s + e.hours, 0) / sleepEntries.length
-    const avgQuality = sleepEntries.reduce((s, e) => s + e.quality, 0) / sleepEntries.length
+    const withQ = sleepEntries.filter(e => e.quality != null)
+    const avgQuality = withQ.length
+      ? withQ.reduce((s, e) => s + (e.quality as number), 0) / withQ.length
+      : 0
     const hrvEntries = sleepEntries.flatMap(e => e.hrv != null ? [e.hrv] : [])
     const avgHrv = hrvEntries.length ? hrvEntries.reduce((a, b) => a + b, 0) / hrvEntries.length : null
 
-    const poorSleep = avgSleep < 6.5 || avgQuality < 3
+    const poorSleep = avgSleep < 6.5 || (withQ.length > 0 && avgQuality < 3)
     if (poorSleep && scaleDelta > 0) {
       insights.push({
         id: 'sleep-poor',
@@ -172,12 +176,6 @@ function generateInsights(data: {
   return insights.slice(0, 4)
 }
 
-function nDaysAgo(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().split('T')[0]
-}
-
 function avg(nums: number[]): number | null {
   if (!nums.length) return null
   return parseFloat((nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2))
@@ -185,12 +183,15 @@ function avg(nums: number[]): number | null {
 
 export async function GET() {
   try {
-    const today = new Date().toISOString().split('T')[0]
-    const sevenDaysAgo = nDaysAgo(7)
+    const window = rollingWindow(7)
+    const dateFilter = windowWhere(window)
+    const today = window.to
+    const sevenDaysAgo = window.from
+
 
     // ── Weight ──────────────────────────────────────────────────────────────
     const weightEntries = await prisma.weightEntry.findMany({
-      where: { date: { gte: sevenDaysAgo } },
+      where: { date: dateFilter },
       orderBy: { date: 'desc' },
     })
     const latestWeight = weightEntries[0] ?? null
@@ -229,7 +230,7 @@ export async function GET() {
 
     // ── Food ────────────────────────────────────────────────────────────────
     const foodToday = await prisma.foodEntry.findMany({ where: { date: today } })
-    const food7 = await prisma.foodEntry.findMany({ where: { date: { gte: sevenDaysAgo } } })
+    const food7 = await prisma.foodEntry.findMany({ where: { date: dateFilter } })
 
     const todayKcal = foodToday.reduce((s, e) => s + e.kcal, 0)
     const todayProtein = foodToday.reduce((s, e) => s + e.proteinG, 0)
@@ -242,17 +243,17 @@ export async function GET() {
 
     // ── Sleep ───────────────────────────────────────────────────────────────
     const sleepEntries = await prisma.sleepEntry.findMany({
-      where: { date: { gte: sevenDaysAgo } },
+      where: { date: dateFilter },
       orderBy: { date: 'desc' },
     })
     const latestSleep = sleepEntries[0] ?? null
     const avgHours7 = avg(sleepEntries.map(e => e.hours))
-    const avgQuality7 = avg(sleepEntries.map(e => e.quality))
+    const avgQuality7 = avg(sleepEntries.flatMap(e => (e.quality != null ? [e.quality] : [])))
     const avgHrv7 = avg(sleepEntries.flatMap(e => (e.hrv != null ? [e.hrv] : [])))
 
     // ── Training ────────────────────────────────────────────────────────────
     const trainingEntries = await prisma.trainingEntry.findMany({
-      where: { date: { gte: sevenDaysAgo } },
+      where: { date: dateFilter },
       orderBy: { date: 'desc' },
     })
     const sessionDates = [...new Set(trainingEntries.map(e => e.date))]
@@ -273,7 +274,7 @@ export async function GET() {
     // ── Events ──────────────────────────────────────────────────────────────
     const allEvents = await prisma.eventTag.findMany({ orderBy: { startDate: 'desc' } })
     const activeEvents = allEvents.filter(e => e.startDate <= today && e.endDate >= today)
-    const recentEvents = allEvents.filter(e => e.endDate >= sevenDaysAgo)
+    const recentEvents = allEvents.filter(e => e.endDate >= sevenDaysAgo && e.startDate <= today)
 
     // ── Insights ────────────────────────────────────────────────────────────
     const structuredInsights = generateInsights({
@@ -365,6 +366,12 @@ export async function GET() {
         recent: recentEvents,
       },
       insights: structuredInsights,
+      window: {
+        label: 'rolling' as const,
+        from: window.from,
+        to: window.to,
+        days: window.days,
+      },
     })
   } catch (error) {
     console.error(error)

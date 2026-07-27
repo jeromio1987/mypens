@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
+import { shiftDateStr, today } from '@/lib/timeWindow'
 
 async function getModeStreak(): Promise<number> {
   const todayStr = today()
-  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const yesterdayStr = shiftDateStr(todayStr, -1)
   const allEntries = await prisma.dayEntry.findMany({
     select: { date: true, mode: true },
     orderBy: { date: 'desc' },
@@ -22,9 +19,7 @@ async function getModeStreak(): Promise<number> {
   for (const d of sorted) {
     if (d === cursor) {
       streak++
-      const prev = new Date(cursor + 'T00:00:00')
-      prev.setDate(prev.getDate() - 1)
-      cursor = prev.toISOString().slice(0, 10)
+      cursor = shiftDateStr(cursor, -1)
     } else {
       break
     }

@@ -67,6 +67,24 @@ describe('BMR', () => {
     expect(e.method).toBe('mifflin_st_jeor')
     expect(e.kcal).toBeGreaterThan(0)
   })
+  it('prefers Katch–McArdle when BF% present', () => {
+    const e = estimateBmrDetailed(
+      80,
+      { heightCm: 180, birthYear: 1988, sex: 'male' },
+      18,
+    )
+    expect(e.method).toBe('katch_mcardle')
+    // FFM = 80 × 0.82 = 65.6; BMR = 370 + 21.6 × 65.6
+    expect(e.kcal).toBe(Math.round(370 + 21.6 * 65.6))
+  })
+  it('ignores implausible BF% and keeps Mifflin', () => {
+    const e = estimateBmrDetailed(
+      80,
+      { heightCm: 180, birthYear: 1988, sex: 'male' },
+      99,
+    )
+    expect(e.method).toBe('mifflin_st_jeor')
+  })
 })
 
 describe('NEAT', () => {
@@ -85,9 +103,20 @@ describe('NEAT', () => {
     expect(n.source).toBe('steps_model')
     expect(n.neatKcal).toBe(stepsToKcal(10000, 70))
   })
-  it('never double-counts: residual floors at 0', () => {
+  it('never double-counts: residual floors at 0 when Active < sessions and no steps', () => {
     const n = estimateNeat({ sessionEatKcal: 2000, deviceActiveKcal: 1500 })
+    expect(n.source).toBe('device_active_residual')
     expect(n.neatKcal).toBe(0)
+  })
+  it('falls back to steps when HC Active under-reports vs sessions', () => {
+    const n = estimateNeat({
+      sessionEatKcal: 177,
+      deviceActiveKcal: 14,
+      steps: 12581,
+      weightKg: 70,
+    })
+    expect(n.source).toBe('steps_model')
+    expect(n.neatKcal).toBe(stepsToKcal(12581, 70))
   })
 })
 

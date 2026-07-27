@@ -261,9 +261,32 @@ export function alcoholWindowStats(dailyWithConfounders) {
 }
 
 /**
+ * Food energy window stats — soft ADDITIONAL cause candidate (WP 2.1).
+ * Reads `energyDelta`/`foodCoverage` fields attached to day-core rows by
+ * buildDailySignals (see periodAnalyze.mjs) when the caller supplies
+ * data.food. Purely additive: does not read/modify alcohol confounder state.
+ */
+export function foodEnergyWindowStats(daily) {
+  const withDelta = (daily || []).filter(d => typeof d.energyDelta === 'number')
+  if (!withDelta.length) return null
+  const deficitDays = withDelta.filter(d => d.energyDelta <= -400).length
+  const surplusDays = withDelta.filter(d => d.energyDelta >= 400).length
+  const loggedDays = (daily || []).filter(d => d.foodCoverage).length
+  return {
+    daysWithDelta: withDelta.length,
+    loggedDays,
+    avgDelta: avg(withDelta.map(d => d.energyDelta)),
+    deficitDays,
+    surplusDays,
+    deficitShare: Math.round((deficitDays / withDelta.length) * 100) / 100,
+    surplusShare: Math.round((surplusDays / withDelta.length) * 100) / 100,
+  }
+}
+
+/**
  * Rank hypotheses with confidence 0–1 and long explanation text.
  */
-export function rankHypotheses({ daily, domains, alcohol, lags }) {
+export function rankHypotheses({ daily, domains, alcohol, lags, food }) {
   const hypotheses = []
   const act = domains?.activity
   const rhr = domains?.restingHr
@@ -413,6 +436,32 @@ export function rankHypotheses({ daily, domains, alcohol, lags }) {
     })
   }
 
+  // --- H_food: Sustained caloric deficit/surplus (soft, additive candidate) ---
+  if (food && food.daysWithDelta >= 4 && food.avgDelta != null) {
+    if (food.deficitShare >= 0.5 && food.avgDelta <= -300) {
+      hypotheses.push({
+        id: 'food_energy_deficit',
+        label: 'Sustained caloric deficit',
+        confidence: Math.min(0.75, 0.4 + food.deficitShare * 0.35),
+        priority: 3,
+        text:
+          `${food.deficitDays}/${food.daysWithDelta} logged days show an estimated deficit ≥400 kcal ` +
+          `(avg ${food.avgDelta} kcal/day, food − BMR/EAT/NEAT estimate). Chronic under-fuelling can mimic ` +
+          `overtraining/illness signals (low HRV, elevated RHR, poor sleep) — check food logging before blaming training load alone.`,
+      })
+    } else if (food.surplusShare >= 0.5 && food.avgDelta >= 300) {
+      hypotheses.push({
+        id: 'food_energy_surplus',
+        label: 'Sustained caloric surplus',
+        confidence: Math.min(0.7, 0.35 + food.surplusShare * 0.3),
+        priority: 3,
+        text:
+          `${food.surplusDays}/${food.daysWithDelta} logged days show an estimated surplus ≥400 kcal ` +
+          `(avg +${food.avgDelta} kcal/day). Useful context if weight/body-fat trend is climbing alongside these recovery metrics.`,
+      })
+    }
+  }
+
   // --- H6: Late nights ---
   if (alcohol?.lateNightDays >= 3) {
     hypotheses.push({
@@ -512,12 +561,14 @@ export function analyzeCausal(daily, confounderTables = {}) {
   const alcohol = alcoholWindowStats(enriched)
   const lags = lagEffects(enriched)
   const rhrLadder = rhrDrinkWindowStats(enriched)
+  const food = foodEnergyWindowStats(enriched)
 
   // domains-lite for hypothesis ranking (caller usually passes full domains)
   const domains = confounderTables.domains || null
 
   const hypotheses = rankHypotheses({
     daily: enriched,
+    food,
     domains: domains || {
       activity: {
         sessions: enriched.reduce((s, d) => s + (d.activityCount || 0), 0),
@@ -539,7 +590,7 @@ export function analyzeCausal(daily, confounderTables = {}) {
   })
 
   const top = hypotheses[0] || null
-  const narrative = buildCausalNarrative({ alcohol, lags, hypotheses, enriched, rhrLadder })
+  const narrative = buildCausalNarrative({ alcohol, lags, hypotheses, enriched, rhrLadder, food })
 
   const patterns = hypotheses.slice(0, 6).map(h => ({
     id: h.id,
@@ -551,6 +602,7 @@ export function analyzeCausal(daily, confounderTables = {}) {
   return {
     alcohol,
     rhrLadder,
+    food,
     lags,
     hypotheses,
     topHypothesis: top,
@@ -560,7 +612,7 @@ export function analyzeCausal(daily, confounderTables = {}) {
   }
 }
 
-export function buildCausalNarrative({ alcohol, lags, hypotheses, enriched, rhrLadder }) {
+export function buildCausalNarrative({ alcohol, lags, hypotheses, enriched, rhrLadder, food }) {
   const paras = []
 
   paras.push(
@@ -611,6 +663,14 @@ export function buildCausalNarrative({ alcohol, lags, hypotheses, enriched, rhrL
 
   for (const h of hypotheses.slice(0, 4)) {
     paras.push(`[${Math.round(h.confidence * 100)}% · ${h.label}] ${h.text}`)
+  }
+
+  if (food && food.daysWithDelta >= 4) {
+    paras.push(
+      `Food energy (${food.loggedDays} day(s) logged, ${food.daysWithDelta} with a computable balance): ` +
+        `avg ${food.avgDelta > 0 ? '+' : ''}${food.avgDelta} kcal/day · ${food.deficitDays} deficit day(s) (≤-400) · ` +
+        `${food.surplusDays} surplus day(s) (≥+400). Treat as a soft additional candidate cause, not a replacement for the alcohol/RHR read above.`,
+    )
   }
 
   const recentBinge = [...enriched].reverse().find(d => d.alcoholDrinks >= 10)

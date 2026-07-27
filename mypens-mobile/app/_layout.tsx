@@ -14,6 +14,12 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
+  ensureHealthConnectPermissions,
+  ensureHcPairingFromApi,
+  maybeAutoSyncHealthConnect,
+} from "@/lib/healthConnectSync";
+import { maybeAutoSyncHealthConnectSleep } from "@/lib/healthConnectSleepSync";
+import {
   initWeeklyFeedbackNotificationsOnLaunch,
   notificationsSupportedInThisClient,
 } from "@/lib/weeklyFeedbackNotifications";
@@ -27,6 +33,15 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
+    // HC: if ExerciseSession / ActiveCaloriesBurned missing, show system grant dialog once per launch.
+    // Then auto-pull sleep (6h demper) + workouts/day metrics (~20m demper) when paired.
+    void (async () => {
+      await ensureHealthConnectPermissions();
+      await ensureHcPairingFromApi();
+      void maybeAutoSyncHealthConnectSleep();
+      void maybeAutoSyncHealthConnect();
+    })();
+
     // Skip entirely in Expo Go (SDK 53+ Android push removed — import can throw).
     if (!notificationsSupportedInThisClient()) return;
 

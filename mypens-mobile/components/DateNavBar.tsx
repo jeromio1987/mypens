@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 
@@ -19,35 +19,22 @@ export function shiftIso(iso: string, days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function shortLabel(iso: string): string {
-  if (iso === isoToday()) return 'Today'
-  if (iso === isoYesterday()) return 'Yesterday'
-  const d = new Date(iso + 'T12:00:00')
-  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })
-}
-
 type Props = {
   date: string
   onChange: (next: string) => void
-  /** Extra ISO dates to show as chips (e.g. recently logged). */
+  /** Kept for call-site compat; chips removed so Fueling only shows one date row. */
   recentDates?: string[]
   accent?: string
 }
 
-/** Compact ← / Yesterday / chips / → for late entry without typing yyyy-mm-dd. */
-export function DateNavBar({ date, onChange, recentDates = [], accent }: Props) {
+/** Single row: ← / Yesterday / Today / → + ISO — no second chip bar. */
+export function DateNavBar({ date, onChange, accent }: Props) {
   const colors = useColors()
   const primary = accent ?? colors.primary
   const today = isoToday()
+  const yesterday = isoYesterday()
   const isToday = date === today
-
-  const chips = useMemo(() => {
-    const set = new Set<string>([...recentDates, date, today, isoYesterday()])
-    return Array.from(set)
-      .filter(Boolean)
-      .sort((a, b) => b.localeCompare(a))
-      .slice(0, 10)
-  }, [recentDates, date, today])
+  const isYesterday = date === yesterday
 
   return (
     <View style={styles.wrap}>
@@ -60,18 +47,18 @@ export function DateNavBar({ date, onChange, recentDates = [], accent }: Props) 
           <Feather name="chevron-left" size={18} color={colors.foreground} />
         </Pressable>
         <Pressable
-          onPress={() => onChange(isoYesterday())}
+          onPress={() => onChange(yesterday)}
           style={[
             styles.pill,
             {
-              backgroundColor: date === isoYesterday() ? primary : colors.secondary,
+              backgroundColor: isYesterday ? primary : colors.secondary,
               borderColor: colors.border,
             },
           ]}
         >
           <Text
             style={{
-              color: date === isoYesterday() ? '#fff' : colors.foreground,
+              color: isYesterday ? '#fff' : colors.foreground,
               fontSize: 12,
               fontFamily: 'Inter_600SemiBold',
             }}
@@ -79,16 +66,26 @@ export function DateNavBar({ date, onChange, recentDates = [], accent }: Props) 
             Yesterday
           </Text>
         </Pressable>
-        {!isToday ? (
-          <Pressable
-            onPress={() => onChange(today)}
-            style={[styles.pill, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+        <Pressable
+          onPress={() => onChange(today)}
+          style={[
+            styles.pill,
+            {
+              backgroundColor: isToday ? primary : colors.secondary,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Text
+            style={{
+              color: isToday ? '#fff' : colors.foreground,
+              fontSize: 12,
+              fontFamily: 'Inter_600SemiBold',
+            }}
           >
-            <Text style={{ color: colors.foreground, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
-              Today
-            </Text>
-          </Pressable>
-        ) : null}
+            Today
+          </Text>
+        </Pressable>
         <Pressable
           onPress={() => onChange(shiftIso(date, 1))}
           disabled={isToday}
@@ -106,40 +103,12 @@ export function DateNavBar({ date, onChange, recentDates = [], accent }: Props) 
         </Pressable>
         <Text style={[styles.iso, { color: colors.mutedForeground }]}>{date}</Text>
       </View>
-      <View style={styles.chips}>
-        {chips.map(d => {
-          const on = d === date
-          return (
-            <Pressable
-              key={d}
-              onPress={() => onChange(d)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor: on ? primary : colors.secondary,
-                  borderColor: on ? primary : colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: on ? '#fff' : colors.foreground,
-                  fontSize: 11,
-                  fontFamily: 'Inter_500Medium',
-                }}
-              >
-                {shortLabel(d)}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 8, marginBottom: 10 },
+  wrap: { marginBottom: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   iconBtn: {
     width: 36,
@@ -156,11 +125,4 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   iso: { fontSize: 11, fontFamily: 'Inter_500Medium', marginLeft: 4 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
 })

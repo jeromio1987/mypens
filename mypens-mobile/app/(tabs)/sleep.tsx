@@ -18,7 +18,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LineChart } from 'react-native-gifted-charts'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
 
 import { useColors } from '@/hooks/useColors'
 import { usePensSync } from '@/hooks/usePensSync'
@@ -29,12 +28,9 @@ import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { HealthConnectSleepCard } from '@/components/HealthConnectSleepCard'
 import { DateNavBar } from '@/components/DateNavBar'
+import { useSelectedDate } from '@/hooks/useSelectedDate'
 
 const MOD = MODULE_COLORS.sleep
-const today = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 interface SleepEntry {
   id: string
@@ -42,9 +38,10 @@ interface SleepEntry {
   bedtime: string
   wakeTime: string
   hours: number
-  quality: number
-  hrv?: number
-  notes?: string
+  quality: number | null
+  hrv?: number | null
+  notes?: string | null
+  source?: string
 }
 
 function parseTimeToMinutes(t: string): number {
@@ -62,19 +59,38 @@ function calcHours(bedtime: string, wakeTime: string): number {
   return parseFloat((diff / 60).toFixed(2))
 }
 
-function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function StarRating({
+  value,
+  onChange,
+}: {
+  value: number | null
+  onChange: (v: number | null) => void
+}) {
   const colors = useColors()
   return (
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      {[1, 2, 3, 4, 5].map((s) => (
-        <Pressable key={s} onPress={() => onChange(s)} hitSlop={8}>
-          <Feather
-            name="star"
-            size={28}
-            color={s <= value ? MOD.primary : colors.border}
-          />
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {[1, 2, 3, 4, 5].map((s) => (
+          <Pressable key={s} onPress={() => onChange(s)} hitSlop={8}>
+            <Feather
+              name="star"
+              size={28}
+              color={value != null && s <= value ? MOD.primary : colors.border}
+            />
+          </Pressable>
+        ))}
+      </View>
+      {value == null ? (
+        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+          Not measured (no HRV) — tap a star only if you rate manually
+        </Text>
+      ) : (
+        <Pressable onPress={() => onChange(null)} hitSlop={6}>
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, textDecorationLine: 'underline' }}>
+            Clear quality (keep null without HRV)
+          </Text>
         </Pressable>
-      ))}
+      )}
     </View>
   )
 }
@@ -84,16 +100,16 @@ export default function SleepScreen() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   const insets = useSafeAreaInsets()
-  const router = useRouter()
   const { width } = useWindowDimensions()
   const qc = useQueryClient()
   const useApi = isPensApiConfigured()
   const { pending, online, refresh: refreshQueue } = usePensSync()
 
-  const [date, setDate] = useState(today())
+  const { date, setDate } = useSelectedDate()
+  const [showLogForm, setShowLogForm] = useState(false)
   const [bedtime, setBedtime] = useState('23:00')
   const [wakeTime, setWakeTime] = useState('07:00')
-  const [quality, setQuality] = useState(3)
+  const [quality, setQuality] = useState<number | null>(3)
   const [hrv, setHrv] = useState('')
   const [notes, setNotes] = useState('')
 
@@ -185,7 +201,7 @@ export default function SleepScreen() {
 
   const last30 = entries.slice(-30)
   const chartData = last30.map((e) => ({ value: e.hours }))
-  const qualityData = last30.map((e) => ({ value: e.quality }))
+  const qualityData = last30.map((e) => ({ value: e.quality ?? 0 }))
 
   const avg = entries.length
     ? (entries.slice(-7).reduce((a, e) => a + e.hours, 0) / Math.min(entries.slice(-7).length, 7)).toFixed(1)
@@ -216,35 +232,6 @@ export default function SleepScreen() {
         )}
       </View>
 
-      {/* Weekly Feedback entry */}
-      <Pressable
-        onPress={() => router.push('/weekly-feedback')}
-        style={({ pressed }) => ({
-          marginHorizontal: 16,
-          marginBottom: 12,
-          padding: 14,
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: isDark ? '#164e63' : '#a5f3fc',
-          backgroundColor: isDark ? 'rgba(6,182,212,0.12)' : '#ecfeff',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-          opacity: pressed ? 0.7 : 1,
-        })}
-      >
-        <Feather name="activity" size={18} color="#06b6d4" />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.foreground }}>
-            Weekly Feedback
-          </Text>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>
-            Your health + how you worked with Claude this week
-          </Text>
-        </View>
-        <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-      </Pressable>
-
       {pending > 0 ? (
         <View
           style={{
@@ -269,91 +256,48 @@ export default function SleepScreen() {
         }}
       />
 
-      <View style={{ marginHorizontal: 16, marginBottom: 4 }}>
-        <DateNavBar
-          date={date}
-          onChange={setDate}
-          accent={MOD.primary}
-          recentDates={entries.map((e) => e.date)}
-        />
-      </View>
-
-      {/* Form */}
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Log sleep</Text>
-
-        <View style={styles.timeRow}>
-          <View style={styles.timeField}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Bedtime</Text>
-            <TextInput
-              value={bedtime}
-              onChangeText={setBedtime}
-              placeholder="23:00"
-              placeholderTextColor={colors.mutedForeground}
-              style={[styles.timeInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
-            />
-          </View>
-          <Feather name="arrow-right" size={20} color={colors.mutedForeground} style={{ marginTop: 24 }} />
-          <View style={styles.timeField}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Wake time</Text>
-            <TextInput
-              value={wakeTime}
-              onChangeText={setWakeTime}
-              placeholder="07:00"
-              placeholderTextColor={colors.mutedForeground}
-              style={[styles.timeInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
-            />
-          </View>
-          <View style={styles.durationWrap}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Duration</Text>
-            <Text style={[styles.durationValue, { color: hours > 0 ? MOD.primary : colors.mutedForeground }]}>
-              {hours > 0 ? `${hours}h` : '--'}
-            </Text>
-          </View>
+      {/* Recent first — feedback over logging */}
+      {entries.length > 0 && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent</Text>
+          {entries.slice(-8).reverse().map((e) => (
+            <Pressable
+              key={e.id}
+              onPress={() => {
+                setDate(e.date)
+                setBedtime(e.bedtime)
+                setWakeTime(e.wakeTime)
+                setQuality(e.quality)
+                setHrv(e.hrv != null ? String(e.hrv) : '')
+                setNotes(e.notes ?? '')
+                setShowLogForm(true)
+              }}
+              style={[styles.entryRow, { borderTopColor: colors.border }]}
+            >
+              <View>
+                <Text style={[styles.entryDate, { color: colors.foreground }]}>
+                  {new Date(e.date + 'T12:00:00').toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })}
+                </Text>
+                <Text style={[styles.entrySub, { color: colors.mutedForeground }]}>
+                  {e.bedtime} → {e.wakeTime}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.entryHours, { color: MOD.primary }]}>{e.hours}h</Text>
+                <View style={styles.starsRow}>
+                  {e.quality == null ? (
+                    <Text style={[styles.entrySub, { color: colors.mutedForeground }]}>not measured</Text>
+                  ) : (
+                    [1, 2, 3, 4, 5].map((s) => (
+                      <Feather key={s} name="star" size={10} color={s <= e.quality! ? MOD.primary : colors.border} />
+                    ))
+                  )}
+                </View>
+              </View>
+            </Pressable>
+          ))}
         </View>
-
-        <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 12 }]}>Quality</Text>
-        <StarRating value={quality} onChange={setQuality} />
-
-        <View style={styles.optionalRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>HRV (optional)</Text>
-            <TextInput
-              value={hrv}
-              onChangeText={setHrv}
-              keyboardType="decimal-pad"
-              placeholder="ms"
-              placeholderTextColor={colors.mutedForeground}
-              style={[styles.smallInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
-            />
-          </View>
-          <View style={{ flex: 2, marginLeft: 12 }}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Notes</Text>
-            <TextInput
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Optional notes"
-              placeholderTextColor={colors.mutedForeground}
-              style={[styles.smallInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
-            />
-          </View>
-        </View>
-
-        <Pressable
-          onPress={() => mutation.mutate()}
-          disabled={mutation.isPending}
-          style={({ pressed }) => [
-            styles.submitBtn,
-            { backgroundColor: MOD.primary, opacity: pressed || mutation.isPending ? 0.7 : 1 },
-          ]}
-        >
-          {mutation.isPending ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.submitText}>Log sleep</Text>
-          )}
-        </Pressable>
-      </View>
+      )}
 
       {/* Chart */}
       {isLoading ? (
@@ -393,37 +337,127 @@ export default function SleepScreen() {
         <View style={styles.empty}>
           <Feather name="moon" size={40} color={colors.mutedForeground} />
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-            No sleep logged yet.
+            No sleep logged yet — sync Health Connect or log a night below.
           </Text>
         </View>
       ) : null}
 
-      {/* Recent entries */}
-      {entries.length > 0 && (
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent</Text>
-          {entries.slice(-5).reverse().map((e) => (
-            <View key={e.id} style={[styles.entryRow, { borderTopColor: colors.border }]}>
-              <View>
-                <Text style={[styles.entryDate, { color: colors.foreground }]}>
-                  {new Date(e.date).toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })}
-                </Text>
-                <Text style={[styles.entrySub, { color: colors.mutedForeground }]}>
-                  {e.bedtime} → {e.wakeTime}
-                </Text>
+      <Pressable
+        onPress={() => setShowLogForm((s) => !s)}
+        style={{
+          marginHorizontal: 16,
+          marginBottom: 12,
+          paddingVertical: 12,
+          paddingHorizontal: 14,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+        }}
+      >
+        <Feather name="edit-3" size={18} color={MOD.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.foreground, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+            {showLogForm ? 'Hide log / edit' : 'Log / edit night'}
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 2 }}>
+            Manual only when HC missed a night
+          </Text>
+        </View>
+        <Feather name={showLogForm ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+      </Pressable>
+
+      {showLogForm ? (
+        <>
+          <View style={{ marginHorizontal: 16, marginBottom: 4 }}>
+            <DateNavBar
+              date={date}
+              onChange={setDate}
+              accent={MOD.primary}
+              recentDates={entries.map((e) => e.date)}
+            />
+          </View>
+
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Log sleep</Text>
+
+            <View style={styles.timeRow}>
+              <View style={styles.timeField}>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Bedtime</Text>
+                <TextInput
+                  value={bedtime}
+                  onChangeText={setBedtime}
+                  placeholder="23:00"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.timeInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                />
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[styles.entryHours, { color: MOD.primary }]}>{e.hours}h</Text>
-                <View style={styles.starsRow}>
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <Feather key={s} name="star" size={10} color={s <= e.quality ? MOD.primary : colors.border} />
-                  ))}
-                </View>
+              <Feather name="arrow-right" size={20} color={colors.mutedForeground} style={{ marginTop: 24 }} />
+              <View style={styles.timeField}>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Wake time</Text>
+                <TextInput
+                  value={wakeTime}
+                  onChangeText={setWakeTime}
+                  placeholder="07:00"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.timeInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                />
+              </View>
+              <View style={styles.durationWrap}>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Duration</Text>
+                <Text style={[styles.durationValue, { color: hours > 0 ? MOD.primary : colors.mutedForeground }]}>
+                  {hours > 0 ? `${hours}h` : '--'}
+                </Text>
               </View>
             </View>
-          ))}
-        </View>
-      )}
+
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 12 }]}>Quality</Text>
+            <StarRating value={quality} onChange={setQuality} />
+
+            <View style={styles.optionalRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>HRV (optional)</Text>
+                <TextInput
+                  value={hrv}
+                  onChangeText={setHrv}
+                  keyboardType="decimal-pad"
+                  placeholder="ms"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.smallInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                />
+              </View>
+              <View style={{ flex: 2, marginLeft: 12 }}>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Notes</Text>
+                <TextInput
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Optional notes"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.smallInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                />
+              </View>
+            </View>
+
+            <Pressable
+              onPress={() => mutation.mutate()}
+              disabled={mutation.isPending}
+              style={({ pressed }) => [
+                styles.submitBtn,
+                { backgroundColor: MOD.primary, opacity: pressed || mutation.isPending ? 0.7 : 1 },
+              ]}
+            >
+              {mutation.isPending ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.submitText}>Log sleep</Text>
+              )}
+            </Pressable>
+          </View>
+        </>
+      ) : null}
     </ScrollView>
   )
 }

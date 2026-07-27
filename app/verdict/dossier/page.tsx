@@ -1,18 +1,9 @@
 import Link from 'next/link'
 import { ArrowLeft, AlertCircle, Wine, Droplet, Moon, Activity } from 'lucide-react'
 import { prisma } from '@/lib/db'
+import { shiftDateStr, today } from '@/lib/timeWindow'
 
 export const dynamic = 'force-dynamic'
-
-function todayDate(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function daysAgo(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
-}
 
 function fmt(n: number, digits = 1): string {
   return Number.isFinite(n) ? n.toFixed(digits) : '—'
@@ -57,9 +48,9 @@ function median(values: number[]): number | null {
 }
 
 async function loadDossier(): Promise<Dossier> {
-  const date = todayDate()
-  const baselineCutoff = daysAgo(14)
-  const weekCutoff     = daysAgo(7)
+  const date = today()
+  const baselineCutoff = shiftDateStr(date, -14)
+  const weekCutoff     = shiftDateStr(date, -7)
 
   const [todayWeight, todaySleep, todayDay, baselineSleep, recentTrain] = await Promise.all([
     prisma.weightEntry.findFirst({ where: { date }, orderBy: { createdAt: 'desc' } }),

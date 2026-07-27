@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, FileText, Anchor, BookOpen, UtensilsCrossed, FlaskConical, Cable } from 'lucide-react'
+import { Scale, Moon, Ruler, LayoutDashboard, Target, Scale as Balance, Bed, Info, ChevronRight, ListChecks, Anchor, BookOpen, UtensilsCrossed, FlaskConical, Cable, ClipboardList, Activity } from 'lucide-react'
 import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 import NotificationsBadge from '@/components/shared/NotificationsBadge'
+import HomeReadCard from '@/components/home/HomeReadCard'
+import { DESTINATIONS } from '@/lib/destinations'
 
 const MODES = [
   {
@@ -66,6 +68,7 @@ export default function HomeClient() {
   const [stamp, setStamp]     = useState<{ today: string; time: string; entryNumber: number | null }>(
     { today: '', time: '', entryNumber: null },
   )
+  const [moreOpen, setMoreOpen] = useState(false)
 
   useEffect(() => {
     // Deferred to client to avoid SSR/CSR locale + timezone hydration mismatches.
@@ -128,46 +131,43 @@ export default function HomeClient() {
             </div>
             <h1 className="text-xl font-[family-name:var(--font-headline)] font-black italic text-pens-cream">Auditor</h1>
           </div>
-          <nav className="hidden md:flex gap-8">
-            <Link href="/morning-brief" className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Brief</Link>
-            <Link href="/investing" className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Investing</Link>
-            <Link href="/landing"    className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">About</Link>
-            <Link href="/dashboard" className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Dashboard</Link>
-            <Link href="/context"   className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Journal</Link>
-            <span             className="uppercase tracking-widest text-xs font-bold text-pens-crimson">Modes</span>
-            <Link href="/anchor"    className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Anchor</Link>
-            <Link href="/data"      className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Vault</Link>
-            <Link href="/share"     className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors">Share</Link>
+          <nav className="hidden md:flex gap-6 flex-wrap justify-end">
+            {DESTINATIONS.map(d => (
+              <Link
+                key={d.id}
+                href={d.href}
+                className="uppercase tracking-widest text-xs font-bold text-pens-cream/60 hover:text-pens-cream transition-colors"
+              >
+                {d.label}
+              </Link>
+            ))}
+            <span className="uppercase tracking-widest text-xs font-bold text-pens-crimson">Mode</span>
           </nav>
         </div>
       </header>
 
-      <div className="max-w-screen-xl mx-auto px-6 pt-12 pb-32">
-        {/* Editorial header */}
-        <header className="mb-12 max-w-2xl">
-          <div className="flex items-baseline gap-4 mb-2 flex-wrap min-h-[1rem]">
-            {stamp.entryNumber !== null && (
-              <>
-                <span className="text-xs font-bold tracking-[0.2em] text-pens-crimson uppercase">Entry {stamp.entryNumber}</span>
-                <span className="text-xs font-medium text-pens-cream/40">{stamp.today} — {stamp.time}</span>
-              </>
-            )}
-          </div>
-          <h2 className="text-5xl md:text-7xl font-[family-name:var(--font-headline)] font-bold italic tracking-tight text-pens-cream leading-tight">
-            Today&apos;s Intent
-          </h2>
-          <p className="mt-6 text-lg text-pens-cream/60 font-light leading-relaxed">
-            Before the chaos of the world intervenes, define the scope of your output. Choose a frequency and commit to the ledger.
-          </p>
-        </header>
+      <div className="max-w-screen-xl mx-auto px-6 pt-10 pb-32">
+        <div className="flex items-baseline gap-4 mb-6 flex-wrap min-h-[1rem]">
+          {stamp.entryNumber !== null && (
+            <>
+              <span className="text-xs font-bold tracking-[0.2em] text-pens-crimson uppercase">Entry {stamp.entryNumber}</span>
+              <span className="text-xs font-medium text-pens-cream/40">{stamp.today} — {stamp.time}</span>
+            </>
+          )}
+        </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 mb-6">
           <SyncStatusBadge />
           <NotificationsBadge />
         </div>
 
-        {/* Quick nav: Mode / Context / Verdict */}
-        <div className="flex items-center gap-2 mb-12 mt-6 max-w-xl">
+        {/* WP 0.7 — Read first */}
+        <div className="mb-8">
+          <HomeReadCard />
+        </div>
+
+        {/* Quick nav: Mode / Read / Audit */}
+        <div className="flex items-center gap-2 mb-8 max-w-xl">
           <div className="flex items-center gap-1.5 flex-1 bg-pens-crimson/15 border border-pens-crimson/40 rounded-xl px-3 py-2.5">
             <div className="min-w-0">
               <p className="text-[8px] uppercase tracking-widest text-pens-crimson/70 font-semibold leading-none mb-0.5">Today</p>
@@ -175,38 +175,47 @@ export default function HomeClient() {
             </div>
           </div>
           <Link
-            href="/context"
+            href="/period-review"
             className="flex items-center gap-1.5 flex-1 bg-pens-surface/60 border border-pens-muted/20 hover:border-pens-muted/40 rounded-xl px-3 py-2.5 transition-colors"
           >
-            <ListChecks size={13} className="text-pens-cream/40 shrink-0" />
+            <Activity size={13} className="text-pens-cream/40 shrink-0" />
             <div className="min-w-0">
-              <p className="text-[8px] uppercase tracking-widest text-pens-cream/30 font-semibold leading-none mb-0.5">Log</p>
-              <p className="text-xs font-bold text-pens-cream/60 truncate">Context</p>
+              <p className="text-[8px] uppercase tracking-widest text-pens-cream/30 font-semibold leading-none mb-0.5">Window</p>
+              <p className="text-xs font-bold text-pens-cream/60 truncate">Read</p>
             </div>
           </Link>
           <Link
             href="/verdict"
             className="flex items-center gap-1.5 flex-1 bg-pens-surface/60 border border-pens-muted/20 hover:border-pens-muted/40 rounded-xl px-3 py-2.5 transition-colors"
           >
-            <FileText size={13} className="text-pens-cream/40 shrink-0" />
+            <ClipboardList size={13} className="text-pens-cream/40 shrink-0" />
             <div className="min-w-0">
-              <p className="text-[8px] uppercase tracking-widest text-pens-cream/30 font-semibold leading-none mb-0.5">Review</p>
-              <p className="text-xs font-bold text-pens-cream/60 truncate">Verdict</p>
+              <p className="text-[8px] uppercase tracking-widest text-pens-cream/30 font-semibold leading-none mb-0.5">Ledgers</p>
+              <p className="text-xs font-bold text-pens-cream/60 truncate">Audit</p>
             </div>
           </Link>
         </div>
 
-        {/* Asymmetric mode selection */}
+        <header className="mb-6 max-w-2xl">
+          <h2 className="text-2xl md:text-3xl font-[family-name:var(--font-headline)] font-bold italic tracking-tight text-pens-cream leading-tight">
+            Today&apos;s Intent
+          </h2>
+          <p className="mt-2 text-sm text-pens-cream/50 font-light leading-relaxed">
+            Mode and context tags — input, not the homepage headline.
+          </p>
+        </header>
+
+        {/* Compact mode selection (demoted under Read) */}
         {loading ? (
-          <div className="h-96 rounded-2xl bg-pens-surface/30 animate-pulse" />
+          <div className="h-48 rounded-2xl bg-pens-surface/30 animate-pulse" />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start mb-16">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start mb-12">
             {/* Primary mode */}
             <div className="md:col-span-6 lg:col-span-5 h-full">
               <button
                 onClick={() => selectMode(primaryMode.id)}
                 disabled={saving}
-                className={`w-full text-left group relative p-8 md:p-12 rounded-xl transition-all hover:scale-[1.01] active:scale-95 flex flex-col justify-between min-h-[420px] border-b-4 ${
+                className={`w-full text-left group relative p-6 md:p-8 rounded-xl transition-all hover:scale-[1.01] active:scale-95 flex flex-col justify-between min-h-[280px] border-b-4 ${
                   entry.mode === primaryMode.id
                     ? 'bg-pens-surface shadow-[0_30px_60px_rgba(0,0,0,0.4)]'
                     : 'bg-pens-surface/40 hover:bg-pens-surface/60'
@@ -328,8 +337,41 @@ export default function HomeClient() {
           </div>
         )}
 
+        {/* Meer — MODULES demoted (WP 0.7) */}
+        <div className="mt-10 mb-8 max-w-2xl">
+          <button
+            type="button"
+            onClick={() => setMoreOpen(o => !o)}
+            className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold text-pens-cream/45 hover:text-pens-cream/70 transition-colors"
+          >
+            <ChevronRight size={14} className={`transition-transform ${moreOpen ? 'rotate-90' : ''}`} />
+            Meer modules
+          </button>
+          {moreOpen && (
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {MODULES.map(({ href, label, icon: Icon, ...rest }) => {
+                const emerald = 'emeraldNav' in rest && rest.emeraldNav
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                      emerald
+                        ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-950/20'
+                        : 'border-pens-muted/20 text-pens-cream/70 hover:border-pens-muted/40 hover:bg-pens-surface/40'
+                    }`}
+                  >
+                    <Icon size={16} />
+                    {label}
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Footer ledger row */}
-        <div className="mt-24 border-t-2 border-pens-muted/20 pt-8 flex flex-col md:flex-row justify-between gap-8">
+        <div className="mt-16 border-t-2 border-pens-muted/20 pt-8 flex flex-col md:flex-row justify-between gap-8">
           <div className="flex items-center gap-12">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-pens-cream/40 mb-1">Current Streak</p>

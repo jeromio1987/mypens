@@ -127,6 +127,16 @@ export function buildDailySignals(data) {
         trainingLoad: 0,
         hardLoad: 0,
         easyLoad: 0,
+        // WP 2.1 — nutrition day core. Populated from data.food when the caller
+        // supplies it (see lib/engines/cockpitData.ts); left at defaults
+        // otherwise so existing Garmin-only callers/tests are unaffected.
+        kcalIn: 0,
+        proteinG: 0,
+        carbsG: 0,
+        fatG: 0,
+        foodCoverage: false,
+        estimatedOut: null,
+        energyDelta: null,
       })
     }
     return byDate.get(date)
@@ -140,6 +150,22 @@ export function buildDailySignals(data) {
     // SleepEntry.hrv (avgSleepingHRV from dump) — use when daily metric HRV is missing
     if (typeof s.hrv === 'number' && s.hrv > 0 && row.hrv == null) row.hrv = s.hrv
   }
+  // WP 2.1 — nutrition day core. `data.food` rows: {date, kcal, proteinG, carbsG,
+  // fatG, estimatedOut?, energyDelta?} — one row per date, already aggregated by
+  // the caller (see lib/engines/cockpitData.ts → getEnergyBalanceForRange).
+  // Does not touch alcohol/confounder logic in periodCausal.mjs.
+  for (const f of data.food || []) {
+    const row = touch(f.date)
+    if (!row) continue
+    row.kcalIn += typeof f.kcal === 'number' ? f.kcal : 0
+    row.proteinG += typeof f.proteinG === 'number' ? f.proteinG : 0
+    row.carbsG += typeof f.carbsG === 'number' ? f.carbsG : 0
+    row.fatG += typeof f.fatG === 'number' ? f.fatG : 0
+    row.foodCoverage = true
+    if (typeof f.estimatedOut === 'number') row.estimatedOut = f.estimatedOut
+    if (typeof f.energyDelta === 'number') row.energyDelta = f.energyDelta
+  }
+
   for (const m of data.metrics || []) {
     const row = touch(m.date)
     if (!row || m.valueNum == null) continue
@@ -177,6 +203,11 @@ export function buildDailySignals(data) {
     touch(t.date)
   }
 
+  const hrMax =
+    data.hrMax != null && Number.isFinite(Number(data.hrMax)) && Number(data.hrMax) > 0
+      ? Number(data.hrMax)
+      : 185
+
   const allLoadDates = new Set([...actsByDate.keys(), ...trainsByDate.keys()])
   for (const date of allLoadDates) {
     const row = touch(date)
@@ -185,7 +216,7 @@ export function buildDailySignals(data) {
     const trains = trainsByDate.get(date) || []
     const scored = dayTrainingLoad(acts, trains, {
       restingHr: row.restingHr ?? 50,
-      hrMax: 185,
+      hrMax,
     })
     row.activityCount = acts.length + trains.length
     row.activityMinutes = scored.activityMinutes

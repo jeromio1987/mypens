@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Scale, Dumbbell, Activity } from 'lucide-react'
 import QuickToggle from '@/components/shared/QuickToggle'
 import PresetPicker from '@/components/shared/PresetPicker'
+import { today } from '@/lib/timeWindow'
 
 interface WeightBreakdown {
   scaleKg: number
@@ -35,7 +36,7 @@ const labelCls = 'block text-sm font-medium text-pens-cream/80 mb-1'
 const labelSmCls = 'block text-xs font-medium text-pens-cream/50 mb-1'
 
 export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
-  const today = new Date().toISOString().split('T')[0]
+  const todayStr = today()
   const [quick, setQuick] = useState(true)
   const [activeTab, setActiveTab] = useState<'scale' | 'context' | 'tanita'>('scale')
   const [saving, setSaving] = useState(false)
@@ -43,7 +44,7 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
   const [error, setError] = useState<string | null>(null)
 
   const [form, setForm] = useState({
-    date: today,
+    date: todayStr,
     scaleKg: '',
     bodyFatPct: '',
     muscleMassKg: '',
@@ -172,6 +173,19 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
               <label className={labelCls}>Scale weight (kg) <span className="text-pens-crimson">*</span></label>
               <input type="number" step="0.05" value={form.scaleKg} onChange={e => set('scaleKg', e.target.value)} className={inputCls} placeholder="e.g. 82.4" required />
             </div>
+            <div className="flex flex-wrap gap-4 pt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.morningReading} onChange={e => set('morningReading', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+                <span className="text-sm text-pens-cream">Morning reading</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.hardTraining} onChange={e => set('hardTraining', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+                <span className="text-sm text-pens-cream">Hard training</span>
+              </label>
+            </div>
+            <p className="text-xs text-pens-cream/40">
+              Switch off Quick for optional confounders / Tanita — not needed for a normal weigh-in.
+            </p>
           </div>
         )}
 
@@ -207,64 +221,15 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
 
         {!quick && activeTab === 'context' && (
           <div className="space-y-4">
-            <p className="text-xs text-pens-cream/40">These inputs drive the water retention model.</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelSmCls}>Creatine dose (g/day)</label>
-                <input type="number" step="1" value={form.creatineDoseG} onChange={e => set('creatineDoseG', e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelSmCls}>Days on creatine</label>
-                <input type="number" value={form.creatineDaysOn} onChange={e => set('creatineDaysOn', e.target.value)} className={inputCls} />
-              </div>
-              {Number(form.creatineDoseG) > 0 && Number(form.creatineDoseG) < 10 && (
-                <div className="col-span-2">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" checked={form.creatinePostLoad} onChange={e => set('creatinePostLoad', e.target.checked)} className="w-4 h-4 accent-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium text-pens-cream">Post-load maintenance</p>
-                      <p className="text-xs text-pens-cream/40">Switched from loading (≥10g) — stores stay fully saturated</p>
-                    </div>
-                  </label>
-                </div>
-              )}
-              <div>
-                <label className={labelSmCls}>Alcohol units</label>
-                <input type="number" step="0.5" value={form.alcoholUnits} onChange={e => set('alcoholUnits', e.target.value)} className={inputCls} />
-              </div>
-              {Number(form.creatineDoseG) > 0 && Number(form.creatineDoseG) < 10 && (
-                <div className="col-span-2">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.creatinePostLoad}
-                      onChange={e => set('creatinePostLoad', e.target.checked)}
-                      className="w-4 h-4 accent-blue-600"
-                    />
-                    <div>
-                      <p className="text-sm font-medium">Post-load maintenance</p>
-                      <p className="text-xs text-pens-cream/50">Switched from loading (≥10g) — stores stay fully saturated</p>
-                    </div>
-                  </label>
-                </div>
-              )}
-              <div>
-                <label className={labelSmCls}>Hours since alcohol</label>
-                <input type="number" step="1" value={form.hoursSinceAlcohol} onChange={e => set('hoursSinceAlcohol', e.target.value)} className={inputCls} />
-              </div>
-              <div className="col-span-2">
-                <label className={labelSmCls}>Carbs yesterday (g)</label>
-                <input type="number" step="10" value={form.carbsG} onChange={e => set('carbsG', e.target.value)} className={inputCls} />
-              </div>
-            </div>
-
-            <div className="space-y-2 pt-1 border-t border-pens-muted/20">
-              <p className="text-xs text-pens-cream/40">Additional confounders (affect confidence score)</p>
+            <p className="text-xs text-pens-cream/40">
+              Optional — only if today is unusual. Skip on a normal morning weigh-in.
+            </p>
+            <div className="space-y-2">
               {[
-                { key: 'highSodium', label: 'High sodium day', sub: 'Salty meals → water retention' },
-                { key: 'restaurantMeal', label: 'Restaurant meal(s)', sub: 'Hidden sodium / large portions' },
-                { key: 'flightDay', label: 'Flight / sedentary day', sub: 'Fluid pooling in lower body' },
-                { key: 'illnessDay', label: 'Illness / inflammation', sub: 'Scale and Tanita both unreliable' },
+                { key: 'highSodium', label: 'High sodium / salty meals', sub: 'Water retention' },
+                { key: 'illnessDay', label: 'Illness', sub: 'Scale less reliable' },
+                { key: 'flightDay', label: 'Flight / travel', sub: 'Fluid pooling' },
+                { key: 'restaurantMeal', label: 'Restaurant meal(s)', sub: 'Hidden sodium' },
               ].map(({ key, label, sub }) => (
                 <label key={key} className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" checked={form[key as keyof typeof form] as boolean} onChange={e => set(key, e.target.checked)} className="w-4 h-4 accent-blue-500" />
@@ -275,6 +240,45 @@ export default function WeightEntry({ onSaved }: { onSaved?: () => void }) {
                 </label>
               ))}
             </div>
+
+            <details className="pt-2 border-t border-pens-muted/20">
+              <summary className="text-xs text-pens-cream/50 cursor-pointer select-none py-1">
+                More retention numbers (creatine / alcohol / carbs)
+              </summary>
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div>
+                  <label className={labelSmCls}>Creatine dose (g/day)</label>
+                  <input type="number" step="1" value={form.creatineDoseG} onChange={e => set('creatineDoseG', e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelSmCls}>Days on creatine</label>
+                  <input type="number" value={form.creatineDaysOn} onChange={e => set('creatineDaysOn', e.target.value)} className={inputCls} />
+                </div>
+                {Number(form.creatineDoseG) > 0 && Number(form.creatineDoseG) < 10 && (
+                  <div className="col-span-2">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox" checked={form.creatinePostLoad} onChange={e => set('creatinePostLoad', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+                      <div>
+                        <p className="text-sm font-medium text-pens-cream">Post-load maintenance</p>
+                        <p className="text-xs text-pens-cream/40">Switched from loading (≥10g)</p>
+                      </div>
+                    </label>
+                  </div>
+                )}
+                <div>
+                  <label className={labelSmCls}>Alcohol units</label>
+                  <input type="number" step="0.5" value={form.alcoholUnits} onChange={e => set('alcoholUnits', e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelSmCls}>Hours since alcohol</label>
+                  <input type="number" step="1" value={form.hoursSinceAlcohol} onChange={e => set('hoursSinceAlcohol', e.target.value)} className={inputCls} />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelSmCls}>Carbs yesterday (g)</label>
+                  <input type="number" step="10" value={form.carbsG} onChange={e => set('carbsG', e.target.value)} className={inputCls} />
+                </div>
+              </div>
+            </details>
           </div>
         )}
 

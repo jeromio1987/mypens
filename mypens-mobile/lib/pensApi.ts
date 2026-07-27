@@ -9,6 +9,10 @@
 const base = (process.env.EXPO_PUBLIC_PENS_API_URL ?? '').replace(/\/$/, '')
 const token = (process.env.EXPO_PUBLIC_PENS_API_TOKEN ?? '').trim()
 
+/** Default request budget — hung Next must not leave Fueling/Read spinners forever. */
+export const PENS_FETCH_TIMEOUT_MS = 12_000
+export const PENS_PHOTO_TIMEOUT_MS = 90_000
+
 export function isPensApiConfigured(): boolean {
   return Boolean(base && token)
 }
@@ -29,10 +33,20 @@ export function describePensError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
   const lower = msg.toLowerCase()
   if (
+    lower.includes('abort') ||
+    lower.includes('timed out') ||
+    lower.includes('timeout')
+  ) {
+    const where = base || '(EXPO_PUBLIC_PENS_API_URL not set)'
+    return (
+      `MY PENS at ${where} did not respond in time (server may be wedged). ` +
+      `Open ${where}/api/health on the phone browser; if it hangs, restart Next (\`npm run dev\` on the PC).`
+    )
+  }
+  if (
     lower.includes('network request failed') ||
     lower.includes('failed to fetch') ||
-    lower.includes('network error') ||
-    lower.includes('timed out')
+    lower.includes('network error')
   ) {
     const where = base || '(EXPO_PUBLIC_PENS_API_URL not set)'
     return (
@@ -50,6 +64,18 @@ export function describePensError(err: unknown): string {
   return msg
 }
 
+function mergeAbortSignals(a?: AbortSignal | null, b?: AbortSignal | null): AbortSignal | undefined {
+  if (!a && !b) return undefined
+  if (a && !b) return a
+  if (b && !a) return b
+  const ctrl = new AbortController()
+  const onAbort = () => ctrl.abort()
+  a!.addEventListener('abort', onAbort)
+  b!.addEventListener('abort', onAbort)
+  if (a!.aborted || b!.aborted) ctrl.abort()
+  return ctrl.signal
+}
+
 /**
  * Lightweight connectivity / auth probe for Food and other tabs.
  * Uses public /api/health, then a tiny authenticated food products call.
@@ -62,7 +88,7 @@ export async function probePensApi(): Promise<PensApiProbe> {
     env?: { hasAnthropicKey?: boolean; hasMobileToken?: boolean }
   }
   try {
-    const healthRes = await fetch(`${base}/api/health`)
+    const healthRes = await pensFetch('/api/health', { timeoutMs: 5000 }, { skipAuth: true })
     if (!healthRes.ok) {
       return { status: 'unreachable', detail: `Health returned ${healthRes.status}` }
     }
@@ -76,7 +102,7 @@ export async function probePensApi(): Promise<PensApiProbe> {
   }
 
   try {
-    const res = await pensFetch('/api/food/products?q=ab')
+    const res = await pensFetch('/api/food/products?q=ab', { timeoutMs: 8000 })
     if (res.status === 401) {
       return { status: 'unauthorized', baseUrl: base }
     }
@@ -94,18 +120,36 @@ export async function probePensApi(): Promise<PensApiProbe> {
   }
 }
 
-export async function pensFetch(path: string, init?: RequestInit): Promise<Response> {
+type PensFetchInit = RequestInit & {
+  /** Override default timeout (ms). Photo analyze should pass a longer budget. */
+  timeoutMs?: number
+}
+
+/**
+ * Authenticated fetch with hard timeout so a wedged Next cannot pin UI spinners.
+ */
+export async function pensFetch(
+  path: string,
+  init?: PensFetchInit,
+  opts?: { skipAuth?: boolean },
+): Promise<Response> {
   if (!base) {
     throw new Error('EXPO_PUBLIC_PENS_API_URL is not set')
   }
+  const { timeoutMs = PENS_FETCH_TIMEOUT_MS, signal: userSignal, ...rest } = init ?? {}
   const url = `${base}${path.startsWith('/') ? path : `/${path}`}`
-  const headers = new Headers(init?.headers)
-  if (token) {
+  const headers = new Headers(rest.headers)
+  if (!opts?.skipAuth && token) {
     headers.set('Authorization', `Bearer ${token}`)
   }
+  const timer = new AbortController()
+  const timerId = setTimeout(() => timer.abort(), timeoutMs)
+  const signal = mergeAbortSignals(userSignal ?? null, timer.signal)
   try {
-    return await fetch(url, { ...init, headers })
+    return await fetch(url, { ...rest, headers, signal })
   } catch (e: unknown) {
     throw new Error(describePensError(e))
+  } finally {
+    clearTimeout(timerId)
   }
 }

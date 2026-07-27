@@ -1,12 +1,64 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { bearerFromRequest, verifyToken } from '@/lib/integrations/healthconnect/auth'
-import { mapSessionToDraft } from '@/lib/integrations/healthconnect/mapping'
+import { isRawTypeLabel, mapSessionToDraft } from '@/lib/integrations/healthconnect/mapping'
 import type { HealthConnectExerciseSession } from '@/lib/integrations/healthconnect/api'
 import { importDrafts, type DraftItem } from '@/lib/integrations/_shared/import'
 
+type DayMetricIn = {
+  date?: string
+  steps?: number
+  activeKcal?: number
+}
+
+async function upsertDayMetrics(metrics: DayMetricIn[]): Promise<number> {
+  let n = 0
+  for (const m of metrics) {
+    if (!m?.date || !/^\d{4}-\d{2}-\d{2}$/.test(m.date)) continue
+    if (m.steps != null && Number.isFinite(m.steps) && m.steps > 0) {
+      await prisma.garminDailyMetric.upsert({
+        where: { date_kind: { date: m.date, kind: 'steps' } },
+        create: {
+          date: m.date,
+          kind: 'steps',
+          valueNum: Math.round(m.steps),
+          unit: 'count',
+          sourceFile: 'healthconnect',
+          raw: JSON.stringify({ source: 'healthconnect', steps: m.steps }),
+        },
+        update: {
+          valueNum: Math.round(m.steps),
+          sourceFile: 'healthconnect',
+          raw: JSON.stringify({ source: 'healthconnect', steps: m.steps }),
+        },
+      })
+      n++
+    }
+    if (m.activeKcal != null && Number.isFinite(m.activeKcal) && m.activeKcal > 0) {
+      await prisma.garminDailyMetric.upsert({
+        where: { date_kind: { date: m.date, kind: 'active_calories' } },
+        create: {
+          date: m.date,
+          kind: 'active_calories',
+          valueNum: Math.round(m.activeKcal),
+          unit: 'kcal',
+          sourceFile: 'healthconnect',
+          raw: JSON.stringify({ source: 'healthconnect', activeKcal: m.activeKcal }),
+        },
+        update: {
+          valueNum: Math.round(m.activeKcal),
+          sourceFile: 'healthconnect',
+          raw: JSON.stringify({ source: 'healthconnect', activeKcal: m.activeKcal }),
+        },
+      })
+      n++
+    }
+  }
+  return n
+}
+
 /**
- * POST { sessions: HealthConnectExerciseSession[], clientError?: string | null }
+ * POST { sessions: HealthConnectExerciseSession[], dayMetrics?: [...], clientError?: string | null }
  * Authorization: Bearer <pairingToken>
  *
  * Companion Android app calls this to push exercise sessions. `clientError`,
@@ -36,6 +88,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'sessions array required' }, { status: 400 })
     }
     const sessions = rawSessions as HealthConnectExerciseSession[]
+    const dayMetricsRaw = (body as { dayMetrics?: unknown }).dayMetrics
+    const dayMetrics = Array.isArray(dayMetricsRaw) ? (dayMetricsRaw as DayMetricIn[]) : []
 
     const clientErrorRaw = (body as { clientError?: unknown }).clientError
     const clientError =
@@ -47,9 +101,9 @@ export async function POST(request: Request) {
       where: { pairingToken: token! },
       select: { autoImportOnIngest: true },
     })
-    const autoImport = Boolean(conn?.autoImportOnIngest)
+    const autoImport = conn ? Boolean(conn.autoImportOnIngest) : false
 
-    if (sessions.length === 0) {
+    if (sessions.length === 0 && dayMetrics.length === 0) {
       await applyClientError(token, clientError)
       await prisma.healthConnectConnection.updateMany({
         where: { pairingToken: token! },
@@ -66,6 +120,35 @@ export async function POST(request: Request) {
         read: 0,
         imported: 0,
         autoImport,
+        dayMetrics: 0,
+      })
+    }
+
+    const dayMetricsUpserted = dayMetrics.length ? await upsertDayMetrics(dayMetrics) : 0
+
+    if (sessions.length === 0) {
+      await applyClientError(token, clientError)
+      await prisma.healthConnectConnection.updateMany({
+        where: { pairingToken: token! },
+        data: {
+          lastSyncAt: new Date(),
+          lastError: null,
+          lastErrorAt: null,
+          ...(clientError === undefined
+            ? {}
+            : clientError === null
+              ? { lastClientError: null, lastClientErrorAt: null }
+              : { lastClientError: clientError, lastClientErrorAt: new Date() }),
+        },
+      })
+      return NextResponse.json({
+        ok: true,
+        stored: 0,
+        skipped: 0,
+        read: 0,
+        imported: 0,
+        autoImport,
+        dayMetrics: dayMetricsUpserted,
       })
     }
 
@@ -96,6 +179,44 @@ export async function POST(request: Request) {
           continue
         }
         const draft = mapSessionToDraft(s)
+        const cal =
+          draft.calories ??
+          (s.totalEnergyKcal != null && s.totalEnergyKcal > 0 ? Math.round(s.totalEnergyKcal) : 0)
+
+        // Always prefer updating an existing TrainingEntry (kcal backfill + label refresh).
+        const existingTe = await prisma.trainingEntry.findFirst({
+          where: { source: 'healthconnect', externalId: draft.externalId },
+          select: { id: true, calories: true, notes: true, exercise: true },
+        })
+        if (existingTe) {
+          const oldCal = existingTe.calories ?? 0
+          const kcalImproved = cal > 0 && (oldCal === 0 || oldCal !== cal)
+          const labelImproved =
+            Boolean(draft.exercise) &&
+            draft.exercise !== existingTe.exercise &&
+            !isRawTypeLabel(draft.exercise)
+          const notesImproved =
+            Boolean(draft.notes) &&
+            draft.notes !== existingTe.notes &&
+            (kcalImproved || labelImproved)
+          if (kcalImproved || labelImproved || notesImproved) {
+            await prisma.trainingEntry.update({
+              where: { id: existingTe.id },
+              data: {
+                ...(kcalImproved ? { calories: cal } : {}),
+                ...(draft.notes != null ? { notes: draft.notes } : {}),
+                ...(draft.externalRaw != null ? { externalRaw: draft.externalRaw } : {}),
+                ...(labelImproved || kcalImproved ? { exercise: draft.exercise } : {}),
+                ...(draft.date ? { date: draft.date } : {}),
+              },
+            })
+            stored++
+          } else {
+            skipped++
+          }
+          continue
+        }
+
         if (autoImport) {
           autoImportDrafts.push({
             date: draft.date,
@@ -108,11 +229,10 @@ export async function POST(request: Request) {
             externalId: draft.externalId,
             externalUrl: draft.externalUrl || undefined,
             externalRaw: draft.externalRaw,
-            calories: draft.calories ?? null,
+            calories: draft.calories ?? (cal > 0 ? cal : null),
           })
           continue
         }
-        const cal = draft.calories ?? (s.totalEnergyKcal != null && s.totalEnergyKcal > 0 ? Math.round(s.totalEnergyKcal) : 0)
         const existing = await prisma.pushedWorkout.findUnique({
           where: {
             source_externalId: { source: 'healthconnect', externalId: draft.externalId },
@@ -166,9 +286,7 @@ export async function POST(request: Request) {
         const result = await importDrafts('healthconnect', autoImportDrafts)
         imported = result.created
         skipped += result.skipped
-        // "stored" mirrors non-auto path: newly accepted items this request.
-        stored = result.created
-        // Drop any leftover inbox rows for these ids (e.g. earlier manual-queue pushes).
+        stored = result.created + result.updated
         const ids = autoImportDrafts.map(d => d.externalId)
         await prisma.pushedWorkout.deleteMany({
           where: { source: 'healthconnect', externalId: { in: ids } },
@@ -189,6 +307,7 @@ export async function POST(request: Request) {
         lastSyncAt: new Date(),
         lastError: null,
         lastErrorAt: null,
+        autoImportOnIngest: true,
         ...(clientError === undefined
           ? {}
           : clientError === null
@@ -202,7 +321,8 @@ export async function POST(request: Request) {
       stored,
       skipped,
       imported,
-      autoImport,
+      autoImport: true,
+      dayMetrics: dayMetricsUpserted,
     })
   } catch (err) {
     console.error(err)

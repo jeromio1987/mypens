@@ -40,6 +40,7 @@ import { weekBounds, shiftDateStr } from './lib/weekDates.mjs'
 import { findTranscriptFiles, computeWeekMetrics, defaultTranscriptDirs } from './lib/transcriptMetrics.mjs'
 import { loadIszeFeedback, defaultIszeFeedbackDir } from './lib/iszeFeedback.mjs'
 import { analyzeGarmin, loadGarminData } from './lib/garminAnalyze.mjs'
+import { WEEKLY_FEEDBACK_SCHEMA } from './lib/aiSchemas.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(__dirname, '..')
@@ -448,14 +449,33 @@ ${links.length ? links.map(l => `- ${l}`).join('\n') : '- none detected'}
 
 Write the review now as JSON.`
 
-  const client = new Anthropic({ apiKey })
-  const msg = await client.messages.create({
+  // Beta namespace + raised retry budget: structured outputs live there in the
+  // installed SDK, and the SDK's own backoff already honours Retry-After.
+  const client = new Anthropic({ apiKey, maxRetries: 4 })
+  const msg = await client.beta.messages.create({
     model: MODEL,
     max_tokens: 1400,
     stream: false,
     system,
+    output_config: { format: { type: 'json_schema', schema: WEEKLY_FEEDBACK_SCHEMA } },
     messages: [{ role: 'user', content: userPrompt }],
   })
+
+  const u = msg.usage ?? {}
+  console.log(
+    `[ai-usage] ${JSON.stringify({
+      feature: 'weekly-feedback',
+      model: msg.model,
+      inputTokens: u.input_tokens ?? 0,
+      outputTokens: u.output_tokens ?? 0,
+      cacheReadTokens: u.cache_read_input_tokens ?? 0,
+      stopReason: msg.stop_reason,
+    })}`,
+  )
+  if (msg.stop_reason === 'refusal' || msg.stop_reason === 'max_tokens') {
+    console.warn(`[weekly-feedback] unusable response (stop_reason=${msg.stop_reason})`)
+    return null
+  }
 
   const text = msg.content.map(b => (b.type === 'text' ? b.text : '')).join('').trim()
   return parseClaudeJson(text)

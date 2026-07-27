@@ -1,5 +1,8 @@
 export type ConfidenceLevel = 'high' | 'medium' | 'low'
 
+/** Mirror of web lib/retentionModels TRUE_WEIGHT_MODEL_VERSION (WP 2.5). */
+export const TRUE_WEIGHT_MODEL_VERSION = 'v3-2026-07' as const
+
 export interface WeightBreakdown {
   scaleKg: number
   creatineKg: number
@@ -12,6 +15,7 @@ export interface WeightBreakdown {
   tanitaFlags: string[]
   confidence: ConfidenceLevel
   activeConfounders: number
+  modelVersion?: typeof TRUE_WEIGHT_MODEL_VERSION
 }
 
 export function estimateCreatineRetention(doseG: number, daysOn: number, postLoad = false) {
@@ -172,6 +176,7 @@ export function calculateWeightBreakdown(input: {
     tanitaFlags: tanita.flags,
     confidence: confidence.level,
     activeConfounders: confidence.activeConfounders,
+    modelVersion: TRUE_WEIGHT_MODEL_VERSION,
   }
 }
 

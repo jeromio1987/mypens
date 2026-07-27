@@ -21,12 +21,16 @@ const LINKS: {
   blurb: string
   icon: React.ComponentProps<typeof Feather>['name']
 }[] = [
-  { href: '/verdict', label: 'Verdict', blurb: 'Weekly P.E.N.S. reconciliation', icon: 'check-square' },
-  { href: '/dopamine-debt', label: 'Dopamine debt', blurb: 'Liquidation protocol (shell)', icon: 'zap' },
+  { href: '/verdict', label: 'Verdict', blurb: 'Weekly pillar reconciliation', icon: 'check-square' },
+  { href: '/weekly-feedback', label: 'Weekly Feedback', blurb: 'Health + Claude week recap', icon: 'message-circle' },
+  { href: '/(tabs)/index', label: 'Weight entry', blurb: 'Scale + retention corrections', icon: 'trending-up' },
+  { href: '/(tabs)/sleep', label: 'Sleep entry', blurb: 'Manual sleep correction', icon: 'moon' },
   { href: '/bloodwork', label: 'Bloodwork', blurb: 'Serum ledger from lab panels', icon: 'droplet' },
   { href: '/planner', label: 'Planner', blurb: 'Operational week directive', icon: 'calendar' },
-  { href: '/period-review', label: 'Period review', blurb: 'Live cockpit reconciliation', icon: 'activity' },
+  { href: '/period-review', label: 'Period review', blurb: 'Full cockpit (same as Read)', icon: 'activity' },
   { href: '/journal-log', label: 'Journal log', blurb: 'Auditor chronological feed', icon: 'book-open' },
+  { href: '/(tabs)/measurements', label: 'Body', blurb: 'Tape measurements', icon: 'maximize' },
+  { href: '/(tabs)/journal', label: 'Journal', blurb: 'Capture notes & mood', icon: 'edit-3' },
 ]
 
 export default function AuditHubScreen() {
@@ -42,7 +46,7 @@ export default function AuditHubScreen() {
       if (!res.ok) return null
       return (await res.json()) as {
         hasEnoughData?: boolean
-        pillars?: { key: string; score: number }[]
+        pillars?: { key: string; score: number | null; hasData?: boolean }[]
         todayMode?: string | null
       }
     },
@@ -67,15 +71,22 @@ export default function AuditHubScreen() {
     enabled: configured,
     staleTime: 60_000,
     queryFn: async () => {
-      const res = await pensFetch('/api/bloodwork/panels')
+      const res = await pensFetch('/api/bloodwork/latest-summary')
       if (!res.ok) return null
-      const panels = (await res.json()) as { drawDate?: string }[]
-      return panels[0]?.drawDate ?? null
+      return (await res.json()) as {
+        present?: boolean
+        drawDate?: string | null
+        chipLabel?: string
+        flaggedCount?: number
+      }
     },
   })
 
-  const pScore = (key: string) =>
-    verdictQ.data?.pillars?.find(p => p.key === key)?.score
+  const pScore = (key: string) => {
+    const p = verdictQ.data?.pillars?.find(p => p.key === key)
+    if (!p?.hasData || p.score == null) return null
+    return p.score
+  }
 
   return (
     <ContinentalScreen
@@ -88,18 +99,32 @@ export default function AuditHubScreen() {
         <View style={styles.chipGrid}>
           <MetricChip
             label="Perf"
-            value={verdictQ.data?.hasEnoughData ? String(pScore('P') ?? '—') : '—'}
+            value={pScore('P') != null ? String(pScore('P')) : '—'}
+          />
+          <MetricChip
+            label="Fuel"
+            value={pScore('N') != null ? String(pScore('N')) : '—'}
           />
           <MetricChip
             label="Sleep"
-            value={verdictQ.data?.hasEnoughData ? String(pScore('S') ?? '—') : '—'}
+            value={pScore('S') != null ? String(pScore('S')) : '—'}
           />
           <MetricChip
             label="Planner"
             value={plannerQ.data?.saved?.accepted ? 'Accepted' : 'Draft'}
             critical={!plannerQ.data?.saved?.accepted}
           />
-          <MetricChip label="Last draw" value={bloodQ.data ?? 'None'} />
+          <MetricChip
+            label="Labs"
+            value={
+              bloodQ.data?.present
+                ? bloodQ.data.flaggedCount && bloodQ.data.flaggedCount > 0
+                  ? `${bloodQ.data.flaggedCount} flagged`
+                  : bloodQ.data.drawDate ?? 'Logged'
+                : 'None'
+            }
+            critical={Boolean(bloodQ.data?.flaggedCount && bloodQ.data.flaggedCount > 0)}
+          />
         </View>
         {verdictQ.data?.todayMode ? (
           <Block>

@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import type { Model } from '@anthropic-ai/sdk/resources/messages/messages'
+import type { BetaImageBlockParam } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import { consume } from '@/lib/rateLimit'
 import { MEAL_ORDER, type MealType } from '@/lib/foodModels'
 import { FOOD_VISION_SYSTEM_BLOCKS } from '@/lib/foodVisionPrompt'
 import { extractVisionPayload, parseJsonFromAssistant } from '@/lib/foodPhotoJson'
+import { FOOD_VISION_SCHEMA } from '@/lib/aiSchemas'
+import { AiResponseError, callClaude, getAnthropicClient } from '@/lib/aiCall'
+import { today } from '@/lib/timeWindow'
 
 export const runtime = 'nodejs'
 
@@ -66,7 +69,7 @@ export async function POST(req: Request) {
 
     const form = await req.formData()
     const file = form.get('file')
-    const date = String(form.get('date') ?? '').trim() || new Date().toISOString().slice(0, 10)
+    const date = String(form.get('date') ?? '').trim() || today()
     const mealHint = String(form.get('meal') ?? 'snack').trim()
     const defaultMeal: MealType = typeof mealHint === 'string' && (MEAL_ORDER as readonly string[]).includes(mealHint)
       ? (mealHint as MealType)
@@ -108,11 +111,27 @@ export async function POST(req: Request) {
     }
 
     const mediaType = extToMediaType(ext)
-    const client = new Anthropic({ apiKey })
+    const client = getAnthropicClient(apiKey)
 
     const userLine =
       `Diary date: ${date}. Default meal when an item omits meal: ${defaultMeal}.\n` +
       'Analyze the attached image and reply with JSON only (schema in system instructions).'
+
+    const paramsFor = (image: BetaImageBlockParam) => ({
+      model: VISION_MODEL,
+      max_tokens: 1400,
+      betas: [FILES_BETA],
+      system: FOOD_VISION_SYSTEM_BLOCKS,
+      output_config: {
+        format: { type: 'json_schema' as const, schema: FOOD_VISION_SCHEMA },
+      },
+      messages: [
+        {
+          role: 'user' as const,
+          content: [{ type: 'text' as const, text: userLine }, image],
+        },
+      ],
+    })
 
     let anthropicFileId: string | null = null
     let text: string
@@ -123,42 +142,23 @@ export async function POST(req: Request) {
       const uploaded = await client.beta.files.upload({ file: uploadable, betas: [FILES_BETA] })
       anthropicFileId = uploaded.id
 
-      const msg = await client.beta.messages.create({
-        model: VISION_MODEL,
-        max_tokens: 1400,
-        betas: [FILES_BETA],
-        system: FOOD_VISION_SYSTEM_BLOCKS,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: userLine },
-              { type: 'image', source: { type: 'file', file_id: uploaded.id } },
-            ],
-          },
-        ],
-      })
-      text = msg.content.map(b => (b.type === 'text' ? b.text : '')).join('').trim()
+      const res = await callClaude(
+        client,
+        'food.photo-analyze',
+        paramsFor({ type: 'image', source: { type: 'file', file_id: uploaded.id } }),
+      )
+      text = res.text
     } catch (fileErr) {
+      if (fileErr instanceof AiResponseError) throw fileErr
       console.error('food photo Files API path failed, falling back to base64', fileErr)
       anthropicFileId = null
       const b64 = imageBuf.toString('base64')
-      const msg = await client.beta.messages.create({
-        model: VISION_MODEL,
-        max_tokens: 1400,
-        betas: [FILES_BETA],
-        system: FOOD_VISION_SYSTEM_BLOCKS,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: userLine },
-              { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-            ],
-          },
-        ],
-      })
-      text = msg.content.map(b => (b.type === 'text' ? b.text : '')).join('').trim()
+      const res = await callClaude(
+        client,
+        'food.photo-analyze',
+        paramsFor({ type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } }),
+      )
+      text = res.text
     }
 
     if (!text) {
@@ -176,6 +176,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ analysisMode, dishSummary, items, anthropicFileId })
   } catch (err) {
+    if (err instanceof AiResponseError) {
+      console.error('food photo-analyze', err.message)
+      return NextResponse.json({ error: err.message }, { status: 502 })
+    }
     console.error('food photo-analyze', err)
     return NextResponse.json({ error: 'analysis failed' }, { status: 500 })
   }

@@ -1,3 +1,5 @@
+import { rollingWindow, shiftDateStr } from './timeWindow'
+
 /**
  * Rough resting burn stub: ~22 kcal per kg body weight / day.
  * Prefer Mifflin–St Jeor via energyBmr when profile exists — this stub remains
@@ -13,31 +15,22 @@ export function estimateBmrKcal(weightKg: number | null | undefined): number {
   return Math.round(BMR_KCAL_PER_KG * weightKg)
 }
 
+/** @deprecated Prefer shiftDateStr from timeWindow — kept for callers. */
 export function isoDateOffset(asOf: string, daysBack: number): string {
-  const d = new Date(`${asOf}T12:00:00`)
-  d.setDate(d.getDate() - daysBack)
-  return d.toISOString().slice(0, 10)
+  return shiftDateStr(asOf, -daysBack)
 }
 
 export function rolling7Window(asOf: string): { from: string; to: string; dates: string[] } {
   return rollingNWindow(asOf, 7)
 }
 
-/** Inclusive window of `days` ending on asOf (e.g. 7 or 30). */
+/** Inclusive window of `days` ending on asOf (e.g. 7 or 30). Delegates to P9 timeWindow. */
 export function rollingNWindow(
   asOf: string,
   days: number,
 ): { from: string; to: string; dates: string[] } {
-  const n = Math.max(1, Math.floor(days))
-  const to = asOf
-  const from = isoDateOffset(asOf, n - 1)
-  const dates: string[] = []
-  const start = new Date(`${from}T12:00:00`)
-  const end = new Date(`${to}T12:00:00`)
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    dates.push(d.toISOString().slice(0, 10))
-  }
-  return { from, to, dates }
+  const w = rollingWindow(days, asOf)
+  return { from: w.from, to: w.to, dates: w.dates }
 }
 
 export type RawDayEnergy = {

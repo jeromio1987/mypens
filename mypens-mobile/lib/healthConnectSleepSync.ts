@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Platform } from 'react-native'
 
-import { getHcPairingToken, isAndroidHealthConnectHost } from '@/lib/healthConnectSync'
+import { ensureHcPairingFromApi, getHcPairingToken, isAndroidHealthConnectHost } from '@/lib/healthConnectSync'
 
 const LAST_SLEEP_SYNC_KEY = '@mypens/hc_last_sleep_sync_iso'
 
@@ -53,12 +53,31 @@ async function loadHc() {
 }
 
 export type HcSleepSyncResult =
-  | { ok: true; stored: number; skipped: number; read: number }
+  | { ok: true; stored: number; skipped: number; read: number; updated?: number }
   | { ok: false; error: string }
+
+const AUTO_SYNC_MIN_MS = 6 * 60 * 60 * 1000 // 6 hours
+
+/**
+ * Launch-time sleep sync with a 6h demper (WP 0.2).
+ * Uses the same LAST_SLEEP_SYNC_KEY as manual Sync.
+ */
+export async function maybeAutoSyncHealthConnectSleep(): Promise<HcSleepSyncResult | null> {
+  if (!isAndroidHealthConnectHost() || Platform.OS !== 'android') return null
+  if (!pensBaseUrl()) return null
+
+  const last = await getHcLastSleepSyncIso()
+  if (last) {
+    const age = Date.now() - Date.parse(last)
+    if (Number.isFinite(age) && age >= 0 && age < AUTO_SYNC_MIN_MS) return null
+  }
+
+  return syncHealthConnectSleep()
+}
 
 /**
  * Average RMSSD (ms) from HeartRateVariabilityRmssd samples overlapping [start, end].
- * Returns undefined when none are available (quality will default to 3★ on server).
+ * Returns undefined when none are available (quality stays null on server).
  */
 async function averageHrvMs(
   hc: typeof import('react-native-health-connect'),
@@ -88,8 +107,8 @@ async function averageHrvMs(
  * Read recent SleepSession records from Health Connect and POST them to
  * MY PENS `/api/integrations/healthconnect/sleep-ingest`.
  *
- * Sleep goes straight into SleepEntry (by wake date). Nights already logged are skipped.
- * This is separate from the workout ingest queue.
+ * Sleep goes straight into SleepEntry (by wake date).
+ * HC-sourced nights are updated; manual nights are skipped.
  */
 export async function syncHealthConnectSleep(): Promise<HcSleepSyncResult> {
   if (!isAndroidHealthConnectHost() || Platform.OS !== 'android') {
@@ -101,9 +120,11 @@ export async function syncHealthConnectSleep(): Promise<HcSleepSyncResult> {
     return { ok: false, error: 'Set EXPO_PUBLIC_PENS_API_URL in mypens-mobile/.env' }
   }
 
-  const token = await getHcPairingToken()
+  let token = await getHcPairingToken()
   if (!token) {
-    return { ok: false, error: 'Paste the pairing token from /integrations first.' }
+    const paired = await ensureHcPairingFromApi()
+    if (!paired.ok) return { ok: false, error: paired.error }
+    token = paired.token
   }
 
   let hc: typeof import('react-native-health-connect')
@@ -138,7 +159,7 @@ export async function syncHealthConnectSleep(): Promise<HcSleepSyncResult> {
   }
 
   const end = new Date()
-  // Always re-read last 14 days; server skips nights already in SleepEntry.
+  // Always re-read last 14 days; server updates HC rows / protects manual.
   const start = new Date(end.getTime() - 14 * 24 * 60 * 60 * 1000)
 
   const { records } = await hc.readRecords('SleepSession', {
@@ -200,6 +221,7 @@ export async function syncHealthConnectSleep(): Promise<HcSleepSyncResult> {
   const body = (await res.json().catch(() => ({}))) as {
     ok?: boolean
     stored?: number
+    updated?: number
     skipped?: number
     error?: string
   }
@@ -215,6 +237,7 @@ export async function syncHealthConnectSleep(): Promise<HcSleepSyncResult> {
   return {
     ok: true,
     stored: body.stored ?? 0,
+    updated: body.updated ?? 0,
     skipped: body.skipped ?? 0,
     read: sessions.length,
   }

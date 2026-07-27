@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pencil, Check, X } from 'lucide-react'
 import { MEAL_LABELS, MEAL_ORDER, type MealType } from '@/lib/foodModels'
+import { shiftDateStr, today } from '@/lib/timeWindow'
 
 interface FoodEntryRow {
   id: string
@@ -25,11 +26,9 @@ interface Props {
 }
 
 function dayHeading(iso: string) {
-  const today = new Date().toISOString().slice(0, 10)
-  const y = new Date()
-  y.setDate(y.getDate() - 1)
-  const yesterday = y.toISOString().slice(0, 10)
-  if (iso === today) return 'Today'
+  const todayStr = today()
+  const yesterday = shiftDateStr(todayStr, -1)
+  if (iso === todayStr) return 'Today'
   if (iso === yesterday) return 'Yesterday'
   return new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', {
     weekday: 'short',

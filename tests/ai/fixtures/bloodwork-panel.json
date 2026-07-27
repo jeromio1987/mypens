@@ -1,0 +1,43 @@
+{
+  "drawDate": "2026-03-14",
+  "labName": "Synthetic Test Lab",
+  "fasting": true,
+  "markers": [
+    {
+      "code": "hba1c",
+      "label": "HbA1c",
+      "valueNum": 5.2,
+      "valueText": null,
+      "unit": "%",
+      "refLow": 4,
+      "refHigh": 5.7
+    },
+    {
+      "code": "ldl",
+      "label": "LDL cholesterol",
+      "valueNum": 2.8,
+      "valueText": null,
+      "unit": "mmol/L",
+      "refLow": null,
+      "refHigh": 3
+    },
+    {
+      "code": "ferritin",
+      "label": "Ferritine",
+      "valueNum": 112,
+      "valueText": null,
+      "unit": "µg/L",
+      "refLow": 30,
+      "refHigh": 400
+    },
+    {
+      "code": "crp",
+      "label": "CRP",
+      "valueNum": null,
+      "valueText": "<2",
+      "unit": "mg/L",
+      "refLow": null,
+      "refHigh": 5
+    }
+  ]
+}

@@ -61,15 +61,19 @@ export default function WeekEnergyRecapCard({
   refresh = 0,
   compact = false,
   windowDays = 7,
+  defaultCollapsed = false,
 }: {
   asOf: string
   refresh?: number
   compact?: boolean
   /** 7 or 30 */
   windowDays?: 7 | 30
+  /** When true, show a one-line summary until expanded (Fueling scroll tax). */
+  defaultCollapsed?: boolean
 }) {
   const [data, setData] = useState<Recap | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [open, setOpen] = useState(!defaultCollapsed)
 
   useEffect(() => {
     let cancelled = false
@@ -94,14 +98,14 @@ export default function WeekEnergyRecapCard({
 
   if (err) {
     return (
-      <div className="bg-pens-surface rounded-2xl p-4 border border-pens-muted/30 text-sm text-red-300">
+      <div className="bg-ct-bloodc px-5 py-4 text-sm text-ct-blood">
         {windowDays}-day energy: {err}
       </div>
     )
   }
   if (!data) {
     return (
-      <div className="bg-pens-surface rounded-2xl p-4 border border-pens-muted/30 text-sm text-pens-cream/40">
+      <div className="bg-ct-high px-5 py-4 text-sm text-ct-second/45">
         Loading {windowDays}-day ledger…
       </div>
     )
@@ -113,45 +117,78 @@ export default function WeekEnergyRecapCard({
 
   if (compact) {
     return (
-      <div className="bg-pens-surface rounded-2xl px-4 py-3 border border-amber-500/20 flex items-center justify-between gap-3">
+      <div className="bg-ct-high px-4 py-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-widest text-amber-400/90 font-semibold">{label}</p>
-          <p className="text-xs text-pens-cream/50 truncate">
+          <p className="font-grotesk text-[0.5625rem] uppercase tracking-[0.18em] text-ct-second/55">{label}</p>
+          <p className="text-xs text-ct-second/50 truncate">
             {data.window.from} → {data.window.to} · {data.summary.daysTracked} tracked
             {data.summary.daysImputed ? ` · ${data.summary.daysImputed} imputed` : ''}
           </p>
         </div>
-        <p className={`text-lg font-semibold tabular-nums shrink-0 ${surplus ? 'text-amber-300' : 'text-sky-300'}`}>
+        <p className={`font-headline text-lg tabular-nums shrink-0 ${surplus ? 'text-ct-blood' : 'text-ct-second'}`}>
           {surplus ? '+' : ''}
           {net}
-          <span className="text-xs font-normal text-pens-cream/50"> kcal</span>
+          <span className="ml-1 font-grotesk text-xs font-normal text-ct-second/50">kcal</span>
         </p>
       </div>
     )
   }
 
+  if (defaultCollapsed && !open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full text-left bg-ct-high px-4 py-3 flex items-center justify-between gap-3 hover:bg-ct-highest transition-colors"
+      >
+        <div className="min-w-0">
+          <p className="font-grotesk text-[0.5625rem] uppercase tracking-[0.18em] text-ct-second/55">{label}</p>
+          <p className="text-xs text-ct-second/50 truncate">
+            {data.window.from} → {data.window.to} · tap to expand
+          </p>
+        </div>
+        <p className={`font-headline text-lg tabular-nums shrink-0 ${surplus ? 'text-ct-blood' : 'text-ct-second'}`}>
+          {surplus ? '+' : ''}
+          {net}
+          <span className="ml-1 font-grotesk text-xs font-normal text-ct-second/50">kcal</span>
+        </p>
+      </button>
+    )
+  }
+
   return (
-    <div className="bg-pens-surface rounded-2xl p-4 border border-amber-500/25 space-y-3">
+    <div className="bg-ct-high px-5 py-5 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] uppercase tracking-widest text-amber-400/90 font-semibold">
+          <p className="font-grotesk text-[0.5625rem] uppercase tracking-[0.18em] text-ct-second/55">
             {windowDays === 30 ? '30-day energy recap' : 'Weekly energy recap'}
           </p>
-          <p className="text-sm text-pens-cream/70 mt-0.5">
+          <p className="text-sm text-ct-second/65 mt-0.5">
             Rolling {windowDays} days · {data.window.from} → {data.window.to}
           </p>
         </div>
-        <div className={`text-right ${surplus ? 'text-amber-300' : 'text-sky-300'}`}>
-          <p className="text-xs text-pens-cream/40">{surplus ? 'window surplus' : 'window deficit'}</p>
-          <p className="text-xl font-semibold tabular-nums">
-            {surplus ? '+' : ''}
-            {net}
-            <span className="text-sm font-normal text-pens-cream/50"> kcal</span>
-          </p>
-          <p className="text-[10px] text-pens-cream/40 tabular-nums">
-            avg {surplus ? '+' : ''}
-            {data.summary.avgDailyNetKcal}/day
-          </p>
+        <div className="flex items-start gap-2">
+          <div className={`text-right ${surplus ? 'text-ct-blood' : 'text-ct-second'}`}>
+            <p className="text-xs text-ct-second/40">{surplus ? 'window surplus' : 'window deficit'}</p>
+            <p className="font-headline text-xl tabular-nums leading-none">
+              {surplus ? '+' : ''}
+              {net}
+              <span className="text-sm font-normal text-pens-cream/50"> kcal</span>
+            </p>
+            <p className="text-[10px] text-pens-cream/40 tabular-nums">
+              avg {surplus ? '+' : ''}
+              {data.summary.avgDailyNetKcal}/day
+            </p>
+          </div>
+          {defaultCollapsed ? (
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-[10px] text-pens-cream/40 hover:text-pens-cream/70 px-1"
+            >
+              Hide
+            </button>
+          ) : null}
         </div>
       </div>
 

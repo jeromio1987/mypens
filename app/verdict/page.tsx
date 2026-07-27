@@ -52,14 +52,16 @@ const MODE_LABEL: Record<string, { label: string; tone: string }> = {
   off:       { label: 'Rest Day',  tone: 'text-pens-cream/40' },
 }
 
-function scoreTone(score: number): string {
+function scoreTone(score: number | null): string {
+  if (score == null) return 'text-pens-cream/20'
   if (score >= 75) return 'text-pens-cream'
   if (score >= 55) return 'text-pens-gold'
   if (score >= 40) return 'text-amber-400'
   return 'text-pens-crimson'
 }
 
-function gaugeTone(score: number): string {
+function gaugeTone(score: number | null): string {
+  if (score == null) return 'from-pens-cream/20 to-transparent'
   if (score >= 75) return 'from-pens-cream to-transparent'
   if (score >= 55) return 'from-pens-gold to-transparent'
   if (score >= 40) return 'from-amber-400 to-transparent'
@@ -93,14 +95,14 @@ function LedgerCard({ item }: { item: LedgerItem }) {
 function PillarSection({
   pillar,
   ledger,
-  hasEnoughData,
 }: {
   pillar: VerdictPillar
   ledger: LedgerItem[]
-  hasEnoughData: boolean
+  /** @deprecated coverage is per-pillar via pillar.hasData */
+  hasEnoughData?: boolean
 }) {
   const Icon  = PILLAR_ICONS[pillar.icon] ?? ArrowUpRight
-  const noData = !hasEnoughData || !pillar.hasData
+  const noData = !pillar.hasData || pillar.score == null
   const tag   = PILLAR_TAG_FOR_KEY[pillar.key]
   const items = ledger.filter(l => l.pillar === tag).slice(0, 2)
 
@@ -130,14 +132,14 @@ function PillarSection({
             <span className={`text-5xl font-black tracking-tight tabular-nums ${scoreTone(pillar.score)}`}>
               {pillar.score}
             </span>
-            <span className="text-xs uppercase tracking-widest text-pens-cream/30">/ 99</span>
+            <span className="text-xs uppercase tracking-widest text-pens-cream/30">/ 100</span>
           </>
         )}
       </div>
 
       {/* Gauge bar */}
       <div className="relative h-1 bg-pens-surface/40 rounded-full overflow-hidden">
-        {!noData && (
+        {!noData && pillar.score != null && (
           <div
             className={`absolute inset-y-0 left-0 bg-gradient-to-r ${gaugeTone(pillar.score)}`}
             style={{ width: `${Math.max(2, pillar.score)}%` }}
@@ -230,9 +232,10 @@ export default function VerdictPage() {
     return () => { cancelled = true }
   }, [])
 
-  // Headline metric: average of the four pillar scores (when we have data)
-  const avgScore = data && data.hasEnoughData
-    ? Math.round(data.pillars.reduce((s, p) => s + p.score, 0) / data.pillars.length)
+  // Headline metric: average of pillars that actually scored (P2)
+  const scored = data?.pillars.filter(p => p.hasData && p.score != null) ?? []
+  const avgScore = scored.length > 0
+    ? Math.round(scored.reduce((s, p) => s + (p.score as number), 0) / scored.length)
     : null
 
   return (

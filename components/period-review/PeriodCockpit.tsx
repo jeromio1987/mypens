@@ -109,6 +109,12 @@ export default function PeriodCockpit() {
   /** Last day that has any ledger rows — presets/zoom anchor here, not "today". */
   const [ledgerTo, setLedgerTo] = useState<string | null>(null)
   const [ledgerFrom, setLedgerFrom] = useState<string | null>(null)
+  const [labsChip, setLabsChip] = useState<{
+    present: boolean
+    chipLabel: string
+    panelId: string | null
+    flaggedCount: number
+  } | null>(null)
   const autoClampedRef = useRef(false)
 
   const effectiveTo = ledgerTo && ledgerTo < today ? ledgerTo : today
@@ -157,6 +163,30 @@ export default function PeriodCockpit() {
   useEffect(() => {
     void load(from, to)
   }, [from, to, load])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/bloodwork/latest-summary')
+      .then(async r => (r.ok ? r.json() : null))
+      .then(j => {
+        if (cancelled || !j?.present) {
+          if (!cancelled) setLabsChip(null)
+          return
+        }
+        setLabsChip({
+          present: true,
+          chipLabel: j.chipLabel,
+          panelId: j.panelId ?? null,
+          flaggedCount: j.flaggedCount ?? 0,
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setLabsChip(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const applyPreset = (days: number) => {
     const end = effectiveTo
@@ -364,12 +394,29 @@ export default function PeriodCockpit() {
                 </div>
               ))}
             </div>
+            {labsChip?.present ? (
+              <Link
+                href={labsChip.panelId ? `/bloodwork/${labsChip.panelId}` : '/bloodwork'}
+                className={`inline-flex text-[11px] font-semibold rounded-full border px-2.5 py-1 ${
+                  labsChip.flaggedCount > 0
+                    ? 'border-violet-400/40 text-violet-200/90 bg-violet-950/30'
+                    : 'border-pens-muted/30 text-pens-cream/55 bg-pens-navy/40'
+                }`}
+              >
+                {labsChip.chipLabel}
+              </Link>
+            ) : null}
           </section>
         )}
 
         {!loading && cockpit && tab === 'timeline' && (
           <section className="rounded-2xl border border-pens-muted/20 bg-pens-surface/80 p-5">
-            <h2 className="text-sm font-semibold text-cyan-300 mb-3">Form score (how you were doing)</h2>
+            <h2 className="text-sm font-semibold text-cyan-300 mb-3">
+              Form score
+              <span className="ml-2 text-[10px] font-normal text-pens-cream/40">
+                (slaap + HRV + rust-HR + belasting — uitleg in cockpit)
+              </span>
+            </h2>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={series}>
@@ -416,11 +463,11 @@ export default function PeriodCockpit() {
         {!loading && cockpit && tab === 'training' && (
           <section className="rounded-2xl border border-pens-muted/20 bg-pens-surface/80 p-5 space-y-4">
             <div>
-              <h2 className="text-sm font-semibold text-orange-300 mb-1">Training load (PLU)</h2>
+              <h2 className="text-sm font-semibold text-orange-300 mb-1">Training load (belasting)</h2>
               <p className="text-xs text-pens-cream/45 leading-relaxed">
-                Pens Load Units = minutes × sport weight × HR intensity (Banister-style when avg HR
-                exists). Walks ≈ 0.22× — a long stroll no longer looks like a hard session. Orange =
-                total PLU · amber dashed = easy (walk/hike) · grey = raw minutes for comparison.
+                Schatting van hoe zwaar sessies waren: duur × sportsoort × hartslag. Wandelen telt licht;
+                kracht/HIIT zwaar. Oranje = totale belasting · amber gestippeld = rustige beweging · grijs =
+                ruwe minuten.
               </p>
             </div>
             <div className="h-56">
@@ -433,14 +480,14 @@ export default function PeriodCockpit() {
                   <Area
                     type="monotone"
                     dataKey="trainingLoad"
-                    name="PLU"
+                    name="Belasting"
                     stroke="#fb923c"
                     fill="#fb923c33"
                   />
                   <Line
                     type="monotone"
                     dataKey="easyLoad"
-                    name="Easy PLU"
+                    name="Rustige beweging"
                     stroke="#fbbf24"
                     strokeDasharray="4 4"
                     dot={false}
@@ -449,7 +496,7 @@ export default function PeriodCockpit() {
                   <Line
                     type="monotone"
                     dataKey="activityMinutes"
-                    name="Raw minutes"
+                    name="Ruwe minuten"
                     stroke="#64748b"
                     dot={false}
                     strokeWidth={1}
@@ -459,8 +506,8 @@ export default function PeriodCockpit() {
               </ResponsiveContainer>
             </div>
             <p className="text-xs text-pens-cream/40">
-              Includes Garmin activities + Strava/manual training rows. Form score now uses PLU, not
-              raw minutes.
+              Includes Garmin activities + Strava/manual training rows. Form uses load units (PLU) —
+              kept off the main chips; not raw minutes.
             </p>
           </section>
         )}

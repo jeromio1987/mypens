@@ -71,9 +71,16 @@ model SleepEntry {
   bedtime  String  // HH:MM e.g. "22:30"
   wakeTime String  // HH:MM e.g. "06:45"
   hours    Float   // auto-calculated
-  quality  Int     // 1–5
+  /// 1–5 from HRV bands; null = not measured (never invent 3)
+  quality  Int?
   hrv      Float?  // optional HRV in ms
   notes    String?
+  /// Origin of the row: manual | healthconnect | garmin
+  source   String  @default("manual")
+  /// External session id when source is healthconnect/garmin
+  externalId String? @unique
+
+  @@index([source])
 }
 
 // Phase 3 — Training
@@ -397,6 +404,13 @@ model UserSettings {
   heightCm   Float?
   birthYear  Int?
   sex        String? // "male" | "female"
+  // Training load HR zones — null → engines default to 185.
+  hrMax      Int?
+  // Body phase (WP 2.3) — steers fueling targets + planner bias. Was file store.
+  bodyPhase              String  @default("maintain") // cut|bulk|recomp|maintain
+  bodyPhaseStartedAt     String? // yyyy-mm-dd
+  bodyPhaseKgPerWeek     Float   @default(0.4)
+  bodyPhaseExpectedEndAt String?
   updatedAt DateTime @updatedAt
 }
 

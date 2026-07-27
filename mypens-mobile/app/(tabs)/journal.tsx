@@ -26,13 +26,10 @@ import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured, pensApiBaseUrl } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { DateNavBar } from '@/components/DateNavBar'
+import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { useLocalSearchParams } from 'expo-router'
 
 const MOD = MODULE_COLORS.journal
-const today = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 interface JournalEntry {
   id: string
@@ -172,14 +169,14 @@ export default function JournalScreen() {
   const [content, setContent] = useState('')
   const [mood, setMood] = useState<number | undefined>(undefined)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [entryDate, setEntryDate] = useState(today())
+  const { date: entryDate, setDate: setEntryDate } = useSelectedDate()
   const params = useLocalSearchParams<{ date?: string }>()
 
   useEffect(() => {
     if (typeof params.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) {
       setEntryDate(params.date)
     }
-  }, [params.date])
+  }, [params.date, setEntryDate])
 
   const { data: entries = [], isLoading, refetch, isRefetching } = useQuery<JournalEntry[]>({
     queryKey: ['journal', useApi ? 'api' : 'supabase'],

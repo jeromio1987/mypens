@@ -1,37 +1,33 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/db'
 import { calculateConfidence } from '@/lib/retentionModels'
+import { rollingWindow } from '@/lib/timeWindow'
+import { consume } from '@/lib/rateLimit'
+import { callClaude, getAnthropicClient } from '@/lib/aiCall'
 
 export const dynamic = 'force-dynamic'
 
-function dateNDaysAgo(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
-}
-
 const CACHE_ID = 'singleton'
-const WINDOW_CUTOFF_DAYS = 7
 
-/** Last 7 days: same inclusive window as /api/verdict (date >= cutoff). */
-async function collectWeekMetrics(cutoff: string) {
+/** Inclusive rolling 7-day window — same as /api/verdict (P9). */
+async function collectWeekMetrics(from: string, to: string) {
+  const dateFilter = { gte: from, lte: to }
   const [weights, foods, sleeps, trainings, journals] = await Promise.all([
     prisma.weightEntry.findMany({
-      where: { date: { gte: cutoff } },
+      where: { date: dateFilter },
       orderBy: { date: 'asc' },
     }),
     prisma.foodEntry.findMany({
-      where: { date: { gte: cutoff } },
+      where: { date: dateFilter },
     }),
     prisma.sleepEntry.findMany({
-      where: { date: { gte: cutoff } },
+      where: { date: dateFilter },
     }),
     prisma.trainingEntry.findMany({
-      where: { date: { gte: cutoff } },
+      where: { date: dateFilter },
     }),
     prisma.journalEntry.findMany({
-      where: { date: { gte: cutoff }, mood: { not: null } },
+      where: { date: dateFilter, mood: { not: null } },
     }),
   ])
 
@@ -105,12 +101,17 @@ async function collectWeekMetrics(cutoff: string) {
       : `Food: avg ${(totalKcal / daysInWindow).toFixed(0)} kcal/day, avg ${(totalProt / daysInWindow).toFixed(0)}g protein`
 
   const sleepN = sleeps.length
+  const withQ = sleeps.filter(x => x.quality != null)
   const sleepLine =
     sleepN === 0
       ? 'Sleep: no entries this week.'
-      : `Sleep: avg ${(
-          sleeps.reduce((s, x) => s + x.hours, 0) / sleepN
-        ).toFixed(2)} hours, avg quality ${(sleeps.reduce((s, x) => s + x.quality, 0) / sleepN).toFixed(1)}/5`
+      : withQ.length === 0
+        ? `Sleep: avg ${(
+            sleeps.reduce((s, x) => s + x.hours, 0) / sleepN
+          ).toFixed(2)} hours, quality not measured`
+        : `Sleep: avg ${(
+            sleeps.reduce((s, x) => s + x.hours, 0) / sleepN
+          ).toFixed(2)} hours, avg quality ${(withQ.reduce((s, x) => s + (x.quality as number), 0) / withQ.length).toFixed(1)}/5`
 
   const trainDates = new Set(trainings.map(t => t.date))
   const vol = trainings.reduce((s, t) => s + t.volume, 0)
@@ -168,22 +169,30 @@ export async function GET() {
       })
     }
 
-    const cutoff = dateNDaysAgo(WINDOW_CUTOFF_DAYS)
-    const metrics = await collectWeekMetrics(cutoff)
+    // Only the generation path is limited. A cache hit above is always served,
+    // so this cannot starve the page; it only stops a refresh loop from
+    // hammering Claude once the 24h cache has expired.
+    const rl = consume('verdict-summary', { capacity: 3, refillPerSec: 3 / 3600 })
+    if (!rl.ok) {
+      return NextResponse.json({
+        summary: cached?.summary ?? null,
+        cached: Boolean(cached),
+        rateLimited: true,
+        generatedAt: cached?.generatedAt.toISOString(),
+      })
+    }
+
+    const window = rollingWindow(7)
+    const metrics = await collectWeekMetrics(window.from, window.to)
     const userPrompt = buildUserPrompt(metrics)
 
-    const client = new Anthropic({ apiKey })
-    const msg = await client.messages.create({
+    const client = getAnthropicClient(apiKey)
+    const { text } = await callClaude(client, 'verdict.summary', {
       model: 'claude-haiku-4-5',
       max_tokens: 150,
       stream: false,
       messages: [{ role: 'user', content: userPrompt }],
     })
-
-    const text = msg.content
-      .map(b => (b.type === 'text' ? b.text : ''))
-      .join('')
-      .trim()
 
     if (!text) {
       return NextResponse.json({ summary: null, error: true })

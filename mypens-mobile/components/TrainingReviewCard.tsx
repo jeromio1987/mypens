@@ -8,19 +8,19 @@ import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
 import { isPensApiConfigured, pensFetch } from '@/lib/pensApi'
 import {
-  isoToday,
   summarizeTraining,
   type PeriodReviewLiveResponse,
 } from '@/lib/cockpitWindow'
+import { rollingWindow } from '@/lib/timeWindow'
 
 const MOD = MODULE_COLORS.training
 
-function rangeFor(days: 7 | 14 | 30): { from: string; to: string } {
-  const to = isoToday()
-  const d = new Date()
-  d.setDate(d.getDate() - (days - 1))
-  const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  return { from, to }
+function peakDayLabel(series: { date: string; trainingLoad: number }[], peak: number): string | null {
+  if (peak <= 0) return null
+  const hit = series.find(d => Math.round(d.trainingLoad || 0) === peak)
+  if (!hit) return null
+  const d = new Date(`${hit.date}T12:00:00`)
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 export function TrainingReviewCard({ defaultDays = 14 }: { defaultDays?: 7 | 14 | 30 }) {
@@ -28,7 +28,8 @@ export function TrainingReviewCard({ defaultDays = 14 }: { defaultDays?: 7 | 14 
   const { width } = useWindowDimensions()
   const enabled = isPensApiConfigured()
   const [days, setDays] = useState<7 | 14 | 30>(defaultDays)
-  const { from, to } = rangeFor(days)
+  const [showPluHelp, setShowPluHelp] = useState(false)
+  const { from, to } = rollingWindow(days)
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['period-review-training', from, to],
     enabled,
@@ -48,6 +49,8 @@ export function TrainingReviewCard({ defaultDays = 14 }: { defaultDays?: 7 | 14 
 
   const series = data?.cockpit?.series ?? []
   const sum = summarizeTraining(series)
+  const peakLabel = peakDayLabel(series, sum.peak)
+  const hardDays = series.filter(d => (d.hardLoad || 0) > (d.easyLoad || 0) && (d.trainingLoad || 0) > 0).length
   const chartW = width - 64
   const barData = series.slice(-14).map((d, i, arr) => ({
     value: Math.round(d.trainingLoad || 0),
@@ -55,15 +58,23 @@ export function TrainingReviewCard({ defaultDays = 14 }: { defaultDays?: 7 | 14 
     frontColor: (d.hardLoad || 0) > (d.easyLoad || 0) ? MOD.primary : `${MOD.primary}88`,
   }))
 
+  const plain =
+    sum.activeDays === 0
+      ? `Last ${days} days: no training load logged. Recovery leans on sleep and resting HR.`
+      : `Last ${days} days: ${sum.activeDays} active day${sum.activeDays === 1 ? '' : 's'}, of which ${hardDays} heavy. Heaviest day: ${peakLabel ?? '—'}.`
+
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.eyebrow, { color: MOD.primary }]}>Training review</Text>
           <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-            PLU load · {from} → {to}
+            {from} → {to}
           </Text>
         </View>
+        <Pressable onPress={() => setShowPluHelp(s => !s)} hitSlop={10} style={{ marginRight: 8 }}>
+          <Feather name="info" size={16} color={colors.mutedForeground} />
+        </Pressable>
         <Pressable onPress={() => void refetch()} hitSlop={10} disabled={isRefetching}>
           {isRefetching || isLoading ? (
             <ActivityIndicator color={MOD.primary} size="small" />
@@ -99,30 +110,30 @@ export function TrainingReviewCard({ defaultDays = 14 }: { defaultDays?: 7 | 14 
         ))}
       </View>
 
+      {showPluHelp ? (
+        <Text style={[styles.explain, { color: colors.mutedForeground, marginBottom: 8 }]}>
+          Belasting ≈ minutes × sport × heart-rate intensity. Walks count light; strength/HIIT heavy.
+          Internal unit is PLU — kept off the main screen.
+        </Text>
+      ) : null}
+
       {isError ? (
         <Text style={{ color: colors.warning, fontSize: 13 }}>{(error as Error)?.message}</Text>
       ) : isLoading && !data ? (
         <ActivityIndicator color={MOD.primary} style={{ marginVertical: 12 }} />
       ) : (
         <>
+          <Text style={[styles.plain, { color: colors.foreground }]}>{plain}</Text>
           <View style={styles.stats}>
-            {[
-              ['PLU', String(sum.totalPlu)],
-              ['Active', String(sum.activeDays)],
-              ['Hard', String(sum.hardPlu)],
-              ['Peak', String(sum.peak)],
-            ].map(([k, v]) => (
-              <View key={k} style={[styles.stat, { backgroundColor: colors.secondary }]}>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{k}</Text>
-                <Text style={[styles.statVal, { color: colors.foreground }]}>{v}</Text>
-              </View>
-            ))}
+            <View style={[styles.stat, { backgroundColor: colors.secondary }]}>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Active days</Text>
+              <Text style={[styles.statVal, { color: colors.foreground }]}>{sum.activeDays}</Text>
+            </View>
+            <View style={[styles.stat, { backgroundColor: colors.secondary }]}>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Minutes</Text>
+              <Text style={[styles.statVal, { color: colors.foreground }]}>{sum.minutes}</Text>
+            </View>
           </View>
-          <Text style={[styles.explain, { color: colors.mutedForeground }]}>
-            {sum.activeDays === 0
-              ? 'No training load in this window — Form leans on sleep / RHR more than sport.'
-              : `${sum.activeDays} active day${sum.activeDays === 1 ? '' : 's'} · ${sum.minutes} raw minutes · easy PLU ${sum.easyPlu}. Same series as web /period-review Training.`}
-          </Text>
           {barData.some(b => b.value > 0) ? (
             <View style={{ marginTop: 8 }}>
               <BarChart
@@ -170,9 +181,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  stats: { flexDirection: 'row', gap: 6 },
+  stats: { flexDirection: 'row', gap: 6, marginTop: 10 },
   stat: { flex: 1, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 6 },
   statLabel: { fontSize: 9, fontFamily: 'Inter_500Medium', textTransform: 'uppercase' },
   statVal: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
-  explain: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17, marginTop: 10 },
+  plain: { fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
+  explain: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
 })

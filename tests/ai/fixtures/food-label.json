@@ -1,0 +1,31 @@
+{
+  "analysisMode": "nutrition_label",
+  "dishSummary": "Nutrition panel of a 1 kg tub of 0% Greek yoghurt, values per 100 g.",
+  "items": [
+    {
+      "name": "Delhaize 0% Greek yoghurt",
+      "brand": "Delhaize",
+      "meal": "breakfast",
+      "kcal": 57,
+      "proteinG": 10.3,
+      "carbsG": 3.6,
+      "fatG": 0.2,
+      "fiberG": 0,
+      "packGrams": 1000,
+      "assumedGrams": 100,
+      "portionGrams": 200,
+      "micros": {
+        "sodiumMg": 41,
+        "potassiumMg": 141,
+        "calciumMg": 110,
+        "ironMg": null,
+        "magnesiumMg": null,
+        "vitaminCMg": null,
+        "vitaminDMcg": null,
+        "vitaminB12Mcg": 0.5,
+        "zincMg": null
+      },
+      "tags": ["high_protein", "dairy"]
+    }
+  ]
+}

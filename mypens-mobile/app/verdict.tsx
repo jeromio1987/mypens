@@ -18,7 +18,7 @@ import { isPensApiConfigured, pensFetch } from '@/lib/pensApi'
 type Pillar = {
   key: string
   label: string
-  score: number
+  score: number | null
   comment: string
   hasData: boolean
 }
@@ -35,11 +35,12 @@ type VerdictData = {
   headline: string
   pillars: Pillar[]
   ledger: LedgerItem[]
-  auditorNote: string
+  auditorNote: { quote: string; body: string } | string
   weekRange: string
   todayMode: string | null
   hasEnoughData: boolean
   modeNote: string | null
+  window?: { label: 'rolling'; from: string; to: string; days: number }
 }
 
 async function fetchVerdict(): Promise<VerdictData> {
@@ -83,8 +84,8 @@ export default function VerdictScreen() {
                 <MetricChip
                   key={p.key}
                   label={p.label}
-                  value={data.hasEnoughData ? String(p.score) : '—'}
-                  critical={p.hasData && p.score < 40}
+                  value={p.hasData && p.score != null ? String(p.score) : '—'}
+                  critical={p.hasData && p.score != null && p.score < 40}
                 />
               ))}
             </View>
@@ -125,7 +126,14 @@ export default function VerdictScreen() {
 
             <SectionLabel>Auditor note</SectionLabel>
             <Block elevated>
-              <Text style={styles.comment}>{data.auditorNote}</Text>
+              {typeof data.auditorNote === 'string' ? (
+                <Text style={styles.comment}>{data.auditorNote}</Text>
+              ) : (
+                <>
+                  <Text style={styles.quote}>{data.auditorNote.quote}</Text>
+                  <Text style={[styles.comment, { marginTop: 8 }]}>{data.auditorNote.body}</Text>
+                </>
+              )}
             </Block>
 
             <PrimaryButton label="Acknowledge debt" onPress={() => void refetch()} />

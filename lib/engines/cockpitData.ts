@@ -8,6 +8,7 @@ import { buildDailySignals, scoreDay, analyzePeriods } from '../../scripts/lib/p
 import { analyzeCausal, classifyRhrDrinkBand } from '../../scripts/lib/periodCausal.mjs'
 import { loadGarminData } from '../../scripts/lib/garminAnalyze.mjs'
 import { loadConfounders } from '../../scripts/lib/periodCausal.mjs'
+import { getEnergyBalanceForRange, type WindowDayEnergy } from '@/lib/energyBalance'
 
 export type CockpitDay = {
   date: string
@@ -23,6 +24,14 @@ export type CockpitDay = {
   trainingLoad: number
   hardLoad: number
   easyLoad: number
+  /** WP 2.1 — nutrition from FoodEntry (window-scoped). */
+  kcalIn: number | null
+  proteinG: number | null
+  carbsG: number | null
+  fatG: number | null
+  foodLogged: boolean
+  energyDelta: number | null
+  foodIncomplete: boolean
 }
 
 function clip<T extends { date: string }>(rows: T[], from: string, to: string) {
@@ -173,22 +182,145 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     )
   }
 
-  const daily = buildDailySignals(data)
-  const series: CockpitDay[] = daily.map((d: Record<string, unknown>) => ({
-    date: d.date as string,
-    formScore: scoreDay(d),
-    sleepHours: (d.sleepHours as number | null) ?? null,
-    stress: (d.stress as number | null) ?? null,
-    hrv: (d.hrv as number | null) ?? null,
-    restingHr: (d.restingHr as number | null) ?? null,
-    rhrBand: classifyRhrDrinkBand(d.restingHr as number | null),
-    steps: (d.steps as number | null) ?? null,
-    activityMinutes: (d.activityMinutes as number) || 0,
-    activityCount: (d.activityCount as number) || 0,
-    trainingLoad: (d.trainingLoad as number) || 0,
-    hardLoad: (d.hardLoad as number) || 0,
-    easyLoad: (d.easyLoad as number) || 0,
-  }))
+  // WP 2.1 — window-scoped energy/macros via the shared engine
+  // (lib/energyBalance.ts getEnergyBalanceForRange), batched for [from, to]
+  // only (not allTime). Fed into buildDailySignals as data.food so the
+  // periodAnalyze/periodCausal nutrition hypothesis (foodEnergyWindowStats)
+  // sees real kcalIn/energyDelta instead of staying dark.
+  const foodByDate = new Map<
+    string,
+    {
+      kcalIn: number
+      proteinG: number
+      carbsG: number
+      fatG: number
+      foodLogged: boolean
+      energyDelta: number | null
+    }
+  >()
+  const incompleteByDate = new Map<string, boolean>()
+  try {
+    const [energyRows, incompleteRows] = await Promise.all([
+      getEnergyBalanceForRange(from, to),
+      prisma.dayEntry
+        .findMany({
+          where: { date: { gte: from, lte: to } },
+          select: { date: true, tags: true },
+        })
+        .catch(() => [] as { date: string; tags: string | null }[]),
+    ])
+    for (const row of energyRows) {
+      foodByDate.set(row.date, {
+        kcalIn: row.kcalIn,
+        proteinG: row.proteinG,
+        carbsG: row.carbsG,
+        fatG: row.fatG,
+        foodLogged: row.foodCoverage,
+        energyDelta: row.delta,
+      })
+    }
+    for (const d of incompleteRows) {
+      try {
+        const tags = JSON.parse(String(d.tags || '[]')) as unknown
+        if (Array.isArray(tags) && tags.includes('food_incomplete')) {
+          incompleteByDate.set(d.date, true)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    loadNotes.push(`Food/energy window load failed: ${msg}`)
+  }
+
+  const foodForSignals = [...foodByDate.entries()]
+    .filter(([, food]) => food.foodLogged)
+    .map(([date, food]) => ({
+      date,
+      kcal: food.kcalIn,
+      proteinG: food.proteinG,
+      carbsG: food.carbsG,
+      fatG: food.fatG,
+      energyDelta: food.energyDelta ?? undefined,
+    }))
+
+  let hrMax: number | null = null
+  try {
+    const settings = await prisma.userSettings.findUnique({
+      where: { id: 'default' },
+      select: { hrMax: true },
+    })
+    if (settings?.hrMax != null && settings.hrMax > 0) hrMax = settings.hrMax
+  } catch {
+    /* optional profile */
+  }
+
+  const daily = buildDailySignals({
+    ...data,
+    food: foodForSignals,
+    ...(hrMax != null ? { hrMax } : {}),
+  })
+
+  const series: CockpitDay[] = daily.map((d: Record<string, unknown>) => {
+    const date = d.date as string
+    const food = foodByDate.get(date)
+    return {
+      date,
+      formScore: scoreDay(d),
+      sleepHours: (d.sleepHours as number | null) ?? null,
+      stress: (d.stress as number | null) ?? null,
+      hrv: (d.hrv as number | null) ?? null,
+      restingHr: (d.restingHr as number | null) ?? null,
+      rhrBand: classifyRhrDrinkBand(d.restingHr as number | null),
+      steps: (d.steps as number | null) ?? null,
+      activityMinutes: (d.activityMinutes as number) || 0,
+      activityCount: (d.activityCount as number) || 0,
+      trainingLoad: (d.trainingLoad as number) || 0,
+      hardLoad: (d.hardLoad as number) || 0,
+      easyLoad: (d.easyLoad as number) || 0,
+      kcalIn: food?.foodLogged ? Math.round(food.kcalIn) : null,
+      proteinG: food?.foodLogged ? Math.round(food.proteinG) : null,
+      carbsG: food?.foodLogged ? Math.round(food.carbsG) : null,
+      fatG: food?.foodLogged ? Math.round(food.fatG) : null,
+      foodLogged: Boolean(food?.foodLogged),
+      energyDelta: food?.energyDelta ?? null,
+      foodIncomplete: incompleteByDate.get(date) ?? false,
+    }
+  })
+
+  for (const [date, food] of foodByDate) {
+    if (series.some(s => s.date === date)) continue
+    if (!food.foodLogged) continue
+    series.push({
+      date,
+      formScore: null,
+      sleepHours: null,
+      stress: null,
+      hrv: null,
+      restingHr: null,
+      rhrBand: null,
+      steps: null,
+      activityMinutes: 0,
+      activityCount: 0,
+      trainingLoad: 0,
+      hardLoad: 0,
+      easyLoad: 0,
+      kcalIn: Math.round(food.kcalIn),
+      proteinG: Math.round(food.proteinG),
+      carbsG: Math.round(food.carbsG),
+      fatG: Math.round(food.fatG),
+      foodLogged: true,
+      energyDelta: food.energyDelta,
+      foodIncomplete: incompleteByDate.get(date) ?? false,
+    })
+  }
+  series.sort((a, b) => a.date.localeCompare(b.date))
+
+  const foodLoggedDays = series.filter(s => s.foodLogged).length
+  if (foodLoggedDays === 0 && !loadNotes.some(n => /Food\/energy window/i.test(n))) {
+    loadNotes.push('No FoodEntry rows in this window — nutrition causes stay quiet.')
+  }
 
   const hrvDays = series.filter(s => s.hrv != null).length
   const stressDays = series.filter(s => s.stress != null).length
@@ -235,6 +367,9 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
 
   const theRead = {
     verdict:
+      avgForm == null ? null : avgForm >= 65 ? 'good' : avgForm >= 45 ? 'mixed' : 'bad',
+    /** WP 2.2 alias — prefer `tone` in new UI to avoid clash with Verdict page. */
+    tone:
       avgForm == null ? null : avgForm >= 65 ? 'good' : avgForm >= 45 ? 'mixed' : 'bad',
     avgForm,
     leadingCause: causal.topHypothesis
@@ -291,6 +426,7 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
       days: series.length,
       hrvDays,
       stressDays,
+      foodDays: foodLoggedDays,
       metricKinds: metricKindCounts,
     },
   }

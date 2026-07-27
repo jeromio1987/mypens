@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+import { rollingWindow, shiftDateStr, today } from '@/lib/timeWindow'
 
 function calcStreak(dates: string[]): { current: number; longest: number; lastLogged: string | null } {
   if (!dates.length) return { current: 0, longest: 0, lastLogged: null }
   const sorted = [...new Set(dates)].sort((a, b) => b.localeCompare(a))
   const todayStr = today()
-  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const yesterdayStr = shiftDateStr(todayStr, -1)
   const mostRecent = sorted[0]
   const anchorStart = mostRecent === todayStr || mostRecent === yesterdayStr ? mostRecent : null
   let current = 0
@@ -18,9 +15,7 @@ function calcStreak(dates: string[]): { current: number; longest: number; lastLo
     for (const d of sorted) {
       if (d === cursor) {
         current++
-        const prev = new Date(cursor + 'T00:00:00')
-        prev.setDate(prev.getDate() - 1)
-        cursor = prev.toISOString().slice(0, 10)
+        cursor = shiftDateStr(cursor, -1)
       } else {
         break
       }
@@ -29,9 +24,7 @@ function calcStreak(dates: string[]): { current: number; longest: number; lastLo
   let longest = 1
   let running = 1
   for (let i = 1; i < sorted.length; i++) {
-    const prev = new Date(sorted[i - 1] + 'T00:00:00')
-    prev.setDate(prev.getDate() - 1)
-    if (sorted[i] === prev.toISOString().slice(0, 10)) {
+    if (sorted[i] === shiftDateStr(sorted[i - 1], -1)) {
       running++
       if (running > longest) longest = running
     } else {
@@ -51,11 +44,7 @@ export async function GET() {
       prisma.bodyMeasurement.findMany({ select: { date: true }, orderBy: { date: 'desc' } }),
     ])
 
-    const last30 = Array.from({ length: 30 }, (_, i) => {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      return d.toISOString().slice(0, 10)
-    })
+    const last30 = rollingWindow(30).dates
 
     const coverage = (dates: { date: string }[]) => {
       const set = new Set(dates.map(d => d.date))

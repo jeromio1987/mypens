@@ -7,6 +7,7 @@ import {
   serializeTags,
   type FoodMicros,
 } from '@/lib/foodMicros'
+import { foodNameKey } from '@/lib/foodNameKey'
 
 function coerceMicros(raw: unknown): FoodMicros | null {
   if (raw == null) return null
@@ -121,7 +122,7 @@ export async function GET(request: Request) {
       })
       const seen = new Set<string>()
       const unique = entries.filter(e => {
-        const key = e.name.toLowerCase()
+        const key = foodNameKey(e.name) || e.name.toLowerCase()
         if (seen.has(key)) return false
         seen.add(key)
         return true

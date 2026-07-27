@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { rollingWindow, shiftDateStr, today } from '@/lib/timeWindow'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -33,12 +34,6 @@ export interface ReportCard {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function nDaysAgo(n: number) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
-}
-
 function avg(arr: number[]) {
   if (!arr.length) return null
   return parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1))
@@ -47,8 +42,8 @@ function avg(arr: number[]) {
 function calcCurrentStreak(dates: string[]): number {
   if (!dates.length) return 0
   const sorted = [...new Set(dates)].sort((a, b) => b.localeCompare(a))
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const yesterdayStr = nDaysAgo(1)
+  const todayStr = today()
+  const yesterdayStr = shiftDateStr(todayStr, -1)
   const mostRecent = sorted[0]
   if (mostRecent !== todayStr && mostRecent !== yesterdayStr) return 0
   let current = 0
@@ -56,9 +51,7 @@ function calcCurrentStreak(dates: string[]): number {
   for (const d of sorted) {
     if (d === cursor) {
       current++
-      const prev = new Date(cursor + 'T00:00:00')
-      prev.setDate(prev.getDate() - 1)
-      cursor = prev.toISOString().slice(0, 10)
+      cursor = shiftDateStr(cursor, -1)
     } else break
   }
   return current
@@ -207,8 +200,8 @@ function buildWeeklyWrap(
   sleepEntries: { hours: number; quality: number }[],
   foodEntries: { date: string; kcal: number }[],
 ): WeeklyWrap {
-  const start = nDaysAgo(6)
-  const end   = new Date().toISOString().slice(0, 10)
+  const start = rollingWindow(7).from
+  const end   = today()
 
   const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
   const weekLabel = `${fmt(start)} – ${fmt(end)}`
@@ -304,7 +297,7 @@ function buildReportToSelf(
 
 export async function GET() {
   try {
-    const sevenDaysAgo = nDaysAgo(7)
+    const sevenDaysAgo = rollingWindow(7).from
 
     const [
       allWeightEntries,

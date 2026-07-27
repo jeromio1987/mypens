@@ -6,6 +6,7 @@ import {
   calculateRollingBaseline,
   calculateDynamicBand,
   detectOutlier,
+  TRUE_WEIGHT_MODEL_VERSION,
   type ConfidenceLevel,
   type HistoryEntry,
 } from '@/lib/retentionModels'
@@ -19,6 +20,7 @@ export type EnrichedWeightEntry = WeightEntry & {
   dynamicBandKg: number
   dynamicBandSource: 'dynamic' | 'static'
   isOutlier: boolean
+  modelVersion: typeof TRUE_WEIGHT_MODEL_VERSION
 }
 
 /**
@@ -70,6 +72,7 @@ export function enrichWeightSeriesFromDb(rawEntries: WeightEntry[]): EnrichedWei
       dynamicBandKg,
       dynamicBandSource,
       isOutlier,
+      modelVersion: TRUE_WEIGHT_MODEL_VERSION,
     }
   })
 }

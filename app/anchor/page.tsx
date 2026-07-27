@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db'
 import { computeStreaks, todayStr, nextMilestone } from '@/lib/anchor/streaks'
 import { computeMoneySaved } from '@/lib/anchor/money'
+import { shiftDateStr } from '@/lib/timeWindow'
 import AnchorClient from './AnchorClient'
 
 export const dynamic = 'force-dynamic'
@@ -8,13 +9,11 @@ export const dynamic = 'force-dynamic'
 // Walk backwards from yesterday, count consecutive days where condition is met
 function calcHealthStreak(qualifyingDates: Set<string>, today: string): number {
   let streak = 0
-  const d = new Date(today + 'T12:00:00')
-  d.setDate(d.getDate() - 1)
+  let cursor = shiftDateStr(today, -1)
   for (let i = 0; i < 365; i++) {
-    const s = d.toISOString().slice(0, 10)
-    if (qualifyingDates.has(s)) {
+    if (qualifyingDates.has(cursor)) {
       streak++
-      d.setDate(d.getDate() - 1)
+      cursor = shiftDateStr(cursor, -1)
     } else break
   }
   return streak

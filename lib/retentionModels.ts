@@ -1,5 +1,15 @@
 export type ConfidenceLevel = 'high' | 'medium' | 'low'
 
+/**
+ * WP 2.5 — frozen true-weight model.
+ * Version bumps only with an explicit decision note in docs/roadmap.
+ *
+ * Formula (v3): trueWeightKg = scaleKg − creatine − alcohol − glycogen − sodium − hardTraining
+ * (each retention term from estimate* helpers below). Confidence drops with confounder count.
+ * Do not change coefficients silently — every trend comparison depends on stability.
+ */
+export const TRUE_WEIGHT_MODEL_VERSION = 'v3-2026-07' as const
+
 export interface WeightBreakdown {
   scaleKg: number
   creatineKg: number
@@ -12,6 +22,7 @@ export interface WeightBreakdown {
   tanitaFlags: string[]
   confidence: ConfidenceLevel
   activeConfounders: number
+  modelVersion?: typeof TRUE_WEIGHT_MODEL_VERSION
 }
 
 // ── Existing retention models (v2 unchanged) ─────────────────────────────────
@@ -194,6 +205,7 @@ export function calculateWeightBreakdown(input: {
     tanitaFlags:     tanita.flags,
     confidence:      confidence.level,
     activeConfounders: confidence.activeConfounders,
+    modelVersion: TRUE_WEIGHT_MODEL_VERSION,
   }
 }
 

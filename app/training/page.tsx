@@ -7,6 +7,7 @@ import TrainingEntry, { type ProgrammeExerciseQueueItem } from '@/components/tra
 import TrainingLog from '@/components/training/TrainingLog'
 import EnergyBalanceCard from '@/components/food/EnergyBalanceCard'
 import WeekEnergyRecapCard from '@/components/food/WeekEnergyRecapCard'
+import { today } from '@/lib/timeWindow'
 
 interface ExerciseAggregate {
   exercise: string
@@ -66,37 +67,37 @@ function ExerciseBrowserPanel() {
   }, [open])
 
   return (
-    <div className="rounded-2xl bg-pens-navy/80 border border-pens-muted/30 overflow-hidden">
+    <div className="bg-ct-high overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-pens-deep/40 transition-colors"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-ct-highest transition-colors"
       >
-        <span className="text-sm font-semibold text-pens-cream uppercase tracking-wide">Exercises</span>
+        <span className="font-grotesk text-[0.65rem] uppercase tracking-[0.16em] text-ct-primary">Exercises</span>
         {open ? (
-          <ChevronDown size={18} className="text-pens-gold shrink-0" />
+          <ChevronDown size={18} className="text-ct-second/50 shrink-0" />
         ) : (
-          <ChevronRight size={18} className="text-pens-gold shrink-0" />
+          <ChevronRight size={18} className="text-ct-second/50 shrink-0" />
         )}
       </button>
       {open && (
-        <div className="border-t border-pens-muted/25 px-4 py-3 max-h-72 overflow-y-auto">
+        <div className="bg-ct-highest/50 px-4 py-3 max-h-72 overflow-y-auto">
           {loading ? (
-            <p className="text-xs text-pens-cream/40 py-4 text-center animate-pulse">Loading…</p>
+            <p className="text-xs text-ct-second/40 py-4 text-center animate-pulse">Loading…</p>
           ) : rows.length === 0 ? (
-            <p className="text-xs text-pens-cream/45 py-3">No exercises logged yet.</p>
+            <p className="text-xs text-ct-second/45 py-3">No exercises logged yet.</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {rows.map(r => (
-                <li key={r.exercise} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2 border-b border-pens-muted/15 last:border-0">
+                <li key={r.exercise} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2 bg-ct-high/40 px-2">
                   <Link
                     href={`/training/exercise/${encodeURIComponent(r.exercise)}`}
-                    className="font-medium text-pens-gold hover:underline truncate min-w-0 flex-1 basis-[40%]"
+                    className="font-medium text-ct-blood hover:underline truncate min-w-0 flex-1 basis-[40%]"
                   >
                     {r.exercise}
                   </Link>
-                  <span className="text-pens-cream/50 text-xs tabular-nums">{r.sessionCount} sessions</span>
-                  <span className="text-pens-cream/40 text-xs">
+                  <span className="text-ct-second/50 text-xs tabular-nums">{r.sessionCount} sessions</span>
+                  <span className="text-ct-second/40 text-xs">
                     {r.lastDate
                       ? new Date(r.lastDate + 'T00:00:00').toLocaleDateString('en-GB', {
                           day: 'numeric',
@@ -105,7 +106,7 @@ function ExerciseBrowserPanel() {
                         })
                       : '—'}
                   </span>
-                  <span className="text-orange-400/90 text-xs font-medium tabular-nums ml-auto">PB {r.personalBestKg} kg</span>
+                  <span className="text-ct-primary/90 text-xs font-medium tabular-nums ml-auto">PB {r.personalBestKg} kg</span>
                 </li>
               ))}
             </ul>
@@ -117,8 +118,8 @@ function ExerciseBrowserPanel() {
 }
 
 export default function TrainingPage() {
-  const today = new Date().toISOString().split('T')[0]
-  const [date, setDate] = useState(today)
+  const todayStr = today()
+  const [date, setDate] = useState(todayStr)
   const [refresh, setRefresh] = useState(0)
   const [programmes, setProgrammes] = useState<Programme[]>([])
   const [dayPick, setDayPick] = useState('')
@@ -162,66 +163,66 @@ export default function TrainingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-pens-deep px-4 py-8">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="px-5 py-8">
+      <div className="max-w-2xl mx-auto space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <Link href="/" className="text-xs text-pens-cream/50 hover:text-pens-cream">
-              ← MY PENS
-            </Link>
-            <h1 className="text-2xl font-bold text-pens-cream mt-0.5">Training</h1>
-            <p className="text-sm text-pens-cream/50">Sets · Reps · Volume</p>
+            <p className="font-grotesk text-[0.625rem] uppercase tracking-[0.18em] text-ct-second/55">Train</p>
+            <h1 className="mt-2 font-headline text-3xl uppercase leading-none tracking-[0.06em] text-ct-primary">
+              Sessions
+            </h1>
+            <p className="mt-2 font-grotesk text-[0.7rem] text-ct-second/55">Sets · Reps · Volume</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-stretch gap-0">
             <Link
               href="/training/activity-stream"
-              className="text-xs font-semibold text-pens-cream hover:text-white border border-pens-muted/40 rounded-lg px-2.5 py-2 transition-colors"
+              className="font-grotesk text-[0.625rem] uppercase tracking-[0.14em] text-ct-second/60 hover:text-ct-primary bg-ct-high px-3 py-2.5"
             >
               Feed
             </Link>
             <Link
               href="/training/analytics"
-              className="text-xs font-semibold text-pens-cream hover:text-white border border-pens-muted/40 rounded-lg px-2.5 py-2 transition-colors"
+              className="font-grotesk text-[0.625rem] uppercase tracking-[0.14em] text-ct-second/60 hover:text-ct-primary bg-ct-high px-3 py-2.5"
             >
               Analytics
             </Link>
             <Link
               href="/programmes/compare"
-              className="text-xs font-semibold text-pens-gold/90 hover:text-pens-gold border border-pens-gold/35 rounded-lg px-2.5 py-2 transition-colors"
+              className="font-grotesk text-[0.625rem] uppercase tracking-[0.14em] text-ct-second/60 hover:text-ct-primary bg-ct-highest px-3 py-2.5"
             >
               Compare
             </Link>
             <Link
               href="/programmes"
-              className="text-xs font-semibold text-orange-500 hover:text-orange-400 border border-orange-500/40 rounded-lg px-2.5 py-2 transition-colors"
+              className="font-grotesk text-[0.625rem] uppercase tracking-[0.14em] text-ct-blood bg-ct-bloodc px-3 py-2.5"
             >
               Programmes
             </Link>
             <Link
               href="/integrations"
-              className="text-xs font-semibold text-pens-gold hover:text-pens-cream border border-pens-gold/40 hover:border-pens-gold/70 rounded-lg px-2.5 py-2 transition-colors"
+              className="font-grotesk text-[0.625rem] uppercase tracking-[0.14em] text-ct-second/60 hover:text-ct-primary bg-ct-high px-3 py-2.5"
               title="Health Connect, Garmin, Strava"
             >
-              Integrations
+              Sync
             </Link>
             <input
               type="date"
               value={date}
               onChange={e => setDate(e.target.value)}
-              className="bg-pens-surface border border-pens-muted/40 text-pens-cream rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-pens-gold focus:border-pens-gold [color-scheme:dark]"
+              className="bg-ct-highest px-3 py-2 text-sm text-ct-primary font-grotesk focus:outline-none [color-scheme:dark]"
             />
           </div>
         </div>
 
         {activeProgramme && (
-          <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 px-4 py-3">
-            <label className="block text-[10px] uppercase tracking-widest text-orange-400/90 font-bold mb-1.5">
+          <div className="bg-ct-highest px-4 py-3">
+            <label className="block font-grotesk text-[0.5625rem] uppercase tracking-[0.18em] text-ct-second/55 mb-1.5">
               Start from programme
             </label>
             <select
               value={dayPick}
               onChange={e => startFromDay(e.target.value)}
-              className="w-full rounded-lg border border-pens-muted/40 bg-pens-deep px-3 py-2 text-sm text-pens-cream"
+              className="w-full bg-ct-low px-3 py-2 text-sm text-ct-primary"
             >
               <option value="">Choose day ({activeProgramme.name})…</option>
               {[...activeProgramme.days].sort((a, b) => a.order - b.order).map(d => (
@@ -248,6 +249,6 @@ export default function TrainingPage() {
         <ExerciseBrowserPanel />
         <TrainingLog date={date} refresh={refresh} />
       </div>
-    </main>
+    </div>
   )
 }

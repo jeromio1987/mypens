@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +25,7 @@ import { IntegrationStatusStrip } from '@/components/IntegrationStatusStrip'
 import { EngineReadCard } from '@/components/EngineReadCard'
 import { DateNavBar } from '@/components/DateNavBar'
 import { useColors } from '@/hooks/useColors'
+import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { usePensSync } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
@@ -113,9 +114,17 @@ export default function WeightScreen() {
   const useApi = isPensApiConfigured()
   const { pending, online, refresh: refreshQueue } = usePensSync()
 
-  const [form, setForm] = useState({ ...defaultForm })
+  const { date: sharedDate, setDate: setSharedDate } = useSelectedDate()
+  const [form, setForm] = useState({ ...defaultForm, date: sharedDate })
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showRetentionNums, setShowRetentionNums] = useState(false)
   const [showTanita, setShowTanita] = useState(false)
+  const [showLogForm, setShowLogForm] = useState(false)
+
+  // Keep form.date aligned with shared date nav
+  useEffect(() => {
+    setForm((f) => (f.date === sharedDate ? f : { ...f, date: sharedDate }))
+  }, [sharedDate])
 
   const { data: entries = [], isLoading, refetch, isRefetching } = useQuery<ApiWeightEntry[]>({
     queryKey: ['weight', useApi ? 'api' : 'supabase'],
@@ -246,8 +255,9 @@ export default function WeightScreen() {
         await refreshQueue()
       }
       qc.invalidateQueries({ queryKey: ['weight'] })
-      setForm({ ...defaultForm })
+      setForm({ ...defaultForm, date: sharedDate })
       setShowAdvanced(false)
+      setShowRetentionNums(false)
       setShowTanita(false)
     },
     onError: (err: Error) => {
@@ -408,8 +418,8 @@ export default function WeightScreen() {
 
       <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
         <DateNavBar
-          date={form.date}
-          onChange={(d) => setForm((f) => ({ ...f, date: d }))}
+          date={sharedDate}
+          onChange={setSharedDate}
           accent={MOD.primary}
           recentDates={entries.slice(-14).map((e) => e.date).reverse()}
         />
@@ -417,7 +427,36 @@ export default function WeightScreen() {
 
       <EngineReadCard defaultDays={7} />
 
-      {/* Form card */}
+      {/* Compact log entry — de-emphasize scale form; Audit + feedback stay primary */}
+      <Pressable
+        onPress={() => setShowLogForm((s) => !s)}
+        style={{
+          marginHorizontal: 16,
+          marginBottom: 12,
+          paddingVertical: 12,
+          paddingHorizontal: 14,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+        }}
+      >
+        <MaterialCommunityIcons name="scale-bathroom" size={18} color={MOD.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.foreground, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+            {showLogForm ? 'Hide scale log' : 'Log weight'}
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 2 }}>
+            Optional — Food + Energy feedback live under Fueling
+          </Text>
+        </View>
+        <Feather name={showLogForm ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+      </Pressable>
+
+      {showLogForm ? (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         {/* Scale weight */}
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Scale weight</Text>
@@ -465,13 +504,13 @@ export default function WeightScreen() {
           />
         </View>
 
-        {/* Advanced context */}
+        {/* Optional context — light toggles first, numbers nested */}
         <Pressable
           onPress={() => setShowAdvanced((s) => !s)}
           style={styles.expandBtn}
         >
           <Text style={[styles.expandLabel, { color: MOD.primary }]}>
-            {showAdvanced ? 'Hide' : 'Show'} context
+            {showAdvanced ? 'Hide' : 'Optional'} context
           </Text>
           <Feather
             name={showAdvanced ? 'chevron-up' : 'chevron-down'}
@@ -482,54 +521,75 @@ export default function WeightScreen() {
 
         {showAdvanced && (
           <View style={styles.advancedSection}>
-            <NumInput
-              label="Creatine dose"
-              value={form.creatineDoseG}
-              onChangeText={(v) => setForm((f) => ({ ...f, creatineDoseG: v }))}
-              unit="g"
-            />
-            <NumInput
-              label="Days on creatine"
-              value={form.creatineDaysOn}
-              onChangeText={(v) => setForm((f) => ({ ...f, creatineDaysOn: v }))}
-            />
-            <NumInput
-              label="Alcohol units"
-              value={form.alcoholUnits}
-              onChangeText={(v) => setForm((f) => ({ ...f, alcoholUnits: v }))}
-            />
-            <NumInput
-              label="Hours since alcohol"
-              value={form.hoursSinceAlcohol}
-              onChangeText={(v) => setForm((f) => ({ ...f, hoursSinceAlcohol: v }))}
-            />
-            <NumInput
-              label="Carbs yesterday"
-              value={form.carbsG}
-              onChangeText={(v) => setForm((f) => ({ ...f, carbsG: v }))}
-              unit="g"
-            />
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <Text style={{ color: colors.mutedForeground, fontSize: 12, marginBottom: 8, fontFamily: 'Inter_400Regular' }}>
+              Only if today is unusual — skip on a normal morning weigh-in.
+            </Text>
             <ToggleRow
-              label="High sodium"
+              label="High sodium / salty meals"
               value={form.highSodium}
               onToggle={(v) => setForm((f) => ({ ...f, highSodium: v }))}
-            />
-            <ToggleRow
-              label="Restaurant meal"
-              value={form.restaurantMeal}
-              onToggle={(v) => setForm((f) => ({ ...f, restaurantMeal: v }))}
-            />
-            <ToggleRow
-              label="Flight day"
-              value={form.flightDay}
-              onToggle={(v) => setForm((f) => ({ ...f, flightDay: v }))}
             />
             <ToggleRow
               label="Illness"
               value={form.illnessDay}
               onToggle={(v) => setForm((f) => ({ ...f, illnessDay: v }))}
             />
+            <ToggleRow
+              label="Flight / travel day"
+              value={form.flightDay}
+              onToggle={(v) => setForm((f) => ({ ...f, flightDay: v }))}
+            />
+
+            <Pressable
+              onPress={() => setShowRetentionNums((s) => !s)}
+              style={[styles.expandBtn, { marginTop: 8 }]}
+            >
+              <Text style={[styles.expandLabel, { color: colors.mutedForeground }]}>
+                {showRetentionNums ? 'Hide' : 'More'} retention detail
+              </Text>
+              <Feather
+                name={showRetentionNums ? 'chevron-up' : 'chevron-down'}
+                size={14}
+                color={colors.mutedForeground}
+              />
+            </Pressable>
+
+            {showRetentionNums ? (
+              <View style={{ marginTop: 4, gap: 4 }}>
+                <NumInput
+                  label="Creatine dose"
+                  value={form.creatineDoseG}
+                  onChangeText={(v) => setForm((f) => ({ ...f, creatineDoseG: v }))}
+                  unit="g"
+                />
+                <NumInput
+                  label="Days on creatine"
+                  value={form.creatineDaysOn}
+                  onChangeText={(v) => setForm((f) => ({ ...f, creatineDaysOn: v }))}
+                />
+                <NumInput
+                  label="Alcohol units"
+                  value={form.alcoholUnits}
+                  onChangeText={(v) => setForm((f) => ({ ...f, alcoholUnits: v }))}
+                />
+                <NumInput
+                  label="Hours since alcohol"
+                  value={form.hoursSinceAlcohol}
+                  onChangeText={(v) => setForm((f) => ({ ...f, hoursSinceAlcohol: v }))}
+                />
+                <NumInput
+                  label="Carbs yesterday"
+                  value={form.carbsG}
+                  onChangeText={(v) => setForm((f) => ({ ...f, carbsG: v }))}
+                  unit="g"
+                />
+                <ToggleRow
+                  label="Restaurant meal"
+                  value={form.restaurantMeal}
+                  onToggle={(v) => setForm((f) => ({ ...f, restaurantMeal: v }))}
+                />
+              </View>
+            ) : null}
           </View>
         )}
 
@@ -538,13 +598,13 @@ export default function WeightScreen() {
           onPress={() => setShowTanita((s) => !s)}
           style={styles.expandBtn}
         >
-          <Text style={[styles.expandLabel, { color: MOD.primary }]}>
-            {showTanita ? 'Hide' : 'Show'} body comp (Tanita)
+          <Text style={[styles.expandLabel, { color: colors.mutedForeground }]}>
+            {showTanita ? 'Hide' : 'Body comp'} (Tanita)
           </Text>
           <Feather
             name={showTanita ? 'chevron-up' : 'chevron-down'}
             size={16}
-            color={MOD.primary}
+            color={colors.mutedForeground}
           />
         </Pressable>
 
@@ -597,6 +657,7 @@ export default function WeightScreen() {
           )}
         </Pressable>
       </View>
+      ) : null}
 
       {/* Chart */}
       {isLoading ? (

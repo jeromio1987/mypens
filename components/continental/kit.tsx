@@ -184,10 +184,9 @@ export function Masthead({ caseId }: { caseId?: string }) {
 }
 
 export const PENS_TABS = [
-  { id: 'performance', label: 'Performance', route: '/training' },
-  { id: 'endurance', label: 'Endurance', route: '(none)' },
-  { id: 'nutrition', label: 'Nutrition', route: '/food' },
-  { id: 'sleep', label: 'Sleep', route: '/sleep' },
+  { id: 'read', label: 'Read', route: '/period-review' },
+  { id: 'fueling', label: 'Fueling', route: '/food' },
+  { id: 'train', label: 'Train', route: '/training' },
   { id: 'audit', label: 'Audit', route: '/verdict' },
 ] as const
 
@@ -215,6 +214,38 @@ export function SpecimenBar() {
       <p className="font-grotesk text-[0.625rem] uppercase leading-relaxed tracking-[0.16em] text-ct-blood">
         Specimen layout · every figure below is a placeholder, not a measurement
       </p>
+    </div>
+  )
+}
+
+/** WP 3.4 — empty state: explicit, one action, Continental surfaces (no faux borders). */
+export function EmptyState({
+  title,
+  body,
+  actionLabel,
+  onAction,
+}: {
+  title: string
+  body: string
+  actionLabel?: string
+  onAction?: () => void
+}) {
+  return (
+    <div className="bg-ct-high px-6 py-10">
+      <Kicker>Nothing here yet</Kicker>
+      <p className="mt-3 font-headline text-2xl leading-tight tracking-[-0.02em] text-ct-primary">{title}</p>
+      <p className="mt-3 max-w-[42ch] text-[0.85rem] leading-relaxed text-ct-second/65">{body}</p>
+      {actionLabel && onAction ? (
+        <div className="mt-8 max-w-xs">
+          <button
+            type="button"
+            onClick={onAction}
+            className="w-full px-6 py-4 font-grotesk text-xs uppercase tracking-[0.28em] bg-gradient-to-br from-ct-primary to-[#242724] text-ct-on"
+          >
+            {actionLabel}
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }

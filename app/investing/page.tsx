@@ -13,6 +13,7 @@ import {
   Trash2,
   StickyNote,
 } from 'lucide-react'
+import { fromDateStr, shiftDateStr, today } from '@/lib/timeWindow'
 
 type Tab = 'calendar' | 'watchlist' | 'regime' | 'sentiment' | 'backtest' | 'scenarios'
 
@@ -22,16 +23,10 @@ type CalEvent = { id?: string; date: string; title: string; kind: string; symbol
 
 const DEFAULT_TICKERS = ['NXE', 'UUUU', 'CCJ', 'POWL', 'VRT', 'GEV', 'NOG']
 
-function addDays(iso: string, n: number): string {
-  const d = new Date(iso + 'T12:00:00')
-  d.setDate(d.getDate() + n)
-  return d.toISOString().slice(0, 10)
-}
-
 export default function InvestingHubPage() {
   const [tab, setTab] = useState<Tab>('calendar')
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const range = useMemo(() => ({ from: today, to: addDays(today, 90) }), [today])
+  const todayStr = useMemo(() => today(), [])
+  const range = useMemo(() => ({ from: todayStr, to: shiftDateStr(todayStr, 90) }), [todayStr])
 
   const [calEvents, setCalEvents] = useState<CalEvent[]>([])
   const [finnhub, setFinnhub] = useState(false)
@@ -39,7 +34,7 @@ export default function InvestingHubPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
 
-  const [manualDate, setManualDate] = useState(today)
+  const [manualDate, setManualDate] = useState(todayStr)
   const [manualTitle, setManualTitle] = useState('')
   const [manualSym, setManualSym] = useState('')
 
@@ -48,7 +43,7 @@ export default function InvestingHubPage() {
   >([])
   const [regimePick, setRegimePick] = useState('risk_on')
   const [regimeNotes, setRegimeNotes] = useState('')
-  const [effDate, setEffDate] = useState(today)
+  const [effDate, setEffDate] = useState(todayStr)
 
   const [sentimentRows, setSentimentRows] = useState<
     { symbol: string; score: number; headlineCount: number; sample: string[] }[]
@@ -61,10 +56,7 @@ export default function InvestingHubPage() {
   const eventWeekBuckets = useMemo(() => {
     const m = new Map<string, number>()
     for (const e of calEvents) {
-      const d = new Date(e.date + 'T12:00:00')
-      const sun = new Date(d)
-      sun.setDate(d.getDate() - d.getDay())
-      const k = sun.toISOString().slice(0, 10)
+      const k = shiftDateStr(e.date, -fromDateStr(e.date).getDay())
       m.set(k, (m.get(k) ?? 0) + 1)
     }
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-12)

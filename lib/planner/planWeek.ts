@@ -3,6 +3,8 @@
  * Pure functions — no DB, no LLM.
  */
 
+import { shiftDateStr } from '@/lib/timeWindow'
+
 export type Sport = 'running' | 'cycling' | 'core' | 'gym'
 export type GoalKind = 'vo2max' | 'bodyfat' | 'marathon' | 'custom'
 export type LongDay = 'saturday' | 'sunday'
@@ -14,6 +16,8 @@ export type PlannerGoalInput = {
   targetNum?: number | null
   longDay?: LongDay
   sports?: Sport[]
+  /** WP 2.3 — body-comp phase steers volume/intensity mix. */
+  phase?: 'cut' | 'bulk' | 'recomp' | 'maintain'
 }
 
 export type RecentContext = {
@@ -54,9 +58,7 @@ export type DayPlan = {
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 
 function addDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T12:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + n)
-  return d.toISOString().slice(0, 10)
+  return shiftDateStr(iso, n)
 }
 
 function hasSport(sports: Sport[], s: Sport) {
@@ -110,6 +112,17 @@ export function planWeek(
     )
   }
 
+  const phase = goal.phase ?? 'maintain'
+  if (phase === 'cut') {
+    notes.push('Phase cut — strength protected, easy aerobic favoured, quality volume scaled down.')
+  } else if (phase === 'bulk') {
+    notes.push('Phase bulk — progressive overload bias, quality sessions kept.')
+  } else if (phase === 'recomp') {
+    notes.push('Phase recomp — strength + easy aerobic balance.')
+  }
+
+  const volumeScale = phase === 'cut' ? 0.85 : phase === 'bulk' ? 1.1 : 1.0
+  const forceEasyMore = phase === 'cut' || phase === 'recomp'
   const days: DayPlan[] = []
   for (let i = 0; i < 7; i++) {
     const date = addDays(weekOf, i)
@@ -253,6 +266,35 @@ export function planWeek(
       plan = {
         ...plan,
         why: `${plan.why} Gym protected while protein looks soft.`,
+      }
+    }
+
+    if (forceEasyMore && plan.intensity === 'quality' && phase === 'cut') {
+      plan = {
+        ...plan,
+        intensity: 'easy',
+        minutes: Math.max(25, Math.round(plan.minutes * volumeScale)),
+        title: plan.title.replace(/Quality/i, 'Easy'),
+        why: `${plan.why} Cut phase — quality softened.`,
+      }
+    } else if (phase === 'bulk' && plan.intensity === 'strength') {
+      plan = {
+        ...plan,
+        minutes: Math.round(plan.minutes * volumeScale),
+        why: `${plan.why} Bulk phase — strength minutes up.`,
+      }
+    } else if (volumeScale !== 1 && plan.minutes > 0) {
+      plan = { ...plan, minutes: Math.max(20, Math.round(plan.minutes * volumeScale)) }
+    }
+
+    if ((phase === 'cut' || phase === 'recomp') && plan.sport == null && i === 2) {
+      plan = {
+        ...plan,
+        sport: hasSport(sports, 'core') ? 'core' : hasSport(sports, 'running') ? 'running' : plan.sport,
+        intensity: 'easy',
+        minutes: plan.minutes || 30,
+        title: phase === 'cut' ? 'Easy aerobic (cut)' : 'Easy aerobic (recomp)',
+        why: `${plan.why || ''} Phase ${phase} inserts easy work mid-week.`.trim(),
       }
     }
 

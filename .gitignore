@@ -34,6 +34,10 @@ prisma/backups/
 # Weekly Feedback Loop — generated reports contain personal health data
 docs/reports/
 
+# Live AI eval fixtures — real food and lab-report photos stay on the machine
+tests/ai/fixtures/images/*
+!tests/ai/fixtures/images/README.md
+
 # debug
 npm-debug.log*
 yarn-debug.log*

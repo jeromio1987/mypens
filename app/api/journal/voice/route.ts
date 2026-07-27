@@ -7,6 +7,7 @@ import { consume } from '@/lib/rateLimit'
 import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sanitiseJournalVoicePath } from '@/lib/journalVoicePath'
+import { today } from '@/lib/timeWindow'
 
 export const runtime = 'nodejs'
 
@@ -61,7 +62,7 @@ export async function POST(req: Request) {
 
     const form = await req.formData()
     const file = form.get('file')
-    const date = String(form.get('date') ?? '').trim() || new Date().toISOString().slice(0, 10)
+    const date = String(form.get('date') ?? '').trim() || today()
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'file is required' }, { status: 400 })

@@ -25,6 +25,7 @@ export function GarminPullCard({ days = 7 }: { days?: number }) {
     const jobs: { label: string; path: string }[] = [
       { label: 'Sleep', path: `/api/integrations/garmin/sleep-sync?days=${days}` },
       { label: 'Body', path: `/api/integrations/garmin/body-sync?days=${days}` },
+      { label: 'Dailies', path: `/api/integrations/garmin/dailies-sync?days=${days}` },
       { label: 'Activities', path: `/api/integrations/garmin/activities?days=${days}` },
     ]
     for (const job of jobs) {
@@ -45,7 +46,7 @@ export function GarminPullCard({ days = 7 }: { days?: number }) {
           out.push({
             label: job.label,
             ok: true,
-            detail: `ingested ${j.ingested ?? 0}, skipped ${j.skipped ?? 0}`,
+            detail: `ingested ${j.ingested ?? j.upserted ?? 0}, skipped ${j.skipped ?? 0}`,
           })
         }
       } catch (e) {
@@ -63,7 +64,7 @@ export function GarminPullCard({ days = 7 }: { days?: number }) {
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={[styles.title, { color: colors.foreground }]}>Garmin pull</Text>
       <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-        Last {days} days — sleep, body weight, activity list (no full dump).
+        Last {days} days — sleep, body weight, dailies (steps/Active), activity list.
       </Text>
       <Pressable
         onPress={() => void run()}

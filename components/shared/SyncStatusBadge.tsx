@@ -1,71 +1,132 @@
 'use client'
 
+/**
+ * WP 1.4 — Sync chip: last success per source + fail; tap → Audit (/verdict?sync=1).
+ * WP 3.3 — Continental surfaces (0 radius).
+ */
+
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Cable } from 'lucide-react'
+import { buildSyncChipState, type SyncSourceStatus } from '@/lib/syncChip'
 
-interface ProviderStatus {
-  id: string
-  name: string
-  endpoint: string
+type StatusPayload = {
+  connected?: boolean
+  lastSyncAt?: string | null
+  lastSuccessAt?: string | null
+  lastError?: string | null
+  lastErrorAt?: string | null
 }
 
-const PROVIDERS: ProviderStatus[] = [
-  { id: 'strava',        name: 'Strava',         endpoint: '/api/integrations/strava/status' },
-  { id: 'garmin',        name: 'Garmin',         endpoint: '/api/integrations/garmin/status' },
-  { id: 'healthkit',     name: 'HealthKit',      endpoint: '/api/integrations/healthkit/status' },
-  { id: 'healthconnect', name: 'Health Connect', endpoint: '/api/integrations/healthconnect/status' },
+const ENDPOINTS: { id: SyncSourceStatus['id']; label: string; endpoint: string }[] = [
+  { id: 'garmin', label: 'Garmin', endpoint: '/api/integrations/garmin/status' },
+  { id: 'healthconnect_sleep', label: 'HC sleep', endpoint: '/api/integrations/healthconnect/status' },
+  { id: 'healthconnect_workouts', label: 'HC workouts', endpoint: '/api/integrations/healthconnect/status' },
 ]
 
-interface FailingProvider {
-  name: string
-  lastError: string
-  lastErrorAt: string | null
+function pickSuccess(d: StatusPayload | null): string | null {
+  if (!d) return null
+  return d.lastSuccessAt ?? d.lastSyncAt ?? null
 }
 
 export default function SyncStatusBadge() {
-  const [failing, setFailing] = useState<FailingProvider[]>([])
+  const [sources, setSources] = useState<SyncSourceStatus[]>([])
 
   useEffect(() => {
     let cancelled = false
     Promise.all(
-      PROVIDERS.map(p =>
-        fetch(p.endpoint)
-          .then(r => (r.ok ? r.json() : null))
-          .then(d => (d && d.connected && d.lastError
-            ? { name: p.name, lastError: String(d.lastError), lastErrorAt: d.lastErrorAt ?? null }
-            : null))
-          .catch(() => null),
-      ),
-    ).then(results => {
-      if (cancelled) return
-      setFailing(results.filter((r): r is FailingProvider => r !== null))
+      ENDPOINTS.map(async p => {
+        try {
+          const r = await fetch(p.endpoint)
+          const d = r.ok ? ((await r.json()) as StatusPayload) : null
+          return {
+            id: p.id,
+            label: p.label,
+            connected: Boolean(d?.connected),
+            lastSuccessAt: pickSuccess(d),
+            lastError: d?.lastError ? String(d.lastError) : null,
+            lastErrorAt: d?.lastErrorAt ?? null,
+          } satisfies SyncSourceStatus
+        } catch {
+          return {
+            id: p.id,
+            label: p.label,
+            connected: false,
+            lastSuccessAt: null,
+            lastError: null,
+            lastErrorAt: null,
+          } satisfies SyncSourceStatus
+        }
+      }),
+    ).then(rows => {
+      if (!cancelled) setSources(rows)
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  if (failing.length === 0) return null
+  if (sources.length === 0) return null
 
-  const primary = failing[0]
-  const more = failing.length - 1
-  const label = failing.length === 1
-    ? `${primary.name} sync failed`
-    : `${primary.name} sync failed (+${more})`
+  const state = buildSyncChipState(sources)
+  const href = '/verdict?sync=1'
+
+  if (state.primaryError) {
+    return (
+      <Link
+        href={href}
+        title={state.sources
+          .filter(s => s.lastError)
+          .map(s => `${s.label}: ${s.lastError}`)
+          .join('\n')}
+        className="flex items-center gap-3 w-full bg-ct-bloodc px-4 py-3 text-ct-blood hover:opacity-95 transition-opacity"
+      >
+        <AlertTriangle size={14} className="shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="font-grotesk text-[0.5625rem] uppercase tracking-[0.18em] text-ct-blood/80 leading-none mb-1">
+            Sync issue
+          </p>
+          <p className="text-xs font-semibold text-ct-primary truncate">
+            {state.primaryError.label}: {state.primaryError.message}
+          </p>
+        </div>
+        <span className="font-grotesk text-[0.5625rem] uppercase tracking-[0.16em] text-ct-blood/60 shrink-0">
+          Audit ↗
+        </span>
+      </Link>
+    )
+  }
+
+  const when = state.lastAnySuccessAt
+    ? new Date(state.lastAnySuccessAt).toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null
 
   return (
     <Link
-      href="/integrations"
-      title={failing.map(f => `${f.name}: ${f.lastError}`).join('\n')}
-      className="flex items-center gap-2 w-full bg-pens-crimson/15 border border-pens-crimson/40 rounded-xl px-3 py-2 text-pens-cream hover:bg-pens-crimson/25 transition-colors"
+      href={href}
+      className="flex items-center gap-3 w-full bg-ct-high px-4 py-3 text-ct-second/70 hover:bg-ct-highest transition-colors"
     >
-      <AlertTriangle size={14} className="text-pens-crimson shrink-0" />
+      {when ? (
+        <CheckCircle2 size={14} className="text-ct-primary shrink-0 opacity-80" />
+      ) : (
+        <Cable size={14} className="text-ct-second/40 shrink-0" />
+      )}
       <div className="min-w-0 flex-1">
-        <p className="text-[9px] uppercase tracking-widest text-pens-crimson/80 font-semibold leading-none mb-0.5">
-          Integration issue
+        <p className="font-grotesk text-[0.5625rem] uppercase tracking-[0.18em] text-ct-second/45 leading-none mb-1">
+          Sync
         </p>
-        <p className="text-xs font-semibold text-pens-cream truncate">{label}</p>
+        <p className="text-xs font-semibold text-ct-primary truncate">
+          {when ? `Last OK ${when}` : 'No recent sync timestamps'}
+        </p>
       </div>
-      <span className="text-[10px] uppercase tracking-widest text-pens-cream/50 shrink-0">Fix ↗</span>
+      <span className="font-grotesk text-[0.5625rem] uppercase tracking-[0.16em] text-ct-second/40 shrink-0">
+        Audit
+      </span>
     </Link>
   )
 }

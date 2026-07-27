@@ -1,7 +1,14 @@
 /** Shared sleep / HRV scoring — used by `/api/readiness` and cross-app snapshot writer. */
 
-export function computeSleepScore(hours: number, quality: number): number {
+/**
+ * Sleep score 0–100. Quality is HRV-derived 1–5.
+ * When quality is null (no HRV), score duration only — never invent mid-band quality (WP 0.2).
+ */
+export function computeSleepScore(hours: number, quality: number | null | undefined): number {
   const hoursScore = Math.min(1, hours / 8) * 60
+  if (quality == null || !Number.isFinite(quality)) {
+    return Math.round(hoursScore)
+  }
   const qualityScore = ((quality - 1) / 4) * 40
   return Math.round(hoursScore + qualityScore)
 }
@@ -21,7 +28,7 @@ export function readinessLabel(score: number): string {
   return 'Poor'
 }
 
-export type SleepRow = { date: string; hours: number; quality: number; hrv: number | null }
+export type SleepRow = { date: string; hours: number; quality: number | null; hrv: number | null }
 
 /**
  * Baseline: mean HRV of up to 14 prior nights (strictly before `forDate`) that have HRV set.

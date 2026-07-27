@@ -1,5 +1,6 @@
 import type { GarminActivity } from './api'
 import { fmtDistance, fmtDuration, type DraftTrainingEntry } from '../_shared/draft'
+import { toDateStr } from '@/lib/timeWindow'
 
 const STRENGTH_TYPES = new Set([
   'STRENGTH_TRAINING',
@@ -10,7 +11,7 @@ const STRENGTH_TYPES = new Set([
 
 function localDate(startSec: number, offsetSec = 0): string {
   const d = new Date((startSec + offsetSec) * 1000)
-  return d.toISOString().slice(0, 10)
+  return toDateStr(d)
 }
 
 function humanType(type: string): string {

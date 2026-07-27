@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getStaticMacroEventsInRange } from '@/lib/investing/macroStaticDates'
+import { shiftDateStr, today } from '@/lib/timeWindow'
 
 export const dynamic = 'force-dynamic'
 
-function qualityLabel(q: number): string {
+function qualityLabel(q: number | null): string {
+  if (q == null) return 'Not measured'
   if (q >= 5) return 'Perfect'
   if (q >= 4) return 'Solid'
   if (q >= 3) return 'Adequate'
@@ -12,7 +14,12 @@ function qualityLabel(q: number): string {
   return 'Very poor'
 }
 
-function sleepVerdict(hours: number, quality: number, hrv: number | null): string {
+function sleepVerdict(hours: number, quality: number | null, hrv: number | null): string {
+  if (quality == null) {
+    if (hours >= 7.5) return 'Long night, quality unknown (no HRV).'
+    if (hours < 6) return 'Short night. Keep decision stakes low.'
+    return 'Hours logged; quality not measured.'
+  }
   if (hours >= 7.5 && quality >= 4) return hrv && hrv > 50 ? 'Full recovery. Go.' : 'Strong night.'
   if (hours >= 6.5 && quality >= 3) return 'Adequate. Manage output accordingly.'
   if (hours < 6) return 'Short night. Keep decision stakes low.'
@@ -28,14 +35,9 @@ function modeVerdict(mode: string | null): string {
 
 export async function GET() {
   try {
-    const today = new Date().toISOString().split('T')[0]
-    const yd = new Date()
-    yd.setDate(yd.getDate() - 1)
-    const yesterday = yd.toISOString().split('T')[0]
-
-    const horizon = new Date()
-    horizon.setDate(horizon.getDate() + 14)
-    const horizonStr = horizon.toISOString().split('T')[0]
+    const todayStr = today()
+    const yesterday = shiftDateStr(todayStr, -1)
+    const horizonStr = shiftDateStr(todayStr, 14)
 
     let latestRegime: { regime: string; effectiveDate: string } | null = null
     let watchTickers: { symbol: string }[] = []
@@ -49,7 +51,7 @@ export async function GET() {
         }),
         prisma.investingWatchlistTicker.findMany({ orderBy: { sortOrder: 'asc' }, take: 24 }),
         prisma.investingManualEvent.findMany({
-          where: { date: { gte: today, lte: horizonStr } },
+          where: { date: { gte: todayStr, lte: horizonStr } },
           orderBy: { date: 'asc' },
           take: 20,
         }),
@@ -58,7 +60,7 @@ export async function GET() {
       // Until migration `20260514142000_investing_hub` is applied.
     }
 
-    const staticMacro = getStaticMacroEventsInRange(today, horizonStr)
+    const staticMacro = getStaticMacroEventsInRange(todayStr, horizonStr)
     const upcomingInvesting = [
       ...staticMacro.map(e => ({ date: e.date, title: e.title, kind: e.kind, source: 'static' as const })),
       ...manualCal.map(m => ({
@@ -73,11 +75,11 @@ export async function GET() {
       prisma.sleepEntry.findMany({ orderBy: { date: 'desc' }, take: 2 }),
       prisma.weightEntry.findMany({ orderBy: { date: 'desc' }, take: 7 }),
       prisma.journalEntry.findFirst({ orderBy: { date: 'desc' } }),
-      prisma.dayEntry.findUnique({ where: { date: today } }),
+      prisma.dayEntry.findUnique({ where: { date: todayStr } }),
     ])
 
     const sleep =
-      sleepEntries.find(e => e.date === today || e.date === yesterday) ??
+      sleepEntries.find(e => e.date === todayStr || e.date === yesterday) ??
       sleepEntries[0] ??
       null
 
@@ -124,7 +126,7 @@ export async function GET() {
         module: 'weight',
       })
     }
-    if (dayEntry?.mode === 'locked_in' && (!sleep || sleep.quality < 3)) {
+    if (dayEntry?.mode === 'locked_in' && (!sleep || sleep.quality == null || sleep.quality < 3)) {
       priorities.push({
         rank: priorities.length + 1,
         label: 'Mode vs recovery',
@@ -166,7 +168,7 @@ export async function GET() {
     const narrative = narrativeParts.join(' ')
 
     return NextResponse.json({
-      date: today,
+      date: todayStr,
 
       narrative,
       priorities: priorities.slice(0, 6),

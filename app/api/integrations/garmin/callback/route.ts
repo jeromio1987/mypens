@@ -71,6 +71,14 @@ export async function GET(request: Request) {
     const { ensurePushSubscription } = await import('@/lib/integrations/garmin/webhook')
     await ensurePushSubscription()
 
+    // Best-effort: pull recent wellness dailies so steps/Active kcal land after reconnect.
+    try {
+      const { syncDailiesWellness } = await import('@/lib/integrations/garmin/dailiesSync')
+      await syncDailiesWellness(14)
+    } catch (e) {
+      console.error('[garmin] post-connect dailies pull failed', e)
+    }
+
     return clearCookies(
       NextResponse.redirect(`${redirectBase}/integrations?garmin_connected=1`),
     )

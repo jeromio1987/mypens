@@ -1,14 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { pushNtfy } from '@/lib/investing/notifyNtfy'
+import { today } from '@/lib/timeWindow'
 
 export const dynamic = 'force-dynamic'
 
 const REGIME_ALIASES = new Set(['risk_on', 'risk_off', 'neutral', 'mixed'])
-
-function todayUtcDate(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 export async function GET() {
   const rows = await prisma.macroRegimeSnapshot.findMany({
@@ -35,7 +32,7 @@ export async function POST(request: Request) {
   const effectiveDate =
     body.effectiveDate && /^\d{4}-\d{2}-\d{2}$/.test(body.effectiveDate)
       ? body.effectiveDate
-      : todayUtcDate()
+      : today()
 
   const prior = await prisma.macroRegimeSnapshot.findFirst({
     where: { effectiveDate: { lt: effectiveDate } },

@@ -15,8 +15,8 @@ interface GarminSleep {
   averageHrv?: number
 }
 
-function hrvToQuality(hrv?: number): number {
-  if (!hrv) return 3
+function hrvToQuality(hrv?: number): number | null {
+  if (hrv == null || !Number.isFinite(hrv)) return null
   if (hrv < 30) return 1
   if (hrv < 45) return 2
   if (hrv < 60) return 3
@@ -71,8 +71,8 @@ export async function syncSleep(days = 30): Promise<{ ingested: number; skipped:
   let skipped = 0
   for (const d of data ?? []) {
     const result = await upsertSleepFromDaily(d)
-    if (result === 'ingested') ingested++
-    else skipped++
+    if (result === 'skipped') skipped++
+    else ingested++
   }
   return { ingested, skipped }
 }
@@ -89,32 +89,53 @@ export async function processPushedSleep(
       continue
     }
     const result = await upsertSleepFromDaily(daily)
-    if (result === 'ingested') ingested++
-    else skipped++
+    if (result === 'skipped') skipped++
+    else ingested++
   }
   return { ingested, skipped }
 }
 
-export async function upsertSleepFromDaily(daily: GarminDaily): Promise<'ingested' | 'skipped'> {
+export async function upsertSleepFromDaily(daily: GarminDaily): Promise<'ingested' | 'skipped' | 'updated'> {
   const date = daily.calendarDate
   if (!date || !daily.sleepingSeconds) return 'skipped'
 
   const existing = await prisma.sleepEntry.findUnique({ where: { date } })
-  if (existing) return 'skipped' // manual always wins
+  if (existing) {
+    const notes = existing.notes ?? ''
+    const protectedManual =
+      existing.source === 'manual' &&
+      notes.trim().length > 0 &&
+      !/health\s*connect/i.test(notes) &&
+      !/garmin/i.test(notes)
+    if (protectedManual) return 'skipped'
+  }
 
   const hours = daily.sleepingSeconds / 3600
   const wakeTime = '07:00'
   const bedtime = deriveBedtime(hours, wakeTime)
   const quality = hrvToQuality(daily.avgSleepingHRV)
+  const payload = {
+    bedtime,
+    wakeTime,
+    hours: Math.round(hours * 10) / 10,
+    quality,
+    hrv: daily.avgSleepingHRV ?? null,
+    source: 'garmin' as const,
+    notes: existing?.notes?.includes('Garmin') ? existing.notes : 'Garmin wellness sync',
+  }
+
+  if (existing) {
+    await prisma.sleepEntry.update({
+      where: { id: existing.id },
+      data: payload,
+    })
+    return 'updated'
+  }
 
   await prisma.sleepEntry.create({
     data: {
       date,
-      bedtime,
-      wakeTime,
-      hours: Math.round(hours * 10) / 10,
-      quality,
-      hrv: daily.avgSleepingHRV ?? null,
+      ...payload,
     },
   })
   return 'ingested'

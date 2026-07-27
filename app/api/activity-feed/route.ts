@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { rollingWindow } from '@/lib/timeWindow'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,9 +9,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const days = Math.min(60, Math.max(7, Number(searchParams.get('days')) || 21))
-    const since = new Date()
-    since.setDate(since.getDate() - days)
-    const sinceStr = since.toISOString().slice(0, 10)
+    const sinceStr = rollingWindow(days).from
 
     const [training, garmin] = await Promise.all([
       prisma.trainingEntry.findMany({

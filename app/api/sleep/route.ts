@@ -21,19 +21,40 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { date, bedtime, wakeTime, quality, hrv, notes } = body
 
-    if (!date || !bedtime || !wakeTime || !quality) {
+    if (!date || !bedtime || !wakeTime) {
       return NextResponse.json(
-        { error: 'date, bedtime, wakeTime and quality are required' },
+        { error: 'date, bedtime and wakeTime are required' },
         { status: 400 },
       )
     }
 
     const hours = calcHours(bedtime, wakeTime)
+    const qualityVal =
+      quality === null || quality === undefined || quality === ''
+        ? null
+        : Number(quality)
 
     const entry = await prisma.sleepEntry.upsert({
       where: { date },
-      create: { date, bedtime, wakeTime, hours, quality: Number(quality), hrv: hrv ?? null, notes },
-      update: { bedtime, wakeTime, hours, quality: Number(quality), hrv: hrv ?? null, notes },
+      create: {
+        date,
+        bedtime,
+        wakeTime,
+        hours,
+        quality: qualityVal,
+        hrv: hrv ?? null,
+        notes,
+        source: 'manual',
+      },
+      update: {
+        bedtime,
+        wakeTime,
+        hours,
+        quality: qualityVal,
+        hrv: hrv ?? null,
+        notes,
+        source: 'manual',
+      },
     })
 
     scheduleCrossAppDailySnapshotRefresh(date)
@@ -85,9 +106,13 @@ export async function PATCH(request: Request) {
         bedtime:  newBed,
         wakeTime: newWake,
         hours,
-        ...(quality !== undefined && { quality: Number(quality) }),
+        ...(quality !== undefined && {
+          quality: quality === null || quality === '' ? null : Number(quality),
+        }),
         ...(hrv     !== undefined && { hrv: hrv === '' ? null : Number(hrv) }),
         ...(notes   !== undefined && { notes }),
+        // Editing via API marks the night as manual so HC won't overwrite.
+        source: 'manual',
       },
     })
     scheduleCrossAppDailySnapshotRefresh(entry.date)

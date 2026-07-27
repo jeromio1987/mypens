@@ -1,28 +1,21 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { rollingWindow, shiftDateStr, today } from '@/lib/timeWindow'
 
 export const dynamic = 'force-dynamic'
-
-function nDaysAgo(n: number) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
-}
 
 function calcStreak(dates: string[]): number {
   if (!dates.length) return 0
   const sorted = [...new Set(dates)].sort((a, b) => b.localeCompare(a))
-  const today = new Date().toISOString().slice(0, 10)
-  const yesterday = nDaysAgo(1)
-  if (sorted[0] !== today && sorted[0] !== yesterday) return 0
+  const todayStr = today()
+  const yesterday = shiftDateStr(todayStr, -1)
+  if (sorted[0] !== todayStr && sorted[0] !== yesterday) return 0
   let streak = 0
   let cursor = sorted[0]
   for (const d of sorted) {
     if (d === cursor) {
       streak++
-      const prev = new Date(cursor + 'T00:00:00')
-      prev.setDate(prev.getDate() - 1)
-      cursor = prev.toISOString().slice(0, 10)
+      cursor = shiftDateStr(cursor, -1)
     } else break
   }
   return streak
@@ -34,7 +27,7 @@ async function getScoreForUser(userId: string) {
     return { weeklyScore: 0, currentStreak: 0, medalsEarned: 0 }
   }
 
-  const sevenDaysAgo = nDaysAgo(7)
+  const sevenDaysAgo = rollingWindow(7).from
   const [weightDates, trainingDates, sleepDates, foodDates, allWeight, allTraining] = await Promise.all([
     prisma.weightEntry.findMany({ select: { date: true }, orderBy: { date: 'desc' } }),
     prisma.trainingEntry.findMany({ select: { date: true }, orderBy: { date: 'desc' } }),

@@ -1,7 +1,9 @@
 /**
  * NEAT (non-exercise activity thermogenesis) for the day ledger.
- * Prefer Garmin/device Active residual: max(0, deviceActive − Σ sessions).
- * Else steps→kcal model. Never add both (would double-count).
+ * Prefer device Active residual when it covers sessions: max(0, Active − Σ EAT).
+ * Health Connect often under-reports Active (e.g. 14 kcal with 12k steps) — if
+ * Active < sessions, fall back to the steps→kcal model instead of locking NEAT at 0.
+ * Never add residual + steps (would double-count).
  */
 
 export type NeatSource = 'device_active_residual' | 'steps_model' | 'none'
@@ -26,8 +28,27 @@ export function stepsToKcal(steps: number, weightKg: number | null | undefined):
   return Math.round(steps * perStep)
 }
 
+function fromSteps(
+  steps: number,
+  sessionEatKcal: number,
+  weightKg: number | null | undefined,
+  deviceActiveKcal: number | null,
+  detailSuffix?: string,
+): NeatEstimate {
+  const neatKcal = stepsToKcal(steps, weightKg)
+  const base = `NEAT from steps (${steps.toLocaleString()} × ~${STEPS_KCAL_BASE} kcal @ ${STEPS_REF_KG} kg ref)`
+  return {
+    neatKcal,
+    source: 'steps_model',
+    steps,
+    deviceActiveKcal,
+    sessionEatKcal,
+    detail: detailSuffix ? `${base} — ${detailSuffix}` : base,
+  }
+}
+
 /**
- * Pick one NEAT path — residual preferred when device day Active is present.
+ * Pick one NEAT path — residual when Active ≥ sessions; else steps when available.
  */
 export function estimateNeat(input: {
   sessionEatKcal: number
@@ -47,10 +68,31 @@ export function estimateNeat(input: {
 
   if (deviceActive != null) {
     const residual = Math.max(0, deviceActive - sessionEatKcal)
+    // Active covers / exceeds sessions → trust residual (may be 0 on heavy training days).
+    if (deviceActive >= sessionEatKcal) {
+      return {
+        neatKcal: residual,
+        source: 'device_active_residual',
+        steps,
+        deviceActiveKcal: deviceActive,
+        sessionEatKcal,
+        detail: `NEAT residual max(0, device Active ${deviceActive} − sessions ${sessionEatKcal})`,
+      }
+    }
+    // Active < sessions: incomplete HC Active (common) — prefer steps over a locked 0.
+    if (steps != null) {
+      return fromSteps(
+        steps,
+        sessionEatKcal,
+        input.weightKg,
+        deviceActive,
+        `Active ${deviceActive} < sessions ${sessionEatKcal}, residual unused`,
+      )
+    }
     return {
-      neatKcal: residual,
+      neatKcal: 0,
       source: 'device_active_residual',
-      steps,
+      steps: null,
       deviceActiveKcal: deviceActive,
       sessionEatKcal,
       detail: `NEAT residual max(0, device Active ${deviceActive} − sessions ${sessionEatKcal})`,
@@ -58,15 +100,7 @@ export function estimateNeat(input: {
   }
 
   if (steps != null) {
-    const neatKcal = stepsToKcal(steps, input.weightKg)
-    return {
-      neatKcal,
-      source: 'steps_model',
-      steps,
-      deviceActiveKcal: null,
-      sessionEatKcal,
-      detail: `NEAT from steps (${steps.toLocaleString()} × ~${STEPS_KCAL_BASE} kcal @ ${STEPS_REF_KG} kg ref)`,
-    }
+    return fromSteps(steps, sessionEatKcal, input.weightKg, null)
   }
 
   return {

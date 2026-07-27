@@ -80,11 +80,22 @@ function fmtRange(weekOf?: string, weekEnd?: string): string {
   return `${a} – ${b}`
 }
 
-async function fetchReport(): Promise<Report | null> {
+async function fetchWeeklyPayload(): Promise<{ report: Report | null; cycle: WeekCycle | null }> {
   const res = await pensFetch('/api/weekly-feedback')
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
-  return (json.report ?? null) as Report | null
+  return {
+    report: (json.report ?? null) as Report | null,
+    cycle: (json.cycle ?? null) as WeekCycle | null,
+  }
+}
+
+type WeekCycle = {
+  happened: string
+  why: string
+  plan: string
+  proof: string
+  unknowns?: string[]
 }
 
 export default function WeeklyFeedbackScreen() {
@@ -96,7 +107,7 @@ export default function WeeklyFeedbackScreen() {
 
   const { data, isLoading, isRefetching, refetch, error } = useQuery({
     queryKey: ['weekly-feedback'],
-    queryFn: fetchReport,
+    queryFn: fetchWeeklyPayload,
     enabled: configured,
   })
 
@@ -109,7 +120,8 @@ export default function WeeklyFeedbackScreen() {
     await setWeeklyFeedbackNotifEnabled(v)
   }
 
-  const report = data ?? null
+  const report = data?.report ?? null
+  const cycle = data?.cycle ?? null
   const work = report?.metrics?.work
   const health = report?.metrics?.health
   const isze = report?.metrics?.isze
@@ -136,6 +148,21 @@ export default function WeeklyFeedbackScreen() {
           </Text>
         )}
       </View>
+
+      {cycle && (
+        <Card colors={colors}>
+          <Text style={[styles.sectionTitle, { color: MOD.primary }]}>Week cycle</Text>
+          <Text style={[styles.body, { color: colors.foreground }]}>Happened — {cycle.happened}</Text>
+          <Text style={[styles.body, { color: colors.foreground, marginTop: 8 }]}>Why — {cycle.why}</Text>
+          <Text style={[styles.body, { color: colors.foreground, marginTop: 8 }]}>Plan — {cycle.plan}</Text>
+          <Text style={[styles.body, { color: colors.foreground, marginTop: 8 }]}>Proof — {cycle.proof}</Text>
+          {cycle.unknowns && cycle.unknowns.length > 0 ? (
+            <Text style={[styles.body, { color: colors.mutedForeground, marginTop: 8 }]}>
+              Gaps — {cycle.unknowns.join('; ')}
+            </Text>
+          ) : null}
+        </Card>
+      )}
 
       {!configured && (
         <Card colors={colors}>
@@ -377,6 +404,7 @@ const styles = StyleSheet.create({
   },
   moduleLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   range: { fontFamily: 'Inter_500Medium', fontSize: 12 },
+  sectionTitle: { fontFamily: 'Inter_700Bold', fontSize: 15, marginBottom: 10 },
   card: {
     marginHorizontal: 16,
     marginBottom: 12,

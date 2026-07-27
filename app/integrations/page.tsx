@@ -164,8 +164,27 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
   const [unskipping, setUnskipping] = useState<Set<string>>(new Set())
   const [skippedSelected, setSkippedSelected] = useState<Set<string>>(new Set())
   const [savingAutoImport, setSavingAutoImport] = useState(false)
+  const [syncingDailies, setSyncingDailies] = useState(false)
 
   const base = `/api/integrations/${provider.id}`
+
+  const syncGarminDailies = async () => {
+    if (provider.id !== 'garmin') return
+    setSyncingDailies(true)
+    setFlash(null)
+    try {
+      const res = await fetch(`${base}/dailies-sync?days=30`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Dailies sync failed')
+      setFlash(
+        `Dailies synced — ${data.upserted ?? data.ingested ?? 0} metrics upserted (${data.days ?? 30}d).`,
+      )
+    } catch (err) {
+      setFlash(err instanceof Error ? err.message : 'Dailies sync failed')
+    } finally {
+      setSyncingDailies(false)
+    }
+  }
 
   const setAutoImportOnIngest = async (on: boolean) => {
     if (provider.id !== 'healthconnect') return
@@ -502,6 +521,15 @@ function ProviderCard({ provider, banner }: { provider: ProviderConfig; banner: 
             >
               {loadingActivities ? 'Syncing…' : provider.syncLabel}
             </button>
+            {provider.id === 'garmin' && (
+              <button
+                onClick={() => void syncGarminDailies()}
+                disabled={syncingDailies}
+                className="text-sm px-4 py-2 rounded-lg border border-pens-muted/30 hover:bg-pens-navy/40 text-pens-cream/70 disabled:opacity-50"
+              >
+                {syncingDailies ? 'Pulling dailies…' : 'Sync dailies'}
+              </button>
+            )}
             {provider.authMode === 'pairing' && (
               <button
                 onClick={issuePairing}

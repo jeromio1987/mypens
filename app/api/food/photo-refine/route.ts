@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import type { Model } from '@anthropic-ai/sdk/resources/messages/messages'
 import { consume } from '@/lib/rateLimit'
 import { MEAL_ORDER, type MealType } from '@/lib/foodModels'
 import { FOOD_VISION_SYSTEM_BLOCKS } from '@/lib/foodVisionPrompt'
 import { extractVisionPayload, parseJsonFromAssistant } from '@/lib/foodPhotoJson'
+import { FOOD_VISION_SCHEMA } from '@/lib/aiSchemas'
+import { AiResponseError, callClaude, getAnthropicClient } from '@/lib/aiCall'
+import { today } from '@/lib/timeWindow'
 
 export const runtime = 'nodejs'
 
@@ -33,7 +35,7 @@ export async function POST(req: Request) {
 
     const body = (await req.json()) as RefineBody
     const anthropicFileId = String(body.anthropicFileId ?? '').trim()
-    const date = String(body.date ?? '').trim() || new Date().toISOString().slice(0, 10)
+    const date = String(body.date ?? '').trim() || today()
     const mealHint = String(body.meal ?? 'snack').trim()
     const priorAssistantText = String(body.priorAssistantText ?? '').trim()
     const refine = String(body.refine ?? '').trim()
@@ -55,16 +57,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'date must be yyyy-mm-dd' }, { status: 400 })
     }
 
-    const client = new Anthropic({ apiKey })
+    const client = getAnthropicClient(apiKey)
     const userLine =
       `Diary date: ${date}. Default meal when an item omits meal: ${defaultMeal}.\n` +
       'Analyze the attached image and reply with JSON only (schema in system instructions).'
 
-    const msg = await client.beta.messages.create({
+    const { text } = await callClaude(client, 'food.photo-refine', {
       model: VISION_MODEL,
       max_tokens: 1400,
       betas: [FILES_BETA],
       system: FOOD_VISION_SYSTEM_BLOCKS,
+      output_config: {
+        format: { type: 'json_schema' as const, schema: FOOD_VISION_SCHEMA },
+      },
       messages: [
         {
           role: 'user',
@@ -91,7 +96,6 @@ export async function POST(req: Request) {
       ],
     })
 
-    const text = msg.content.map(b => (b.type === 'text' ? b.text : '')).join('').trim()
     if (!text) {
       return NextResponse.json({ error: 'empty model response' }, { status: 502 })
     }
@@ -107,6 +111,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ analysisMode, dishSummary, items, anthropicFileId })
   } catch (err) {
+    if (err instanceof AiResponseError) {
+      console.error('food photo-refine', err.message)
+      return NextResponse.json({ error: err.message }, { status: 502 })
+    }
     console.error('food photo-refine', err)
     return NextResponse.json({ error: 'refine failed' }, { status: 500 })
   }

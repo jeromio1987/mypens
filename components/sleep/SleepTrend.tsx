@@ -13,9 +13,10 @@ interface SleepEntry {
   bedtime: string
   wakeTime: string
   hours: number
-  quality: number
-  hrv?: number
-  notes?: string
+  quality: number | null
+  hrv?: number | null
+  notes?: string | null
+  source?: string
 }
 
 interface ChartEntry extends SleepEntry {
@@ -71,7 +72,7 @@ export default function SleepTrend({
         label: new Date(e.date + 'T00:00:00').toLocaleDateString('en-GB', {
           day: 'numeric', month: 'short',
         }),
-        qualityLine: e.quality,
+        qualityLine: e.quality ?? 0,
       }))
     setData(sorted)
   }, [rawEntries])
@@ -86,7 +87,7 @@ export default function SleepTrend({
     setEditForm({
       bedtime:  e.bedtime,
       wakeTime: e.wakeTime,
-      quality:  String(e.quality),
+      quality:  e.quality != null ? String(e.quality) : '',
       hrv:      e.hrv != null ? String(e.hrv) : '',
       notes:    e.notes ?? '',
     })
@@ -126,7 +127,10 @@ export default function SleepTrend({
     return <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 text-sm text-pens-cream/40">No sleep entries yet — log your first night above.</div>
 
   const avgHours   = (data.reduce((s, e) => s + e.hours,   0) / data.length).toFixed(1)
-  const avgQuality = (data.reduce((s, e) => s + e.quality, 0) / data.length).toFixed(1)
+  const withQ = data.filter(e => e.quality != null)
+  const avgQuality = withQ.length
+    ? (withQ.reduce((s, e) => s + (e.quality as number), 0) / withQ.length).toFixed(1)
+    : '—'
 
   return (
     <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-6 w-full">
@@ -157,7 +161,7 @@ export default function SleepTrend({
             formatter={(v) => (v === 'hours' ? 'Duration' : v === 'qualityLine' ? 'Quality (right axis)' : v)}
           />
           <Bar yAxisId="hours" dataKey="hours" radius={[4, 4, 0, 0]} name="hours">
-            {data.map((entry, i) => <Cell key={i} fill={qualityColor(entry.quality)} />)}
+            {data.map((entry, i) => <Cell key={i} fill={qualityColor(entry.quality ?? 0)} />)}
           </Bar>
           <Line yAxisId="quality" type="monotone" dataKey="qualityLine" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} name="qualityLine" />
         </ComposedChart>
@@ -202,7 +206,9 @@ export default function SleepTrend({
                 <div className="flex items-center gap-2 text-sm py-2 px-2 rounded-lg hover:bg-pens-navy/30 group">
                   <span className="text-pens-cream/40 w-16 shrink-0">{e.label}</span>
                   <span className="font-medium w-12 text-pens-cream">{e.hours}h</span>
-                  <span className="text-violet-400 w-6 text-center font-medium">{e.quality}★</span>
+                  <span className="text-violet-400 w-6 text-center font-medium">
+                    {e.quality != null ? `${e.quality}★` : '—'}
+                  </span>
                   <span className="text-pens-cream/40 text-xs">{e.bedtime} → {e.wakeTime}</span>
                   {e.hrv && <span className="text-teal-400 text-xs ml-1">HRV {e.hrv}ms</span>}
                   {e.notes && <span className="text-pens-cream/40 text-xs truncate max-w-[120px]">{e.notes}</span>}

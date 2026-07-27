@@ -1,0 +1,26 @@
+{
+  "combinedSummary": "Sleep held above seven hours while training volume dropped, and the week's prompting was noticeably tighter than the one before it. Weight stayed flat, which is the expected read on a low-volume week.",
+  "healthAnalysis": "Seven nights logged at 7.3h average with quality 3.8/5 and no nights under 6.5h. Two training sessions against a usual three, total volume 8400 kg. Food logged on five days at roughly 2150 kcal and 165 g protein.",
+  "claudeWorkAnalysis": "142 prompts across 18 sessions, average 380 characters, and 64 percent carried explicit file or goal context. Nine prompts landed after 22:00, which is the pattern that tracked with short sleep in earlier weeks.",
+  "iszeAnalysis": "The scheduled ISZE brief flags the part-master understatement as still open and the automation register as drifted from Task Scheduler.",
+  "wins": [
+    "Sleep stayed above seven hours every night.",
+    "Context inclusion in prompts rose to 64 percent.",
+    "No missed weigh-ins."
+  ],
+  "improvements": [
+    "Front-load prompts with the target file and the acceptance criteria.",
+    "Batch related asks instead of five one-liners.",
+    "Move deep sessions before 21:00."
+  ],
+  "healthActions": [
+    "Book the third training slot now.",
+    "Keep the phone out of the bedroom on weeknights.",
+    "Log food on the two days you skipped."
+  ],
+  "iszeActions": [
+    "Close the oldest stale CLAUDE.md item.",
+    "Reconcile the automation register against Task Scheduler.",
+    "Leave recovery data out of the ISZE run."
+  ]
+}

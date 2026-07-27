@@ -55,7 +55,7 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json()
-    const { id, exercise, sets, reps, weightKg, rpe, notes } = body
+    const { id, exercise, sets, reps, weightKg, rpe, notes, calories } = body
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
     const existing = await prisma.trainingEntry.findUnique({ where: { id } })
@@ -66,6 +66,18 @@ export async function PATCH(request: Request) {
     const kg = weightKg !== undefined ? Number(weightKg) : existing.weightKg
     const volume = parseFloat((s * r * kg).toFixed(1))
 
+    let caloriesUpdate: number | null | undefined = undefined
+    if (calories !== undefined) {
+      if (calories === null || calories === '') caloriesUpdate = null
+      else {
+        const n = Number(calories)
+        if (!Number.isFinite(n) || n < 0) {
+          return NextResponse.json({ error: 'calories must be a non-negative number' }, { status: 400 })
+        }
+        caloriesUpdate = Math.round(n)
+      }
+    }
+
     const entry = await prisma.trainingEntry.update({
       where: { id },
       data: {
@@ -73,6 +85,7 @@ export async function PATCH(request: Request) {
         sets: s, reps: r, weightKg: kg, volume,
         ...(rpe   !== undefined && { rpe:   rpe === '' ? null : Number(rpe) }),
         ...(notes !== undefined && { notes }),
+        ...(caloriesUpdate !== undefined && { calories: caloriesUpdate }),
       },
     })
     return NextResponse.json(entry)

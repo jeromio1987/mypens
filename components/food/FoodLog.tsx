@@ -11,6 +11,7 @@ import {
   type MealType,
   type DailyTargets,
 } from '@/lib/foodModels'
+import { shiftDateStr } from '@/lib/timeWindow'
 
 interface FoodEntryRow {
   id: string
@@ -93,9 +94,7 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSa
   useEffect(load, [date, refresh])
 
   useEffect(() => {
-    const y = new Date(date + 'T12:00:00')
-    y.setDate(y.getDate() - 1)
-    setCopySource(y.toISOString().slice(0, 10))
+    setCopySource(shiftDateStr(date, -1))
   }, [date])
 
   const handleDelete = async (id: string) => {
@@ -168,11 +167,7 @@ export default function FoodLog({ date, refresh, targets = DEFAULT_TARGETS, onSa
   }
 
   const copyFromSource = async (meal: MealType) => {
-    const source = copySource || (() => {
-      const y = new Date(date + 'T12:00:00')
-      y.setDate(y.getDate() - 1)
-      return y.toISOString().slice(0, 10)
-    })()
+    const source = copySource || shiftDateStr(date, -1)
     setCopying(meal)
     try {
       const res = await fetch(`/api/food?date=${source}`)

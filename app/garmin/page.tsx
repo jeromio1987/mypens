@@ -13,7 +13,9 @@ function GarminHealthSync() {
       const res = await fetch(endpoint, { method: 'POST' })
       const data = await res.json()
       if (data.ok) {
-        setStatus(s => ({ ...s, [label]: `Done — ${data.ingested ?? 0} ingested, ${data.skipped ?? 0} skipped` }))
+        const n = data.ingested ?? data.upserted ?? 0
+        const skipped = data.skipped ?? 0
+        setStatus(s => ({ ...s, [label]: `Done — ${n} ingested, ${skipped} skipped` }))
       } else {
         setStatus(s => ({ ...s, [label]: `Error: ${data.error ?? 'unknown'}` }))
       }
@@ -37,6 +39,12 @@ function GarminHealthSync() {
           className="px-3 py-1.5 text-sm rounded-lg bg-pens-navy border border-pens-muted/30 text-pens-cream hover:border-pens-gold/50 transition"
         >
           Sync sleep (30 days)
+        </button>
+        <button
+          onClick={() => sync('/api/integrations/garmin/dailies-sync?days=30', 'dailies')}
+          className="px-3 py-1.5 text-sm rounded-lg bg-pens-navy border border-pens-muted/30 text-pens-cream hover:border-pens-gold/50 transition"
+        >
+          Sync dailies (steps / Active kcal)
         </button>
       </div>
       {Object.entries(status).map(([k, v]) => (

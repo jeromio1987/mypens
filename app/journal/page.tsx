@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, BookOpen, ChevronDown, ChevronRight, Trash2, Loader2, Mic, Square,
 } from 'lucide-react'
+import { today } from '@/lib/timeWindow'
 import {
   LineChart,
   Line,
@@ -40,8 +41,8 @@ const inputCls =
 const labelCls = 'block text-xs font-medium text-pens-cream/55 mb-1.5 uppercase tracking-wide'
 
 export default function JournalPage() {
-  const today = new Date().toISOString().split('T')[0]
-  const [date, setDate] = useState(today)
+  const todayStr = today()
+  const [date, setDate] = useState(todayStr)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [mood, setMood] = useState<number | ''>('')

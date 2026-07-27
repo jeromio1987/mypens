@@ -86,7 +86,7 @@ codebase.
 
 `WeightEntry` carries full Tanita output; the ledger reads `scaleKg` and nothing else.
 
-**a. Katch–McArdle BMR** — one branch in `estimateBmrDetailed` (`lib/energyBmr.ts:52`):
+**a. Katch–McArdle BMR** — **shipped** in `estimateBmrDetailed` (`lib/energyBmr.ts`):
 
 ```
 FFM  = scaleKg × (1 − bodyFatPct/100)
@@ -271,7 +271,7 @@ Discipline matters as much as ideas here:
 
 Ranked by value ÷ effort, all 🟢 or 🟡:
 
-1. **Katch–McArdle BMR** (§2a) — one branch in `energyBmr.ts`, immediately better estimates, no new data, and it sidesteps the unset Mifflin profile.
+1. **Katch–McArdle BMR** (§2a) — **shipped** in `energyBmr.ts` when measured BF% exists; falls back to Mifflin / stub.
 2. **Sleep timing pack** (§1) — midsleep, regularity, efficiency (needs the S16 split). Largest analytical gap in the app; entirely free.
 3. **Craving action efficacy + hazard map** (§5a, §5b) — two `groupBy`s over data already collected; the most decision-useful output in the recovery module.
 4. **RPE vs device divergence** (§4) — both numbers stored, never compared; a genuine recovery signal for the cost of a subtraction.

@@ -126,13 +126,24 @@ function ListCard({
 
 export default function WeeklyFeedbackPage() {
   const [report, setReport] = useState<Report | null>(null)
+  const [cycle, setCycle] = useState<{
+    happened: string
+    why: string
+    plan: string
+    proof: string
+    unknowns?: string[]
+    signals?: { id: string; label: string; evidence: string }[]
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
   const runFetch = useCallback(() => {
     return fetch('/api/weekly-feedback')
       .then(r => r.json())
-      .then(d => setReport(d.report ?? null))
+      .then(d => {
+        setReport(d.report ?? null)
+        setCycle(d.cycle ?? null)
+      })
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [])
@@ -158,11 +169,11 @@ export default function WeeklyFeedbackPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-pens-cream/40 hover:text-pens-cream/70 transition-colors">
+            <Link href="/period-review" className="text-pens-cream/40 hover:text-pens-cream/70 transition-colors">
               <ArrowLeft size={20} />
             </Link>
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-cyan-400 font-semibold">P.E.N.S.</p>
+              <p className="text-[10px] uppercase tracking-widest text-cyan-400 font-semibold">Week cycle</p>
               <h1 className="text-2xl font-bold text-pens-cream mt-0.5">Weekly Feedback</h1>
               {report && (
                 <p className="text-xs text-pens-cream/40 mt-0.5">{fmtRange(report.weekOf, report.weekEnd)}</p>
@@ -185,6 +196,28 @@ export default function WeeklyFeedbackPage() {
           </div>
         </div>
 
+        {!loading && cycle && (
+          <div className="rounded-2xl border border-cyan-500/25 bg-pens-navy/70 p-5 space-y-3">
+            <p className="text-[10px] uppercase tracking-widest text-cyan-400 font-semibold">Week cycle</p>
+            <p className="text-sm text-pens-cream"><span className="text-pens-cream/40">Happened — </span>{cycle.happened}</p>
+            <p className="text-sm text-pens-cream"><span className="text-pens-cream/40">Why — </span>{cycle.why}</p>
+            <p className="text-sm text-pens-cream"><span className="text-pens-cream/40">Plan — </span>{cycle.plan}</p>
+            <p className="text-sm text-pens-cream"><span className="text-pens-cream/40">Proof — </span>{cycle.proof}</p>
+            {cycle.signals && cycle.signals.length > 0 && (
+              <ul className="mt-2 space-y-1.5 border-t border-pens-muted/20 pt-3">
+                {cycle.signals.map(s => (
+                  <li key={s.id} className="text-xs text-pens-cream/60">
+                    <span className="text-pens-cream/90 font-medium">{s.label}</span> — {s.evidence}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {cycle.unknowns && cycle.unknowns.length > 0 && (
+              <p className="text-xs text-amber-300/80">Gaps: {cycle.unknowns.join('; ')}</p>
+            )}
+          </div>
+        )}
+
         {loading && (
           <div className="space-y-4">
             {[1, 2, 3].map(i => (
@@ -202,7 +235,7 @@ export default function WeeklyFeedbackPage() {
           </div>
         )}
 
-        {!loading && !error && !report && (
+        {!loading && !error && !report && !cycle && (
           <div className="bg-pens-navy/60 border border-pens-muted/20 rounded-2xl p-6 text-center space-y-3">
             <Sparkles size={24} className="text-cyan-400 mx-auto" />
             <p className="text-sm font-bold text-pens-cream">No feedback generated yet</p>

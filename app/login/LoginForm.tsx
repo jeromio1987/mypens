@@ -23,13 +23,25 @@ export default function LoginForm() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        credentials: 'same-origin',
+        body: JSON.stringify({ password: password.trim() }),
       })
       const data = (await res.json().catch(() => null)) as { error?: string; ok?: boolean } | null
 
       if (res.ok) {
+        // Confirm the session cookie actually stuck (avoids “flash then still on /login”).
+        const probe = await fetch('/api/integrations/healthconnect/status', {
+          credentials: 'same-origin',
+          cache: 'no-store',
+        })
+        if (probe.status === 401) {
+          setError(
+            'Password OK but the browser did not keep the session cookie. Use http://127.0.0.1:5000 (not a file:// or mixed host), allow cookies, then retry. For phone pairing you no longer need web login — open Training → Health Connect on the app.',
+          )
+          setSubmitting(false)
+          return
+        }
         const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/'
-        // Hard navigation so the session cookie is always picked up by proxy.
         window.location.assign(safeNext)
         return
       }

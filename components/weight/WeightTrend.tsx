@@ -15,6 +15,7 @@ import { ChevronRight, ChevronDown, Pencil, Check, X } from 'lucide-react'
 import type { ConfidenceLevel } from '@/lib/retentionModels'
 import PremiumGate from '@/components/shared/PremiumGate'
 import { useTier } from '@/hooks/useTier'
+import { rollingWindow } from '@/lib/timeWindow'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -298,9 +299,7 @@ type ChartEntry = Entry & {
 }
 
 function minDateISOForRollingDays(daysInclusive: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - (daysInclusive - 1))
-  return d.toISOString().slice(0, 10)
+  return rollingWindow(daysInclusive).from
 }
 
 function filterByTrendRange(entries: ChartEntry[], range: TrendRange): ChartEntry[] {

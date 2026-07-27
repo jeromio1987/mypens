@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Target, X, Plus, Trash2 } from 'lucide-react'
+import { today } from '@/lib/timeWindow'
 
 interface Goal {
   id: string
@@ -37,7 +38,7 @@ export default function GoalsPanel({ onClose }: Props) {
   const [formMetric, setFormMetric] = useState('scaleKg')
   const [formTarget, setFormTarget] = useState('')
   const [formStart, setFormStart]   = useState('')
-  const [formDate, setFormDate]     = useState(new Date().toISOString().split('T')[0])
+  const [formDate, setFormDate]     = useState(() => today())
 
   const load = async () => {
     setLoading(true)
@@ -110,7 +111,7 @@ export default function GoalsPanel({ onClose }: Props) {
       })
       setShowForm(false)
       setFormTarget(''); setFormStart('')
-      setFormDate(new Date().toISOString().split('T')[0])
+      setFormDate(today())
       await load()
     } finally {
       setSaving(false)

@@ -1,0 +1,51 @@
+{
+  "analysisMode": "meal_estimate",
+  "dishSummary": "Grilled chicken breast with rice and broccoli; portions estimated from plate size.",
+  "items": [
+    {
+      "name": "Grilled chicken breast",
+      "brand": null,
+      "meal": "dinner",
+      "kcal": 275,
+      "proteinG": 52,
+      "carbsG": 0,
+      "fatG": 6,
+      "fiberG": 0,
+      "packGrams": null,
+      "assumedGrams": 180,
+      "portionGrams": 180,
+      "micros": null,
+      "tags": ["high_protein"]
+    },
+    {
+      "name": "White rice, cooked",
+      "brand": null,
+      "meal": "dinner",
+      "kcal": 195,
+      "proteinG": 4,
+      "carbsG": 43,
+      "fatG": 0.5,
+      "fiberG": 0.6,
+      "packGrams": null,
+      "assumedGrams": 150,
+      "portionGrams": 150,
+      "micros": null,
+      "tags": null
+    },
+    {
+      "name": "Steamed broccoli",
+      "brand": null,
+      "meal": "dinner",
+      "kcal": 42,
+      "proteinG": 3.4,
+      "carbsG": 6.6,
+      "fatG": 0.5,
+      "fiberG": 3.3,
+      "packGrams": null,
+      "assumedGrams": 120,
+      "portionGrams": 120,
+      "micros": null,
+      "tags": ["high_fiber", "plant_forward"]
+    }
+  ]
+}

@@ -22,13 +22,33 @@ describe('healthconnect sleepMapping', () => {
       quality: 3,
       hrv: 52,
       externalId: 'hc-1',
+      source: 'healthconnect',
     })
     expect(mapped?.notes).toContain('Health Connect')
   })
 
-  it('defaults quality to 3 without HRV', () => {
-    expect(hrvToQuality(undefined)).toBe(3)
-    expect(hrvToQuality(null)).toBe(3)
+  it('returns null quality without HRV (never invents 3)', () => {
+    expect(hrvToQuality(undefined)).toBeNull()
+    expect(hrvToQuality(null)).toBeNull()
+    const mapped = mapSleepSession({
+      id: 'hc-no-hrv',
+      startTime: '2026-07-24T22:30:00.000Z',
+      endTime: '2026-07-25T06:30:00.000Z',
+      date: '2026-07-25',
+      bedtime: '00:30',
+      wakeTime: '08:30',
+      hours: 8,
+    })
+    expect(mapped?.quality).toBeNull()
+    expect(mapped?.hrv).toBeNull()
+  })
+
+  it('duration-only sleep score when quality null', async () => {
+    const { computeSleepScore } = await import('@/lib/readinessMetrics')
+    const withQ = computeSleepScore(8, 3)
+    const noQ = computeSleepScore(8, null)
+    expect(noQ).toBe(60)
+    expect(withQ).toBeGreaterThan(noQ)
   })
 
   it('skips invalid duration', () => {

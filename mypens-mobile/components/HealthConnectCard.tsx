@@ -16,11 +16,13 @@ import { useFocusEffect } from '@react-navigation/native'
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
 import {
+  ensureHcPairingFromApi,
   getHcAutoSyncEnabled,
   getHcLastSyncIso,
   getHcPairingToken,
   isAndroidHealthConnectHost,
   maybeAutoSyncHealthConnect,
+  openHealthConnectSettings,
   setHcAutoSyncEnabled,
   setHcPairingToken,
   syncHealthConnectSessions,
@@ -35,15 +37,15 @@ function formatWorkoutStatus(result: Extract<HcSyncResult, { ok: true }>): strin
     return 'Workouts: no sessions in HC (last 14 days)'
   }
   if (result.autoImport) {
-    return `Workouts: ${result.imported ?? result.stored} imported, ${result.skipped} skipped (${result.read} read)`
+    return `Workouts: ${result.imported ?? result.stored} imported, ${result.skipped} skipped`
   }
-  return `Workouts: ${result.stored} new, ${result.skipped} skipped (${result.read} read) → /integrations`
+  return `Workouts: ${result.stored} new, ${result.skipped} skipped`
 }
 
 function formatSleepStatus(result: HcSleepSyncResult): string {
   if (!result.ok) return `Sleep: ${result.error}`
   if (result.read === 0) return 'Sleep: no SleepSession in HC'
-  return `Sleep: ${result.stored} new night(s), ${result.skipped} already logged → Sleep tab (not workout queue)`
+  return `Sleep: ${result.stored} new, ${result.skipped} already logged`
 }
 
 function combineStatus(workouts: HcSyncResult, sleep: HcSleepSyncResult): string {
@@ -55,6 +57,7 @@ function combineStatus(workouts: HcSyncResult, sleep: HcSleepSyncResult): string
   return anyOk ? `Synced — ${parts.join('. ')}.` : parts.join(' · ')
 }
 
+/** Collapsed by default: status + Sync now. Token / re-pair under Advanced. */
 export function HealthConnectCard() {
   const colors = useColors()
   const [token, setToken] = useState('')
@@ -63,12 +66,21 @@ export function HealthConnectCard() {
   const [autoSync, setAutoSync] = useState(true)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const autoRunning = useRef(false)
 
   const reload = useCallback(async () => {
-    setToken(await getHcPairingToken())
+    const paired = await ensureHcPairingFromApi()
+    if (paired.ok) {
+      setToken(paired.token)
+      setSaved(true)
+      if (paired.created) setStatus('Paired via API')
+    } else {
+      setToken(await getHcPairingToken())
+      setSaved(Boolean(await getHcPairingToken()))
+      if (paired.error) setStatus(paired.error)
+    }
     setLastSync(await getHcLastSyncIso())
-    setSaved(Boolean(await getHcPairingToken()))
     setAutoSync(await getHcAutoSyncEnabled())
   }, [])
 
@@ -82,7 +94,6 @@ export function HealthConnectCard() {
     try {
       const workouts = await maybeAutoSyncHealthConnect()
       if (!workouts) return
-      // Same throttle window as workouts — pull sleep whenever auto-sync fires.
       const sleep = await syncHealthConnectSleep()
       setStatus(`Auto-sync: ${combineStatus(workouts, sleep)}`)
       if (workouts.ok) setLastSync(await getHcLastSyncIso())
@@ -93,14 +104,12 @@ export function HealthConnectCard() {
     }
   }, [busy])
 
-  // Training tab focus — pull HC if preference on and last sync is stale.
   useFocusEffect(
     useCallback(() => {
       void runAutoIfDue()
     }, [runAutoIfDue]),
   )
 
-  // App foreground — same throttle as tab focus.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (st) => {
       if (st === 'active') void runAutoIfDue()
@@ -128,11 +137,7 @@ export function HealthConnectCard() {
   const toggleAutoSync = async (on: boolean) => {
     setAutoSync(on)
     await setHcAutoSyncEnabled(on)
-    setStatus(
-      on
-        ? 'Auto-sync on — pulls workouts + sleep when you open Training (~20 min gap).'
-        : 'Auto-sync off.',
-    )
+    setStatus(on ? 'Auto-sync on' : 'Auto-sync off')
   }
 
   const runSync = async () => {
@@ -154,6 +159,11 @@ export function HealthConnectCard() {
     }
   }
 
+  const pairedLabel = saved ? 'Paired' : 'Not paired'
+  const syncLabel = lastSync
+    ? `Last sync ${new Date(lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+    : 'Not synced yet'
+
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.headerRow}>
@@ -161,87 +171,42 @@ export function HealthConnectCard() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.eyebrow, { color: MOD.primary }]}>Health Connect</Text>
           <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-            Garmin → Health Connect → MY PENS
+            {pairedLabel} · {syncLabel}
           </Text>
+        </View>
+        <View style={styles.autoMini}>
+          <Text style={[styles.meta, { color: colors.mutedForeground }]}>Auto</Text>
+          <Switch
+            value={autoSync}
+            onValueChange={(v) => void toggleAutoSync(v)}
+            trackColor={{ false: colors.border, true: MOD.primary }}
+            thumbColor="#fff"
+          />
         </View>
       </View>
 
-      <Text style={[styles.body, { color: colors.mutedForeground }]}>
-        1. Open web /integrations → Health Connect → Pair → copy token{'\n'}
-        2. Paste below → Save{'\n'}
-        3. Sync now (or Auto-sync) — workouts → review/import; sleep nights → Sleep tab directly
-      </Text>
+      <Pressable
+        onPress={() => void runSync()}
+        disabled={busy}
+        style={[styles.btnPrimary, { backgroundColor: MOD.primary, opacity: busy ? 0.6 : 1 }]}
+      >
+        {busy ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <>
+            <Feather name="refresh-cw" size={14} color="#fff" />
+            <Text style={styles.btnPrimaryText}>Sync now</Text>
+          </>
+        )}
+      </Pressable>
 
-      <TextInput
-        value={token}
-        onChangeText={setToken}
-        placeholder="Pairing token from /integrations"
-        placeholderTextColor={colors.mutedForeground}
-        autoCapitalize="none"
-        autoCorrect={false}
-        secureTextEntry
-        style={[
-          styles.input,
-          {
-            color: colors.foreground,
-            borderColor: colors.border,
-            backgroundColor: colors.secondary,
-          },
-        ]}
-      />
-
-      <View style={styles.autoRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.btnText, { color: colors.foreground }]}>Auto-sync</Text>
-          <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-            Phone pulls workouts + sleep from HC. Web auto-import skips workout review only.
-          </Text>
-        </View>
-        <Switch
-          value={autoSync}
-          onValueChange={(v) => void toggleAutoSync(v)}
-          trackColor={{ false: colors.border, true: MOD.primary }}
-          thumbColor="#fff"
-        />
-      </View>
-
-      <View style={styles.row}>
-        <Pressable
-          onPress={() => void saveToken()}
-          style={[styles.btn, { borderColor: colors.border }]}
-        >
-          <Text style={[styles.btnText, { color: colors.foreground }]}>
-            {saved ? 'Update token' : 'Save token'}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => void runSync()}
-          disabled={busy}
-          style={[styles.btnPrimary, { backgroundColor: MOD.primary, opacity: busy ? 0.6 : 1 }]}
-        >
-          {busy ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Feather name="refresh-cw" size={14} color="#fff" />
-              <Text style={styles.btnPrimaryText}>Sync now</Text>
-            </>
-          )}
-        </Pressable>
-      </View>
-
-      {lastSync && (
-        <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-          Last sync: {new Date(lastSync).toLocaleString()}
-        </Text>
-      )}
-      {status && (
+      {status ? (
         <Text
           style={[
             styles.meta,
             {
               color:
-                status.includes('Synced') || status.includes('Auto-sync: Synced') || status.includes('OK')
+                status.includes('Synced') || status.includes('Auto-sync: Synced') || status.includes('Paired')
                   ? colors.success
                   : colors.warning,
             },
@@ -249,12 +214,78 @@ export function HealthConnectCard() {
         >
           {status}
         </Text>
-      )}
-      {Platform.OS === 'android' && (
-        <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-          Base URL: {(process.env.EXPO_PUBLIC_PENS_API_URL ?? '').replace(/\/$/, '') || '(not set)'}
+      ) : null}
+
+      <Pressable onPress={() => setShowAdvanced((s) => !s)} style={styles.expandBtn} hitSlop={8}>
+        <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_500Medium' }}>
+          {showAdvanced ? 'Hide advanced' : 'Advanced'}
         </Text>
-      )}
+        <Feather name={showAdvanced ? 'chevron-up' : 'chevron-down'} size={14} color={colors.mutedForeground} />
+      </Pressable>
+
+      {showAdvanced ? (
+        <View style={{ gap: 8 }}>
+          <Text style={[styles.body, { color: colors.mutedForeground }]}>
+            Pairing is automatic via the API token. Use advanced only if auto-pair fails.
+            {'\n'}OnePlus: Settings → Security & privacy → Privacy → Health Connect.
+          </Text>
+          <Pressable
+            onPress={() => {
+              void (async () => {
+                setBusy(true)
+                const r = await ensureHcPairingFromApi({ force: true })
+                setBusy(false)
+                if (r.ok) {
+                  setToken(r.token)
+                  setSaved(true)
+                  setStatus('Re-paired via API.')
+                } else setStatus(r.error)
+              })()
+            }}
+            style={[styles.btn, { borderColor: colors.border }]}
+          >
+            <Text style={[styles.btnText, { color: colors.foreground }]}>Re-pair via API</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              void (async () => {
+                const r = await openHealthConnectSettings()
+                if (!r.ok) setStatus(r.error)
+              })()
+            }}
+            style={[styles.btn, { borderColor: colors.border }]}
+          >
+            <Text style={[styles.btnText, { color: colors.foreground }]}>Open Health Connect settings</Text>
+          </Pressable>
+          <TextInput
+            value={token}
+            onChangeText={setToken}
+            placeholder="Optional override token"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+            style={[
+              styles.input,
+              {
+                color: colors.foreground,
+                borderColor: colors.border,
+                backgroundColor: colors.secondary,
+              },
+            ]}
+          />
+          <Pressable onPress={() => void saveToken()} style={[styles.btn, { borderColor: colors.border }]}>
+            <Text style={[styles.btnText, { color: colors.foreground }]}>
+              {saved ? 'Update token' : 'Save token'}
+            </Text>
+          </Pressable>
+          {Platform.OS === 'android' ? (
+            <Text style={[styles.meta, { color: colors.mutedForeground }]}>
+              Base URL: {(process.env.EXPO_PUBLIC_PENS_API_URL ?? '').replace(/\/$/, '') || '(not set)'}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -265,9 +296,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     gap: 10,
+    marginHorizontal: 16,
     marginBottom: 12,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  autoMini: { alignItems: 'center', gap: 2 },
   eyebrow: {
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
@@ -284,14 +317,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
   },
-  autoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  row: { flexDirection: 'row', gap: 8 },
   btn: {
-    flex: 1,
     borderWidth: 1,
     borderRadius: 10,
     paddingVertical: 10,
@@ -299,9 +325,8 @@ const styles = StyleSheet.create({
   },
   btnText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
   btnPrimary: {
-    flex: 1,
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -309,4 +334,5 @@ const styles = StyleSheet.create({
   },
   btnPrimaryText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   meta: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
+  expandBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 2 },
 })

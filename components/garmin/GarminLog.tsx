@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { mondayOf } from '@/lib/timeWindow'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Cell,
@@ -56,10 +57,7 @@ function weeklyDistanceData(activities: GarminActivity[]) {
   const map = new Map<string, number>()
   for (const a of activities) {
     if (!a.distanceM) continue
-    const d = new Date(a.date + 'T00:00:00')
-    const day = d.getDay() || 7
-    d.setDate(d.getDate() - day + 1)
-    const key = d.toISOString().slice(0, 10)
+    const key = mondayOf(a.date)
     map.set(key, (map.get(key) ?? 0) + a.distanceM / 1000)
   }
   return Array.from(map.entries())

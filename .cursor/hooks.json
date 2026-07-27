@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": "node .cursor/hooks/mypens-verify-on-stop.mjs",
+        "loop_limit": 2
+      }
+    ]
+  }
+}

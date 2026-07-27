@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Plane, Thermometer, Palmtree, Salad, Trophy, Tag } from 'lucide-react'
+import { today } from '@/lib/timeWindow'
 
 interface EventTag {
   id: string
@@ -34,11 +35,11 @@ export default function EventBanner() {
   const [activeEvents, setActiveEvents] = useState<EventTag[]>([])
 
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0]
+    const asOf = today()
     fetch('/api/events')
       .then(r => r.json())
       .then((events: EventTag[]) => {
-        setActiveEvents(events.filter(e => isActive(e, today)))
+        setActiveEvents(events.filter(e => isActive(e, asOf)))
       })
       .catch(() => {})
   }, [])

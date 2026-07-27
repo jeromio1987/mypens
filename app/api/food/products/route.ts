@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { searchOpenFoodFacts, type FoodProductHit } from '@/lib/openFoodFacts'
+import { foodNameKey } from '@/lib/foodNameKey'
 import { consume } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
@@ -8,6 +9,7 @@ export const dynamic = 'force-dynamic'
 /**
  * GET /api/food/products?q=delhaize+yoghurt
  * Merges personal FoodEntry history with Open Food Facts (worldwide).
+ * History is deduped by product key (grams stripped) — one row per food; user sets grams.
  */
 export async function GET(req: Request) {
   try {
@@ -38,15 +40,20 @@ export async function GET(req: Request) {
     const [historyRows, offHits] = await Promise.all([historyPromise, offPromise])
 
     const historyHits: FoodProductHit[] = []
-    const seenNames = new Set<string>()
+    const seenKeys = new Set<string>()
     for (const e of historyRows) {
-      const key = e.name.toLowerCase()
-      if (seenNames.has(key)) continue
-      seenNames.add(key)
+      const key = foodNameKey(e.name)
+      if (!key || seenKeys.has(key)) continue
+      seenKeys.add(key)
+      // Prefer a clean label without embedded gram suffixes when possible.
+      const cleanName =
+        e.name
+          .replace(/\s*[(\[{]?\s*\d+([.,]\d+)?\s*(g|gr|gram|grams)\s*[)\]}]?\s*$/i, '')
+          .trim() || e.name
       historyHits.push({
         id: `history:${e.id}`,
         source: 'history',
-        name: e.name,
+        name: cleanName,
         brand: null,
         packGrams: null,
         assumedGrams: null,
@@ -61,7 +68,12 @@ export async function GET(req: Request) {
       if (historyHits.length >= 6) break
     }
 
-    const offFiltered = offHits.filter(h => !seenNames.has(h.name.toLowerCase()))
+    const offFiltered = offHits.filter(h => {
+      const key = foodNameKey(h.name)
+      if (!key || seenKeys.has(key)) return false
+      seenKeys.add(key)
+      return true
+    })
     const products: FoodProductHit[] = [...historyHits, ...offFiltered].slice(0, 14)
 
     return NextResponse.json({

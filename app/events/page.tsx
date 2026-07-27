@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Plane, Thermometer, Palmtree, Salad, Trophy, Tag, Trash2, Plus } from 'lucide-react'
+import { today } from '@/lib/timeWindow'
 
 interface EventTag {
   id: string
@@ -27,9 +28,9 @@ function formatDate(d: string) {
 }
 
 function getStatus(event: EventTag): 'active' | 'upcoming' | 'past' {
-  const today = new Date().toISOString().split('T')[0]
-  if (event.endDate < today) return 'past'
-  if (event.startDate > today) return 'upcoming'
+  const asOf = today()
+  if (event.endDate < asOf) return 'past'
+  if (event.startDate > asOf) return 'upcoming'
   return 'active'
 }
 
@@ -42,7 +43,7 @@ const STATUS_BADGE: Record<string, string> = {
 const inputCls = 'w-full bg-pens-navy/60 border border-pens-muted/30 focus:border-pens-gold/60 rounded-lg px-3 py-2 text-sm text-pens-cream placeholder:text-pens-cream/30 focus:outline-none transition-colors'
 
 export default function EventsPage() {
-  const today = new Date().toISOString().split('T')[0]
+  const todayStr = today()
 
   const [events, setEvents] = useState<EventTag[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,8 +52,8 @@ export default function EventsPage() {
   const [form, setForm] = useState({
     type: 'travel',
     label: '',
-    startDate: today,
-    endDate: today,
+    startDate: todayStr,
+    endDate: todayStr,
     notes: '',
   })
 
@@ -79,7 +80,7 @@ export default function EventsPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Save failed')
-      setForm({ type: 'travel', label: '', startDate: today, endDate: today, notes: '' })
+      setForm({ type: 'travel', label: '', startDate: todayStr, endDate: todayStr, notes: '' })
       load()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error')

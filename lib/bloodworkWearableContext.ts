@@ -33,7 +33,7 @@ export function inclusiveRangeEnding(endYmd: string, dayCount: number): string[]
 export type SleepDayContext = {
   date: string
   hours: number
-  quality: number
+  quality: number | null
   hrv: number | null
 }
 
@@ -64,7 +64,7 @@ const DEFAULT_DISCLAIMER =
 export function buildLabWearableContextPayload(input: {
   drawDate: string
   windowDays?: number
-  sleepRows: { date: string; hours: number; quality: number; hrv: number | null }[]
+  sleepRows: { date: string; hours: number; quality: number | null; hrv: number | null }[]
   trainingRows: { date: string; volume: number }[]
 }): LabWearableContextPayload {
   const windowDays = input.windowDays ?? 10

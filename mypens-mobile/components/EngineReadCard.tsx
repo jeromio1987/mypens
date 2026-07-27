@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
 import { Feather } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 
 import { useColors } from '@/hooks/useColors'
 import { isPensApiConfigured, pensFetch } from '@/lib/pensApi'
@@ -14,8 +15,16 @@ import {
 
 const ACCENT = '#38bdf8'
 
+type LabsSummary = {
+  present?: boolean
+  chipLabel?: string
+  flaggedCount?: number
+  drawDate?: string | null
+}
+
 export function EngineReadCard({ defaultDays = 7 }: { defaultDays?: CockpitWindowDays }) {
   const colors = useColors()
+  const router = useRouter()
   const enabled = isPensApiConfigured()
   const [days, setDays] = useState<CockpitWindowDays>(defaultDays)
   const range = cockpitRange(days)
@@ -32,6 +41,17 @@ export function EngineReadCard({ defaultDays = 7 }: { defaultDays?: CockpitWindo
         throw new Error(j.error ?? `Period review ${res.status}`)
       }
       return (await res.json()) as PeriodReviewLiveResponse
+    },
+  })
+
+  const labsQ = useQuery({
+    queryKey: ['bloodwork-latest-summary'],
+    enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<LabsSummary | null> => {
+      const res = await pensFetch('/api/bloodwork/latest-summary')
+      if (!res.ok) return null
+      return (await res.json()) as LabsSummary
     },
   })
 
@@ -91,7 +111,12 @@ export function EngineReadCard({ defaultDays = 7 }: { defaultDays?: CockpitWindo
           {(error as Error)?.message ?? 'Could not load The Read'}
         </Text>
       ) : isLoading && !data ? (
-        <ActivityIndicator color={ACCENT} style={{ marginVertical: 16 }} />
+        <View style={{ marginVertical: 12, gap: 8 }}>
+          <ActivityIndicator color={ACCENT} />
+          <Text style={[styles.body, { color: colors.mutedForeground }]}>
+            Loading cockpit… if this hangs, Next may be wedged — check /api/health.
+          </Text>
+        </View>
       ) : read ? (
         <>
           <View style={styles.verdictRow}>
@@ -137,6 +162,21 @@ export function EngineReadCard({ defaultDays = 7 }: { defaultDays?: CockpitWindo
                 <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#f87171' }}>RHR · </Text>
                 {rhr.likelyDrinkingDays}d ≥50 · {rhr.heavyStackDays || 0}d ≥55
               </Text>
+            ) : null}
+            {labsQ.data?.present ? (
+              <Pressable onPress={() => router.push('/bloodwork' as never)} hitSlop={8}>
+                <Text
+                  style={[
+                    styles.body,
+                    {
+                      color: (labsQ.data.flaggedCount ?? 0) > 0 ? '#c4b5fd' : colors.mutedForeground,
+                      textDecorationLine: 'underline',
+                    },
+                  ]}
+                >
+                  Labs · {labsQ.data.chipLabel}
+                </Text>
+              </Pressable>
             ) : null}
           </View>
           {inv ? (

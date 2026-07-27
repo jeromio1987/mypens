@@ -89,8 +89,8 @@ export default function PeriodReviewScreen() {
 
             <View style={styles.chipGrid}>
               <MetricChip label="Active days" value={String(train.activeDays)} />
-              <MetricChip label="Load PLU" value={String(train.totalPlu)} />
-              <MetricChip label="Hard PLU" value={String(train.hardPlu)} critical={train.hardPlu > train.easyPlu * 2} />
+              <MetricChip label="Load" value={String(train.totalPlu)} />
+              <MetricChip label="Heavy" value={String(train.hardPlu)} critical={train.hardPlu > train.easyPlu * 2} />
               <MetricChip
                 label="Avg sleep"
                 value={avgSleep != null ? `${avgSleep.toFixed(1)}h` : '—'}

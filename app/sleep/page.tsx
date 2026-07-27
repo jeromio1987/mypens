@@ -6,10 +6,11 @@ import { ArrowLeft } from 'lucide-react'
 import SleepEntry from '@/components/sleep/SleepEntry'
 import SleepTrend from '@/components/sleep/SleepTrend'
 import SleepDebt, { type SleepEntryRow } from '@/components/sleep/SleepDebt'
+import SleepSyncStatus from '@/components/sleep/SleepSyncStatus'
+import { today } from '@/lib/timeWindow'
 
 export default function SleepPage() {
-  const today = new Date().toISOString().split('T')[0]
-  const [date, setDate] = useState(today)
+  const [date, setDate] = useState(() => today())
   const [refresh, setRefresh] = useState(0)
   const [sleepEntries, setSleepEntries] = useState<SleepEntryRow[]>([])
   const [sleepLoading, setSleepLoading] = useState(true)
@@ -69,6 +70,8 @@ export default function SleepPage() {
           </Link>
           , pair the Android token, then tap <span className="text-pens-cream/70">Sync now</span> in the phone app.
         </p>
+
+        <SleepSyncStatus />
 
         <SleepEntry date={date} onSaved={() => setRefresh(r => r + 1)} />
         <SleepTrend

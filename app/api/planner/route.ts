@@ -162,6 +162,14 @@ export async function GET(req: Request) {
         null,
       )) || null
 
+    let bodyPhase: 'cut' | 'bulk' | 'recomp' | 'maintain' = 'maintain'
+    try {
+      const { readBodyPhase } = await import('@/lib/bodyPhaseStore')
+      bodyPhase = (await readBodyPhase()).phase
+    } catch {
+      /* settings optional */
+    }
+
     const goalInput = goal
       ? {
           kind: goal.kind as GoalKind,
@@ -169,12 +177,14 @@ export async function GET(req: Request) {
           targetNum: goal.targetNum,
           longDay: goal.longDay as LongDay,
           sports: parseSports(goal.sportsJson),
+          phase: bodyPhase,
         }
       : {
           kind: 'custom' as GoalKind,
           label: 'General fitness',
           longDay: 'saturday' as LongDay,
           sports: ['running', 'gym'] as Sport[],
+          phase: bodyPhase,
         }
 
     const ctx = await recentContext(shiftDateStr(weekOf, -1))
@@ -184,6 +194,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       weekOf,
       goal,
+      bodyPhase,
       plan,
       saved: saved
         ? { id: saved.id, accepted: saved.accepted, createdAt: saved.createdAt.toISOString() }

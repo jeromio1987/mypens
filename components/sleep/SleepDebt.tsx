@@ -12,6 +12,7 @@ import {
   ReferenceLine,
   Cell,
 } from 'recharts'
+import { rollingWindow } from '@/lib/timeWindow'
 
 export interface SleepEntryRow {
   id: string
@@ -19,7 +20,7 @@ export interface SleepEntryRow {
   hours: number
   bedtime: string
   wakeTime: string
-  quality: number
+  quality: number | null
 }
 
 const inputCls =
@@ -31,17 +32,6 @@ type ChartPt = {
   actual: number
   target: number
   debt: number
-}
-
-function lastNDatesStrings(n: number): string[] {
-  const out: string[] = []
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    d.setDate(d.getDate() - i)
-    out.push(d.toISOString().split('T')[0])
-  }
-  return out
 }
 
 /** Human-readable ± duration from fractional hours */
@@ -161,7 +151,7 @@ export default function SleepDebt({ entries }: Props) {
   }, [entries])
 
   const { chartRows, cumulativeDebt, clearInNights } = useMemo(() => {
-    const calendar = lastNDatesStrings(30)
+    const calendar = rollingWindow(30).dates
     const rows: ChartPt[] = calendar.map(date => {
       const e = entryByDate.get(date)
       const actual = e ? e.hours : 0

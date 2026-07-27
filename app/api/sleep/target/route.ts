@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { today } from '@/lib/timeWindow'
 
 function clampHours(v: number): number {
   return Math.min(10, Math.max(5, v))
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'targetHours must be a number' }, { status: 400 })
     }
     const targetHours = clampHours(raw)
-    const today = new Date().toISOString().split('T')[0]
+    const todayStr = today()
 
     const existing = await prisma.goal.findFirst({
       where: { module: 'sleep', metricKey: 'hoursPerNight' },
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
         metricKey: 'hoursPerNight',
         targetValue: targetHours,
         startValue: targetHours,
-        startDate: today,
+        startDate: todayStr,
       },
     })
     return NextResponse.json({

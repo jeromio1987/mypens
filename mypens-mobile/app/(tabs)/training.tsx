@@ -29,17 +29,13 @@ import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
 import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
 import { PlannerWeekCard } from '@/components/PlannerWeekCard'
-import { GarminPullCard } from '@/components/GarminPullCard'
 import { OrphanActivitiesBanner } from '@/components/OrphanActivitiesBanner'
 import { TrainingReviewCard } from '@/components/TrainingReviewCard'
 import { HealthConnectCard } from '@/components/HealthConnectCard'
+import { mondayOf, today } from '@/lib/timeWindow'
 
 const MOD = MODULE_COLORS.training
 const EXERCISES_KEY = '@mypens/recent_exercises'
-const today = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 interface TrainingEntry {
   id: string
@@ -74,6 +70,7 @@ export default function TrainingScreen() {
   const [notes, setNotes] = useState('')
   const [recentExercises, setRecentExercises] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [showLogSet, setShowLogSet] = useState(false)
 
   useEffect(() => {
     AsyncStorage.getItem(EXERCISES_KEY).then((raw) => {
@@ -261,21 +258,47 @@ export default function TrainingScreen() {
     },
   })
 
-  // Weekly volume (last 8 weeks)
+  // Weekly volume (last 8 calendar weeks, Mon–Sun — P9)
   const weeklyMap = new Map<string, number>()
   weeklyEntries.forEach((e) => {
-    const d = new Date(e.date)
-    const startOfWeek = new Date(d)
-    startOfWeek.setDate(d.getDate() - d.getDay())
-    const key = startOfWeek.toISOString().split('T')[0]
+    const key = mondayOf(e.date)
     weeklyMap.set(key, (weeklyMap.get(key) ?? 0) + e.volume)
   })
   const weekKeys = [...weeklyMap.keys()].sort().slice(-8)
   const barData = weekKeys.map((k, i) => ({
     value: Math.round(weeklyMap.get(k) ?? 0),
-    label: i === weekKeys.length - 1 ? 'Now' : `W${i + 1}`,
+    label: k.slice(5), // MM-DD week start (Mon)
     frontColor: i === weekKeys.length - 1 ? MOD.primary : `${MOD.primary}80`,
   }))
+
+  const { data: loadBarData = [] } = useQuery({
+    queryKey: ['training-load-weeks', useApi],
+    enabled: useApi,
+    queryFn: async () => {
+      const to = today()
+      const fromDate = new Date(`${to}T12:00:00`)
+      fromDate.setDate(fromDate.getDate() - 55)
+      const from = `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}-${String(fromDate.getDate()).padStart(2, '0')}`
+      const res = await pensFetch(
+        `/api/period-review?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      )
+      if (!res.ok) return [] as { value: number; label: string; frontColor: string }[]
+      const j = (await res.json()) as {
+        cockpit?: { series?: { date: string; trainingLoad?: number }[] }
+      }
+      const map = new Map<string, number>()
+      for (const row of j.cockpit?.series ?? []) {
+        const key = mondayOf(row.date)
+        map.set(key, (map.get(key) ?? 0) + (Number(row.trainingLoad) || 0))
+      }
+      const keys = [...map.keys()].sort().slice(-8)
+      return keys.map((k, i) => ({
+        value: Math.round(map.get(k) ?? 0),
+        label: k.slice(5),
+        frontColor: i === keys.length - 1 ? '#38bdf8' : '#38bdf880',
+      }))
+    },
+  })
 
   const todayVolume = todayEntries.reduce((a, e) => a + e.volume, 0)
   const suggestions = recentExercises.filter((e) =>
@@ -318,11 +341,11 @@ export default function TrainingScreen() {
         )}
       </View>
 
-      <HealthConnectCard />
+      {/* Feedback first — sync chrome last */}
       <OrphanActivitiesBanner />
-      <GarminPullCard days={7} />
       <TrainingReviewCard defaultDays={14} />
       <PlannerWeekCard />
+      <HealthConnectCard />
 
       {pending > 0 ? (
         <View
@@ -342,9 +365,38 @@ export default function TrainingScreen() {
         </View>
       ) : null}
 
-      {/* Form */}
+      <Pressable
+        onPress={() => setShowLogSet((s) => !s)}
+        style={{
+          marginHorizontal: 16,
+          marginBottom: 12,
+          paddingVertical: 12,
+          paddingHorizontal: 14,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+        }}
+      >
+        <MaterialCommunityIcons name="dumbbell" size={18} color={MOD.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.foreground, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+            {showLogSet ? 'Hide strength log' : 'Log strength'}
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 2 }}>
+            Optional — cardio comes from Health Connect / Garmin
+          </Text>
+        </View>
+        <Feather name={showLogSet ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+      </Pressable>
+
+      {/* Form — collapsed by default */}
+      {showLogSet ? (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Log set</Text>
+        <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Log set</Text>
 
         {/* Exercise input with autocomplete */}
         <View style={{ marginBottom: 12 }}>
@@ -468,13 +520,14 @@ export default function TrainingScreen() {
           )}
         </Pressable>
       </View>
+      ) : null}
 
       {/* Today's session */}
       {isLoading ? (
         <ActivityIndicator color={MOD.primary} style={{ marginTop: 8 }} />
       ) : todayEntries.length > 0 ? (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Today's session</Text>
+          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Today's session</Text>
           {todayEntries.map((e) => (
             <View key={e.id} style={[styles.sessionRow, { borderTopColor: colors.border }]}>
               <View style={styles.sessionInfo}>
@@ -497,10 +550,15 @@ export default function TrainingScreen() {
         </View>
       ) : null}
 
-      {/* Weekly volume chart */}
+      {/* Weekly volume chart — manual gym sets only (WP 0.5 / 2.4) */}
       {barData.length > 1 && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.chartTitle, { color: colors.foreground }]}>Weekly volume (kg)</Text>
+          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>
+            Gym tonnage (logged sets)
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular', marginBottom: 12, lineHeight: 16 }}>
+            Alleen sets die je zelf hebt getikt. Garmin- en Health Connect-sessies staan hier niet in. Week begint op maandag.
+          </Text>
           <BarChart
             data={barData}
             barWidth={Math.max(16, (chartW - 80) / barData.length - 6)}
@@ -508,7 +566,32 @@ export default function TrainingScreen() {
             noOfSections={4}
             width={chartW - 32}
             yAxisTextStyle={{ color: colors.mutedForeground, fontSize: 11 }}
-            xAxisLabelTextStyle={{ color: colors.mutedForeground, fontSize: 11 }}
+            xAxisLabelTextStyle={{ color: colors.mutedForeground, fontSize: 10 }}
+            xAxisColor={colors.border}
+            yAxisColor={colors.border}
+            rulesColor={colors.border}
+            yAxisLabelWidth={52}
+            initialSpacing={8}
+          />
+        </View>
+      )}
+
+      {loadBarData.length > 1 && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>
+            Load (all sessions)
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular', marginBottom: 12, lineHeight: 16 }}>
+            Belasting uit de dagkern — Garmin + Strava/manual. Niet hetzelfde als gym-tonnage.
+          </Text>
+          <BarChart
+            data={loadBarData}
+            barWidth={Math.max(16, (chartW - 80) / loadBarData.length - 6)}
+            spacing={6}
+            noOfSections={4}
+            width={chartW - 32}
+            yAxisTextStyle={{ color: colors.mutedForeground, fontSize: 11 }}
+            xAxisLabelTextStyle={{ color: colors.mutedForeground, fontSize: 10 }}
             xAxisColor={colors.border}
             yAxisColor={colors.border}
             rulesColor={colors.border}
@@ -529,8 +612,9 @@ const styles = StyleSheet.create({
   volumeWrap: { alignItems: 'flex-end' },
   volumeValue: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   volumeSub: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  card: { marginHorizontal: 16, marginBottom: 16, borderRadius: 16, borderWidth: 1, padding: 16 },
+  card: { marginHorizontal: 16, marginBottom: 18, borderRadius: 16, borderWidth: 1, padding: 18 },
   sectionTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 12 },
+  readEyebrow: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 1.1, marginBottom: 8 },
   fieldLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', marginBottom: 6 },
   input: { borderWidth: 1, borderRadius: 10, height: 44, paddingHorizontal: 12, fontSize: 15 },
   suggestions: { borderWidth: 1, borderRadius: 10, marginTop: 4, overflow: 'hidden' },
