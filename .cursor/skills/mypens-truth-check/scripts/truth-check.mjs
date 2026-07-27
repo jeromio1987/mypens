@@ -100,10 +100,18 @@ function checkT8() {
 }
 
 const T1_ALLOWLIST = new Set([
+  // Charts / cockpit — display scaling of API fields is intentional UI, not a second engine.
   'components/period-review/PeriodCockpit.tsx',
   'components/food/EnergyWeekChart.tsx',
+  'components/food/EnergyBalanceCard.tsx', // bar stack heights from API kcal fields
+  'components/goals/GoalsPanel.tsx', // progress % display from API goal numbers
+  'components/home/HomeReadCard.tsx', // read copy formatting from API payload
   'mypens-mobile/components/TrainingReviewCard.tsx',
   'mypens-mobile/components/EngineReadCard.tsx',
+  'mypens-mobile/components/OrphanActivitiesBanner.tsx', // count / age display from API orphans
+  'mypens-mobile/app/(tabs)/food.tsx', // chart + macro bar fill from API day totals
+  'mypens-mobile/app/period-review.tsx', // cockpit display math
+  'mypens-mobile/app/weekly-feedback.tsx', // week score presentation
 ])
 
 const T1_ENGINE_SMELL =

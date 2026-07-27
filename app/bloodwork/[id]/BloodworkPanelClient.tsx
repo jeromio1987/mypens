@@ -97,6 +97,22 @@ export default function BloodworkPanelClient() {
   const [saving, setSaving] = useState(false)
   const [ctx, setCtx] = useState<ContextResp | null>(null)
   const [longevityOn, setLongevityOn] = useState(false)
+  const [deltas, setDeltas] = useState<{
+    present: boolean
+    previousDrawDate: string | null
+    deltas: Array<{
+      code: string
+      label: string
+      previous: number | null
+      latest: number | null
+      delta: number | null
+      unit: string | null
+      trend: string
+    }>
+    summaryLine: string
+  } | null>(null)
+  const [trialBusy, setTrialBusy] = useState<string | null>(null)
+  const [trialMsg, setTrialMsg] = useState<string | null>(null)
 
   const loadPanel = useCallback(() => {
     if (!id) return
@@ -136,6 +152,45 @@ export default function BloodworkPanelClient() {
       .then((d: ContextResp) => setCtx(d))
       .catch(() => setCtx(null))
   }, [id, panel?.drawDate])
+
+  useEffect(() => {
+    if (!id || !panel) return
+    let cancelled = false
+    fetch(`/api/bloodwork/panels/${id}/delta`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!cancelled && d) setDeltas(d)
+      })
+      .catch(() => {
+        if (!cancelled) setDeltas(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id, panel?.drawDate, panel?.markers?.length])
+
+  const startLabTrial = async (signalId: 'iron_low_vs_load' | 'thyroid_out_of_ref') => {
+    setTrialBusy(signalId)
+    setTrialMsg(null)
+    try {
+      const action =
+        signalId === 'iron_low_vs_load'
+          ? 'Treat ferritin + load as soft confounders only — ease hard volume one week and review labs with your clinician; not medical advice.'
+          : 'TSH flag is educational context only — do not change BMR or cut calories from labs; discuss with your clinician.'
+      const res = await fetch('/api/intervention-trials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signalId, action, horizonDays: 14 }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'failed')
+      setTrialMsg(`14d trial started · due ${j.trial?.dueAt ?? '—'}`)
+    } catch (e: unknown) {
+      setTrialMsg(e instanceof Error ? e.message : 'Trial failed')
+    } finally {
+      setTrialBusy(null)
+    }
+  }
 
   const saveMeta = async () => {
     if (!id) return
@@ -356,6 +411,72 @@ export default function BloodworkPanelClient() {
           <p className="text-sm text-pens-cream/75 leading-relaxed">{softRead.summary}</p>
           <p className="text-[10px] text-pens-cream/35 leading-relaxed">{softRead.disclaimer}</p>
         </section>
+
+        {deltas?.present && deltas.deltas.some(d => d.delta != null) && (
+          <section className="rounded-2xl border border-sky-500/25 bg-sky-950/15 p-5 space-y-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-sky-300/90">
+              vs prior draw{deltas.previousDrawDate ? ` · ${deltas.previousDrawDate}` : ''}
+            </h2>
+            <ul className="flex flex-wrap gap-2">
+              {deltas.deltas
+                .filter(d => d.delta != null)
+                .slice(0, 12)
+                .map(d => (
+                  <li
+                    key={d.code}
+                    className="text-[11px] px-2.5 py-1.5 rounded-md border border-sky-500/30 bg-sky-900/30 text-sky-100"
+                  >
+                    {d.label}{' '}
+                    <span className="tabular-nums text-pens-cream/80">
+                      {d.previous} → {d.latest}
+                      {d.unit ? ` ${d.unit}` : ''} (
+                      {d.delta! > 0 ? `+${d.delta}` : d.delta})
+                    </span>
+                  </li>
+                ))}
+            </ul>
+            <p className="text-[10px] text-pens-cream/35 leading-relaxed">
+              Panel-to-panel deltas are self-tracking context only — not a diagnosis or medical trend.
+            </p>
+          </section>
+        )}
+
+        {(softRead.byFlag.below.some(l => /ferritin/i.test(l)) ||
+          softRead.byFlag.below.some(l => /tsh/i.test(l)) ||
+          softRead.byFlag.above.some(l => /tsh/i.test(l))) && (
+          <section className="rounded-2xl border border-amber-500/25 bg-amber-950/15 p-5 space-y-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-amber-300/90">
+              Soft n-of-1 trial
+            </h2>
+            <p className="text-xs text-pens-cream/60 leading-relaxed">
+              Seed a 14-day file trial from this flag — educational only, not treatment advice.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {softRead.byFlag.below.some(l => /ferritin/i.test(l)) && (
+                <button
+                  type="button"
+                  disabled={trialBusy != null}
+                  onClick={() => void startLabTrial('iron_low_vs_load')}
+                  className="px-3 py-1.5 rounded-lg bg-amber-800/70 hover:bg-amber-700 text-xs font-semibold disabled:opacity-50"
+                >
+                  {trialBusy === 'iron_low_vs_load' ? '…' : 'Start 14d iron trial'}
+                </button>
+              )}
+              {(softRead.byFlag.below.some(l => /tsh/i.test(l)) ||
+                softRead.byFlag.above.some(l => /tsh/i.test(l))) && (
+                <button
+                  type="button"
+                  disabled={trialBusy != null}
+                  onClick={() => void startLabTrial('thyroid_out_of_ref')}
+                  className="px-3 py-1.5 rounded-lg border border-amber-500/40 text-xs font-semibold text-amber-100 disabled:opacity-50"
+                >
+                  {trialBusy === 'thyroid_out_of_ref' ? '…' : 'Start 14d thyroid trial'}
+                </button>
+              )}
+            </div>
+            {trialMsg && <p className="text-xs text-pens-cream/55">{trialMsg}</p>}
+          </section>
+        )}
 
         {thyroid.present && (
           <section className="rounded-2xl border border-violet-500/25 bg-violet-950/20 p-5 space-y-3">

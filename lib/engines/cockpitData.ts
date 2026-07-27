@@ -9,6 +9,7 @@ import { analyzeCausal, classifyRhrDrinkBand } from '../../scripts/lib/periodCau
 import { loadGarminData } from '../../scripts/lib/garminAnalyze.mjs'
 import { loadConfounders } from '../../scripts/lib/periodCausal.mjs'
 import { getEnergyBalanceForRange, type WindowDayEnergy } from '@/lib/energyBalance'
+import { loadBloodworkLatestSummary } from '@/lib/bloodworkLatestSummary'
 
 export type CockpitDay = {
   date: string
@@ -365,6 +366,32 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     weights: data.weights,
   })
 
+  // Soft lab confounder block — additive only; does not touch periodCausal alcohol helpers.
+  const labsSummary = await loadBloodworkLatestSummary()
+  const labSoft = labsSummary.present
+    ? {
+        present: true as const,
+        panelId: labsSummary.panelId,
+        drawDate: labsSummary.drawDate,
+        flaggedCount: labsSummary.flaggedCount,
+        chipLabel: labsSummary.chipLabel,
+        summary: labsSummary.summary,
+        disclaimer: labsSummary.disclaimer,
+        confidenceNote:
+          'Low-confidence lab context only — what we don’t know from serum vs wearables. Not a diagnosis.',
+      }
+    : {
+        present: false as const,
+        panelId: null,
+        drawDate: null,
+        flaggedCount: 0,
+        chipLabel: 'No labs yet',
+        summary: '',
+        disclaimer: labsSummary.disclaimer,
+        confidenceNote:
+          'No blood panel on file — lab confounders unavailable for this window.',
+      }
+
   const theRead = {
     verdict:
       avgForm == null ? null : avgForm >= 65 ? 'good' : avgForm >= 45 ? 'mixed' : 'bad',
@@ -410,6 +437,7 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
       alcohol: causal.alcohol,
       rhrLadder: causal.rhrLadder,
       hypotheses: causal.hypotheses?.slice(0, 5),
+      labSoft,
     },
     periods: {
       headline: periods.headline,

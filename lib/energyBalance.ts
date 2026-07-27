@@ -6,6 +6,7 @@ import {
   extractKcalFromTraining,
 } from '@/lib/energyKcalExtract'
 import { estimateNeat } from '@/lib/energyNeat'
+import { foodCoverageNudge, type FoodCoverageNudge } from '@/lib/foodCoverageNudge'
 import {
   buildWeekEnergyRecap,
   rolling7Window,
@@ -66,6 +67,8 @@ export type DayEnergyBalance = {
   neatSource: string
   deviceRef: DeviceDayRef | null
   disclaimer: string
+  /** Soft 7d food-log coverage for Fueling nudge (not a diet score). */
+  foodCoverage7d: FoodCoverageNudge
 }
 
 const DISCLAIMER =
@@ -164,7 +167,9 @@ async function loadDeviceDayMetrics(date: string): Promise<DeviceDayRef | null> 
 }
 
 export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalance> {
-  const [foodAgg, garminActs, training, pushed, profile, weightRow, deviceRef, dayEntry] = await Promise.all([
+  const coverageFrom = shiftDateStr(date, -6)
+  const [foodAgg, garminActs, training, pushed, profile, weightRow, deviceRef, dayEntry, foodDays7] =
+    await Promise.all([
     prisma.foodEntry.aggregate({
       where: { date },
       _sum: { kcal: true },
@@ -203,6 +208,10 @@ export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalanc
     weightAndBfOnDate(date),
     loadDeviceDayMetrics(date),
     prisma.dayEntry.findUnique({ where: { date }, select: { tags: true } }),
+    prisma.foodEntry.groupBy({
+      by: ['date'],
+      where: { date: { gte: coverageFrom, lte: date } },
+    }),
   ])
 
   const weightKg = weightRow.weightKg
@@ -382,6 +391,7 @@ export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalanc
     neatSource: neat.source,
     deviceRef,
     disclaimer: DISCLAIMER,
+    foodCoverage7d: foodCoverageNudge(foodDays7.length, 7),
   }
 }
 
@@ -658,6 +668,7 @@ export async function getRollingEnergyRecap(
     calibration: WeightCalibration | null
     thyroidContext: SchildklierRead | null
     windowDays: number
+    foodCoverage: FoodCoverageNudge
   }
 > {
   const day =
@@ -799,6 +810,7 @@ export async function getRollingEnergyRecap(
     calibration,
     thyroidContext,
     windowDays: daysBack,
+    foodCoverage: foodCoverageNudge(foodByDate.size, daysBack),
   }
 }
 
@@ -809,6 +821,7 @@ export async function getWeekEnergyRecap(
     calibration: WeightCalibration | null
     thyroidContext: SchildklierRead | null
     windowDays: number
+    foodCoverage: FoodCoverageNudge
   }
 > {
   return getRollingEnergyRecap(7, asOf)
@@ -821,6 +834,7 @@ export async function getMonthEnergyRecap(
     calibration: WeightCalibration | null
     thyroidContext: SchildklierRead | null
     windowDays: number
+    foodCoverage: FoodCoverageNudge
   }
 > {
   return getRollingEnergyRecap(30, asOf)

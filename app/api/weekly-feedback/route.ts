@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { buildCockpitWindow } from '@/lib/engines/cockpitData'
-import { detectSignals } from '@/lib/signals/detectSignals'
+import { detectSignals, type LabSignalContext } from '@/lib/signals/detectSignals'
 import { interventionsFor } from '@/lib/signals/interventions'
 import { listTrials } from '@/lib/signals/trialStore'
 import { rollingWindow } from '@/lib/timeWindow'
 import { prisma } from '@/lib/db'
+import { loadBloodworkLatestSummary } from '@/lib/bloodworkLatestSummary'
+import { normalizeMarkerCode, type RefFlag } from '@/lib/bloodworkFlags'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +17,21 @@ function safeParse<T>(raw: string | null | undefined, fallback: T): T {
   } catch {
     return fallback
   }
+}
+
+function daysBetween(fromYmd: string, toYmd: string): number | null {
+  const a = Date.parse(`${fromYmd}T12:00:00Z`)
+  const b = Date.parse(`${toYmd}T12:00:00Z`)
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null
+  return Math.round((b - a) / 86_400_000)
+}
+
+function flagForCode(
+  markers: { code: string; flag: RefFlag }[],
+  code: string,
+): RefFlag | null {
+  const hit = markers.find(m => normalizeMarkerCode(m.code) === code)
+  return hit?.flag ?? null
 }
 
 /** WP 4.5 — four-line week cycle + stored weekly-feedback report. */
@@ -40,7 +57,10 @@ export async function GET(req: Request) {
     }
 
     const win = rollingWindow(7)
-    const cockpit = await buildCockpitWindow({ from: win.from, to: win.to, asOf: win.to })
+    const [cockpit, labsSummary] = await Promise.all([
+      buildCockpitWindow({ from: win.from, to: win.to, asOf: win.to }),
+      loadBloodworkLatestSummary(),
+    ])
     const days = (cockpit.series || []).map(s => ({
       date: s.date,
       sleepHours: s.sleepHours,
@@ -52,7 +72,19 @@ export async function GET(req: Request) {
       energyDelta: s.energyDelta,
       scaleKg: null as number | null,
     }))
-    const signals = detectSignals(days)
+
+    let labs: LabSignalContext | null = null
+    if (labsSummary.present) {
+      labs = {
+        drawDate: labsSummary.drawDate,
+        ferritinFlag: flagForCode(labsSummary.markers, 'ferritin'),
+        tshFlag: flagForCode(labsSummary.markers, 'tsh'),
+        panelAgeDays:
+          labsSummary.drawDate != null ? daysBetween(labsSummary.drawDate, win.to) : null,
+      }
+    }
+
+    const signals = detectSignals(days, labs)
     const interventions = interventionsFor(signals.map(s => s.id))
     const trials = listTrials()
     const lastTrial = [...trials].reverse().find(t => true) ?? null

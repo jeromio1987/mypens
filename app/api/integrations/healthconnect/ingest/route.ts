@@ -117,6 +117,8 @@ export async function POST(request: Request) {
         ok: true,
         stored: 0,
         skipped: 0,
+        skippedAlreadyKnown: 0,
+        needsLabel: 0,
         read: 0,
         imported: 0,
         autoImport,
@@ -145,6 +147,8 @@ export async function POST(request: Request) {
         ok: true,
         stored: 0,
         skipped: 0,
+        skippedAlreadyKnown: 0,
+        needsLabel: 0,
         read: 0,
         imported: 0,
         autoImport,
@@ -165,6 +169,8 @@ export async function POST(request: Request) {
 
     let stored = 0
     let skipped = 0
+    let skippedAlreadyKnown = 0
+    let needsLabel = 0
     let imported = 0
     const autoImportDrafts: DraftItem[] = []
 
@@ -172,13 +178,16 @@ export async function POST(request: Request) {
       for (const s of sessions) {
         if (!s?.id || !s.startTime || !s.exerciseType) {
           skipped++
+          skippedAlreadyKnown++
           continue
         }
         if (skippedSet.has(s.id)) {
           skipped++
+          skippedAlreadyKnown++
           continue
         }
         const draft = mapSessionToDraft(s)
+        const rawLabel = isRawTypeLabel(draft.exercise)
         const cal =
           draft.calories ??
           (s.totalEnergyKcal != null && s.totalEnergyKcal > 0 ? Math.round(s.totalEnergyKcal) : 0)
@@ -211,8 +220,13 @@ export async function POST(request: Request) {
               },
             })
             stored++
+            if (isRawTypeLabel(draft.exercise) || isRawTypeLabel(existingTe.exercise)) {
+              needsLabel++
+            }
           } else {
             skipped++
+            skippedAlreadyKnown++
+            if (isRawTypeLabel(existingTe.exercise)) needsLabel++
           }
           continue
         }
@@ -231,13 +245,14 @@ export async function POST(request: Request) {
             externalRaw: draft.externalRaw,
             calories: draft.calories ?? (cal > 0 ? cal : null),
           })
+          if (rawLabel) needsLabel++
           continue
         }
         const existing = await prisma.pushedWorkout.findUnique({
           where: {
             source_externalId: { source: 'healthconnect', externalId: draft.externalId },
           },
-          select: { id: true, calories: true },
+          select: { id: true, calories: true, exercise: true },
         })
         if (existing) {
           const oldCal = existing.calories ?? 0
@@ -255,8 +270,11 @@ export async function POST(request: Request) {
               },
             })
             stored++
+            if (rawLabel || isRawTypeLabel(existing.exercise)) needsLabel++
           } else {
             skipped++
+            skippedAlreadyKnown++
+            if (rawLabel || isRawTypeLabel(existing.exercise)) needsLabel++
           }
           continue
         }
@@ -275,10 +293,13 @@ export async function POST(request: Request) {
             },
           })
           stored++
+          if (rawLabel) needsLabel++
         } catch (e) {
           const code = (e as { code?: string })?.code
-          if (code === 'P2002') skipped++
-          else throw e
+          if (code === 'P2002') {
+            skipped++
+            skippedAlreadyKnown++
+          } else throw e
         }
       }
 
@@ -286,6 +307,7 @@ export async function POST(request: Request) {
         const result = await importDrafts('healthconnect', autoImportDrafts)
         imported = result.created
         skipped += result.skipped
+        skippedAlreadyKnown += result.skipped
         stored = result.created + result.updated
         const ids = autoImportDrafts.map(d => d.externalId)
         await prisma.pushedWorkout.deleteMany({
@@ -320,6 +342,8 @@ export async function POST(request: Request) {
       ok: true,
       stored,
       skipped,
+      skippedAlreadyKnown,
+      needsLabel,
       imported,
       autoImport: true,
       dayMetrics: dayMetricsUpserted,

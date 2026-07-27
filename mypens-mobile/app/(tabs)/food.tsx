@@ -25,6 +25,7 @@ import { Feather, Ionicons } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
+import { continental as C } from '@/constants/continental'
 import { shiftDateStr, today } from '@/lib/timeWindow'
 import {
   pensFetch,
@@ -42,6 +43,7 @@ import { fuelingRead } from '@/lib/fuelingRead'
 import { DateNavBar, shiftIso } from '@/components/DateNavBar'
 import { FoodIncompleteMobile } from '@/components/FoodIncompleteMobile'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
+import { DESTINATIONS } from '@/lib/destinations'
 
 const MOD = MODULE_COLORS.food
 const TARGETS_KEY = '@mypens/food_targets'
@@ -177,6 +179,12 @@ export default function FoodScreen() {
     deviceTotal: number | null
     sources: Array<{ label: string; kcal: number; detail?: string; origin?: string }>
     disclaimer?: string
+    foodCoverage7d?: {
+      loggedDays: number
+      windowDays: number
+      thin: boolean
+      message: string | null
+    } | null
   } | null>(null)
   const [showEnergyHelp, setShowEnergyHelp] = useState(false)
   const [weekEnergy, setWeekEnergy] = useState<{
@@ -364,6 +372,18 @@ export default function FoodScreen() {
               deviceTotal: j.deviceRef?.totalKcal ?? null,
               sources: Array.isArray(j.sources) ? j.sources : [],
               disclaimer: typeof j.disclaimer === 'string' ? j.disclaimer : undefined,
+              foodCoverage7d:
+                j.foodCoverage7d && typeof j.foodCoverage7d === 'object'
+                  ? {
+                      loggedDays: Number(j.foodCoverage7d.loggedDays) || 0,
+                      windowDays: Number(j.foodCoverage7d.windowDays) || 7,
+                      thin: Boolean(j.foodCoverage7d.thin),
+                      message:
+                        typeof j.foodCoverage7d.message === 'string'
+                          ? j.foodCoverage7d.message
+                          : null,
+                    }
+                  : null,
             })
           }
         }
@@ -1197,18 +1217,19 @@ export default function FoodScreen() {
 
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={[styles.container, { backgroundColor: C.bg }]}
       contentContainerStyle={{ paddingTop: topInset + 16, paddingBottom: insets.bottom + 100 }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={MOD.primary} />}
+      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.cream} />}
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.header}>
-        <View style={[styles.moduleTag, { backgroundColor: accentBg }]}>
-          <Ionicons name="restaurant-outline" size={16} color={MOD.primary} />
-          <Text style={[styles.moduleLabel, { color: MOD.primary }]}>Fueling</Text>
+        <View>
+          <Text style={styles.kicker}>The Continental · P.E.N.S.</Text>
+          <Text style={styles.title}>Fueling</Text>
+          <Text style={styles.sub}>{DESTINATIONS.find(d => d.id === 'fueling')!.blurb}</Text>
         </View>
-        <Pressable onPress={() => setShowTargets((s) => !s)}>
-          <Feather name="settings" size={20} color={colors.mutedForeground} />
+        <Pressable onPress={() => setShowTargets((s) => !s)} hitSlop={12}>
+          <Feather name="settings" size={20} color={C.creamMuted} />
         </Pressable>
       </View>
 
@@ -1216,7 +1237,7 @@ export default function FoodScreen() {
         <DateNavBar
           date={selectedDate}
           onChange={setSelectedDate}
-          accent={MOD.primary}
+          accent={C.cream}
           recentDates={last14.map(([d]) => d).reverse()}
         />
         {apiOk ? (
@@ -1225,8 +1246,8 @@ export default function FoodScreen() {
       </View>
 
       {(!isPensApiConfigured() || apiProbing || (apiProbe && apiProbe.status !== 'ok')) && (
-        <View style={[styles.warnCard, { borderColor: '#f59e0b', backgroundColor: colors.card }]}>
-          <Text style={[styles.warnTitle, { color: colors.foreground }]}>
+        <View style={[styles.warnCard, { backgroundColor: C.surfaceHigh }]}>
+          <Text style={[styles.warnTitle, { color: C.cream }]}>
             {!isPensApiConfigured() || apiProbe?.status === 'unconfigured'
               ? 'Connect to MY PENS'
               : apiProbing
@@ -1237,7 +1258,7 @@ export default function FoodScreen() {
                   ? 'API token mismatch'
                   : 'Cannot reach MY PENS API'}
           </Text>
-          <Text style={[styles.warnBody, { color: colors.mutedForeground }]}>
+          <Text style={[styles.warnBody, { color: C.creamMuted }]}>
             {!isPensApiConfigured() || apiProbe?.status === 'unconfigured'
               ? 'Add EXPO_PUBLIC_PENS_API_URL and EXPO_PUBLIC_PENS_API_TOKEN to mypens-mobile/.env (token must match MOBILE_PENS_API_TOKEN on the Next server). Restart Expo after changing env.'
               : apiProbing
@@ -1290,6 +1311,19 @@ export default function FoodScreen() {
               <MacroBar label="Fat" current={totals.fatG} target={targets.fatG} color="#eab308" />
             </View>
           )}
+          {energy?.foodCoverage7d?.thin && energy.foodCoverage7d.message ? (
+            <Text
+              style={{
+                marginTop: 12,
+                color: colors.warning ?? '#f59e0b',
+                fontSize: 12,
+                fontFamily: 'Inter_400Regular',
+                lineHeight: 17,
+              }}
+            >
+              {energy.foodCoverage7d.message}
+            </Text>
+          ) : null}
         </View>
       )}
 
@@ -2222,28 +2256,31 @@ export default function FoodScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
-  moduleTag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, marginBottom: 12 },
+  kicker: { fontFamily: 'Inter_500Medium', fontSize: 10, letterSpacing: 2.2, textTransform: 'uppercase', color: C.creamDim },
+  title: { fontFamily: 'Inter_700Bold', fontSize: 28, color: C.cream, letterSpacing: 1, textTransform: 'uppercase', marginTop: 4 },
+  sub: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.creamMuted, marginTop: 4, maxWidth: 260 },
+  moduleTag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: C.radius },
   moduleLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  warnCard: { marginHorizontal: 16, marginBottom: 16, borderRadius: 16, borderWidth: 1, padding: 14 },
+  warnCard: { marginHorizontal: 16, marginBottom: 16, borderRadius: C.radius, padding: 14 },
   warnTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 6 },
   warnBody: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19 },
-  card: { marginHorizontal: 16, marginBottom: 18, borderRadius: 16, borderWidth: 1, padding: 18 },
+  card: { marginHorizontal: 16, marginBottom: 18, borderRadius: C.radius, borderWidth: 0, padding: 18 },
   sectionTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 12 },
   dateHint: { fontSize: 11, marginBottom: 4, lineHeight: 16 },
   mealRow: { flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' },
-  mealChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  mealChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: C.radius, borderWidth: 1 },
   mealChipText: { fontSize: 12, fontFamily: 'Inter_500Medium', textTransform: 'capitalize' },
-  input: { borderWidth: 1, borderRadius: 10, height: 44, paddingHorizontal: 12, fontSize: 15, marginBottom: 10 },
+  input: { borderWidth: 1, borderRadius: C.radius, height: 44, paddingHorizontal: 12, fontSize: 15, marginBottom: 10 },
   macroInputRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   macroInput: { flex: 1 },
   macroInputLabel: { fontSize: 11, fontFamily: 'Inter_500Medium', marginBottom: 4 },
-  macroInputField: { borderWidth: 1, borderRadius: 8, height: 38, paddingHorizontal: 8, fontSize: 14, textAlign: 'center' },
+  macroInputField: { borderWidth: 1, borderRadius: C.radius, height: 38, paddingHorizontal: 8, fontSize: 14, textAlign: 'center' },
   detailedToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   detailedLabel: { fontSize: 13, fontFamily: 'Inter_400Regular' },
-  submitBtn: { height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Inter_600SemiBold' },
-  secondaryBtn: { height: 44, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  submitBtn: { height: 48, borderRadius: C.radius, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  submitText: { color: '#2F312E', fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  secondaryBtn: { height: 44, borderRadius: C.radius, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   secondaryBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   aiMeta: { fontSize: 11, marginTop: 8 },
   aiSummary: { fontSize: 12, marginTop: 6, lineHeight: 17 },
@@ -2253,8 +2290,8 @@ const styles = StyleSheet.create({
   macroBarRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   macroBarLabel: { fontSize: 12, fontFamily: 'Inter_500Medium' },
   macroBarVal: { fontSize: 12, fontFamily: 'Inter_500Medium' },
-  macroBarBg: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  macroBarFill: { height: 6, borderRadius: 3 },
+  macroBarBg: { height: 6, borderRadius: C.radius, overflow: 'hidden' },
+  macroBarFill: { height: 6, borderRadius: C.radius },
   mealHeader: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginBottom: 8, textTransform: 'capitalize' },
   entryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 0 },
   entryInfo: { flex: 1 },
@@ -2262,7 +2299,7 @@ const styles = StyleSheet.create({
   entrySub: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   targetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   targetLabel: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  numInputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, height: 36, minWidth: 80 },
+  numInputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: C.radius, paddingHorizontal: 10, height: 36, minWidth: 80 },
   numInput: { fontSize: 14, fontFamily: 'Inter_400Regular', minWidth: 40, textAlign: 'right' },
   numUnit: { fontSize: 12, marginLeft: 4 },
   chartTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 12 },
@@ -2270,12 +2307,7 @@ const styles = StyleSheet.create({
   readVerdict: { fontSize: 20, fontFamily: 'Inter_600SemiBold', marginBottom: 10, lineHeight: 26 },
   readCause: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    maxWidth: '100%',
-  },
+  chip: { borderWidth: 1, borderRadius: C.radius, paddingHorizontal: 12, paddingVertical: 8, maxWidth: '100%' },
   chipText: { fontSize: 13, fontFamily: 'Inter_500Medium', maxWidth: 220 },
 })
+

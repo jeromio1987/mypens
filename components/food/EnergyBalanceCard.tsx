@@ -36,6 +36,12 @@ type Balance = {
   neatDetail?: string
   deviceRef: DeviceRef | null
   disclaimer: string
+  foodCoverage7d?: {
+    loggedDays: number
+    windowDays: number
+    thin: boolean
+    message: string | null
+  }
 }
 
 export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string; refresh?: number }) {
@@ -149,6 +155,15 @@ export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string;
           )}
         </div>
       </div>
+
+      {data.foodCoverage7d?.thin && data.foodCoverage7d.message && (
+        <div className="text-xs text-amber-200/90 bg-amber-950/30 border border-amber-500/25 px-3 py-2">
+          {data.foodCoverage7d.message}{' '}
+          <Link href="/food" className="underline text-amber-100">
+            Log food →
+          </Link>
+        </div>
+      )}
 
       {data.incompleteCapture && (
         <div className="text-xs text-ct-blood bg-ct-bloodc/40 px-3 py-2 space-y-2">

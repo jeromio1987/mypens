@@ -249,7 +249,16 @@ export async function ensureHealthConnectPermissions(opts?: {
 }
 
 export type HcSyncResult =
-  | { ok: true; stored: number; skipped: number; read: number; imported?: number; autoImport?: boolean }
+  | {
+      ok: true
+      stored: number
+      skipped: number
+      read: number
+      imported?: number
+      autoImport?: boolean
+      skippedAlreadyKnown?: number
+      needsLabel?: number
+    }
   | { ok: false; error: string }
 
 /**
@@ -757,6 +766,8 @@ export async function syncHealthConnectSessions(): Promise<HcSyncResult> {
     ok?: boolean
     stored?: number
     skipped?: number
+    skippedAlreadyKnown?: number
+    needsLabel?: number
     imported?: number
     autoImport?: boolean
     error?: string
@@ -774,6 +785,8 @@ export async function syncHealthConnectSessions(): Promise<HcSyncResult> {
     ok: true,
     stored: body.stored ?? 0,
     skipped: body.skipped ?? 0,
+    skippedAlreadyKnown: body.skippedAlreadyKnown ?? body.skipped ?? 0,
+    needsLabel: body.needsLabel ?? 0,
     read: sessions.length,
     imported: body.imported ?? 0,
     autoImport: body.autoImport ?? false,

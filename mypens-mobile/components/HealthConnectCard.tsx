@@ -36,10 +36,17 @@ function formatWorkoutStatus(result: Extract<HcSyncResult, { ok: true }>): strin
   if (result.read === 0) {
     return 'Workouts: no sessions in HC (last 14 days)'
   }
+  const known = result.skippedAlreadyKnown ?? result.skipped
+  const needs = result.needsLabel ?? 0
+  const parts: string[] = []
   if (result.autoImport) {
-    return `Workouts: ${result.imported ?? result.stored} imported, ${result.skipped} skipped`
+    parts.push(`${result.imported ?? result.stored} imported`)
+  } else {
+    parts.push(`${result.stored} new`)
   }
-  return `Workouts: ${result.stored} new, ${result.skipped} skipped`
+  if (known > 0) parts.push(`${known} already known`)
+  if (needs > 0) parts.push(`${needs} need a label`)
+  return `Workouts: ${parts.join(', ')}`
 }
 
 function formatSleepStatus(result: HcSleepSyncResult): string {

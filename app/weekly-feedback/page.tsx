@@ -133,9 +133,12 @@ export default function WeeklyFeedbackPage() {
     proof: string
     unknowns?: string[]
     signals?: { id: string; label: string; evidence: string }[]
+    interventions?: { signalId: string; action: string; horizonDays: number }[]
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [trialBusy, setTrialBusy] = useState<string | null>(null)
+  const [trialMsg, setTrialMsg] = useState<string | null>(null)
 
   const runFetch = useCallback(() => {
     return fetch('/api/weekly-feedback')
@@ -157,6 +160,31 @@ export default function WeeklyFeedbackPage() {
     setError(false)
     runFetch()
   }, [runFetch])
+
+  const startTrial = async (signalId: string) => {
+    const plan = cycle?.interventions?.find(i => i.signalId === signalId)
+    if (!plan) return
+    setTrialBusy(signalId)
+    setTrialMsg(null)
+    try {
+      const res = await fetch('/api/intervention-trials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signalId: plan.signalId,
+          action: plan.action,
+          horizonDays: plan.horizonDays || 14,
+        }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'failed')
+      setTrialMsg(`Trial started · due ${j.trial?.dueAt ?? '—'}`)
+    } catch (e: unknown) {
+      setTrialMsg(e instanceof Error ? e.message : 'Trial failed')
+    } finally {
+      setTrialBusy(null)
+    }
+  }
 
   const work = report?.metrics?.work
   const health = report?.metrics?.health
@@ -205,13 +233,30 @@ export default function WeeklyFeedbackPage() {
             <p className="text-sm text-pens-cream"><span className="text-pens-cream/40">Proof — </span>{cycle.proof}</p>
             {cycle.signals && cycle.signals.length > 0 && (
               <ul className="mt-2 space-y-1.5 border-t border-pens-muted/20 pt-3">
-                {cycle.signals.map(s => (
-                  <li key={s.id} className="text-xs text-pens-cream/60">
-                    <span className="text-pens-cream/90 font-medium">{s.label}</span> — {s.evidence}
-                  </li>
-                ))}
+                {cycle.signals.map(s => {
+                  const labTrial =
+                    s.id === 'iron_low_vs_load' || s.id === 'thyroid_out_of_ref'
+                  return (
+                    <li key={s.id} className="text-xs text-pens-cream/60 space-y-1">
+                      <p>
+                        <span className="text-pens-cream/90 font-medium">{s.label}</span> — {s.evidence}
+                      </p>
+                      {labTrial && (
+                        <button
+                          type="button"
+                          disabled={trialBusy != null}
+                          onClick={() => void startTrial(s.id)}
+                          className="text-[10px] px-2 py-1 rounded-md border border-amber-500/40 text-amber-200 hover:bg-amber-500/10 disabled:opacity-50"
+                        >
+                          {trialBusy === s.id ? '…' : 'Start 14d trial'}
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             )}
+            {trialMsg && <p className="text-xs text-amber-200/80">{trialMsg}</p>}
             {cycle.unknowns && cycle.unknowns.length > 0 && (
               <p className="text-xs text-amber-300/80">Gaps: {cycle.unknowns.join('; ')}</p>
             )}

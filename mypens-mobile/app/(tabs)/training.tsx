@@ -24,6 +24,8 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { usePensSync } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
+import { continental as C } from '@/constants/continental'
+import { DESTINATIONS } from '@/lib/destinations'
 import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
@@ -311,7 +313,7 @@ export default function TrainingScreen() {
 
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={[styles.container, { backgroundColor: C.bg }]}
       contentContainerStyle={{ paddingTop: topInset + 16, paddingBottom: insets.bottom + 100 }}
       refreshControl={
         <RefreshControl
@@ -320,23 +322,24 @@ export default function TrainingScreen() {
             void refetch()
             void refetchWeekly()
           }}
-          tintColor={MOD.primary}
+          tintColor={C.cream}
         />
       }
       keyboardShouldPersistTaps="handled"
     >
       {/* Header */}
       <View style={styles.header}>
-        <View style={[styles.moduleTag, { backgroundColor: accentBg }]}>
-          <MaterialCommunityIcons name="weight-lifter" size={16} color={MOD.primary} />
-          <Text style={[styles.moduleLabel, { color: MOD.primary }]}>Training</Text>
+        <View>
+          <Text style={styles.kicker}>The Continental · P.E.N.S.</Text>
+          <Text style={styles.title}>Train</Text>
+          <Text style={styles.sub}>{DESTINATIONS.find(d => d.id === 'train')!.blurb}</Text>
         </View>
         {todayVolume > 0 && (
           <View style={styles.volumeWrap}>
-            <Text style={[styles.volumeValue, { color: colors.foreground }]}>
+            <Text style={[styles.volumeValue, { color: C.cream }]}>
               {Math.round(todayVolume).toLocaleString()} kg
             </Text>
-            <Text style={[styles.volumeSub, { color: colors.mutedForeground }]}>today's volume</Text>
+            <Text style={[styles.volumeSub, { color: C.creamMuted }]}>today's volume</Text>
           </View>
         )}
       </View>
@@ -606,33 +609,36 @@ export default function TrainingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
-  moduleTag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, marginBottom: 12 },
+  kicker: { fontFamily: 'Inter_500Medium', fontSize: 10, letterSpacing: 2.2, textTransform: 'uppercase', color: C.creamDim },
+  title: { fontFamily: 'Inter_700Bold', fontSize: 28, color: C.cream, letterSpacing: 1, textTransform: 'uppercase', marginTop: 4 },
+  sub: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.creamMuted, marginTop: 4, maxWidth: 220 },
+  moduleTag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: C.radius },
   moduleLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   volumeWrap: { alignItems: 'flex-end' },
   volumeValue: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   volumeSub: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  card: { marginHorizontal: 16, marginBottom: 18, borderRadius: 16, borderWidth: 1, padding: 18 },
+  card: { marginHorizontal: 16, marginBottom: 18, borderRadius: C.radius, borderWidth: 0, padding: 18 },
   sectionTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 12 },
   readEyebrow: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 1.1, marginBottom: 8 },
   fieldLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', marginBottom: 6 },
-  input: { borderWidth: 1, borderRadius: 10, height: 44, paddingHorizontal: 12, fontSize: 15 },
-  suggestions: { borderWidth: 1, borderRadius: 10, marginTop: 4, overflow: 'hidden' },
+  input: { borderWidth: 1, borderRadius: C.radius, height: 44, paddingHorizontal: 12, fontSize: 15 },
+  suggestions: { borderWidth: 1, borderRadius: C.radius, marginTop: 4, overflow: 'hidden' },
   suggestionItem: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1 },
   suggestionText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
   setsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   setsField: { flex: 1 },
-  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 10, borderColor: '#e2e8f0', paddingHorizontal: 8, height: 44 },
-  stepBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: C.radius, borderColor: '#e2e8f0', paddingHorizontal: 8, height: 44 },
+  stepBtn: { width: 28, height: 28, borderRadius: C.radius, alignItems: 'center', justifyContent: 'center' },
   stepValue: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  weightInput: { borderWidth: 1, borderRadius: 10, height: 44, paddingHorizontal: 12, fontSize: 18, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  volumePreview: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 4 },
+  weightInput: { borderWidth: 1, borderRadius: C.radius, height: 44, paddingHorizontal: 12, fontSize: 18, fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  volumePreview: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: C.radius, paddingHorizontal: 12, paddingVertical: 8, marginTop: 4 },
   volumePreviewLabel: { fontSize: 13, fontFamily: 'Inter_500Medium' },
   volumePreviewValue: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   rpeRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 2 },
-  rpeChip: { width: 44, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1 },
-  submitBtn: { height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  rpeChip: { width: 44, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: C.radius, borderWidth: 1 },
+  submitBtn: { height: 48, borderRadius: C.radius, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  submitText: { color: '#2F312E', fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   sessionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1 },
   sessionInfo: { flex: 1 },
   sessionExercise: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
@@ -641,3 +647,4 @@ const styles = StyleSheet.create({
   sessionVolume: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   chartTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 12 },
 })
+

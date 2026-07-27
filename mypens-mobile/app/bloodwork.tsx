@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useQuery } from '@tanstack/react-query'
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import * as ImagePicker from 'expo-image-picker'
 
 import {
   ApiGate,
@@ -12,7 +20,13 @@ import {
   SectionLabel,
 } from '@/components/continental'
 import { continental as C } from '@/constants/continental'
-import { isPensApiConfigured, pensFetch } from '@/lib/pensApi'
+import {
+  describePensError,
+  isPensApiConfigured,
+  pensFetch,
+  PENS_PHOTO_TIMEOUT_MS,
+} from '@/lib/pensApi'
+import { today } from '@/lib/timeWindow'
 
 type PanelListItem = {
   id: string
@@ -38,6 +52,34 @@ type PanelDetail = PanelListItem & {
   markers: Marker[]
 }
 
+type DraftMarker = {
+  code: string
+  label: string
+  valueNum: number | null
+  valueText: string | null
+  unit: string | null
+  refLow: number | null
+  refHigh: number | null
+}
+
+type PhotoDraft = {
+  drawDate: string | null
+  labName: string | null
+  fasting: boolean | null
+  markers: DraftMarker[]
+  disclaimer?: string
+}
+
+type MarkerDelta = {
+  code: string
+  label: string
+  previous: number | null
+  latest: number | null
+  delta: number | null
+  unit: string | null
+  trend: 'up' | 'down' | 'flat' | 'unknown'
+}
+
 function markerCritical(m: Marker): boolean {
   if (m.valueNum == null) return false
   if (m.refHigh != null && m.valueNum > m.refHigh) return true
@@ -53,9 +95,19 @@ function formatValue(m: Marker): string {
   return m.valueText?.trim() || '—'
 }
 
+function fmtDelta(n: number): string {
+  return n > 0 ? `+${n}` : String(n)
+}
+
 export default function BloodworkScreen() {
   const configured = isPensApiConfigured()
+  const qc = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [draft, setDraft] = useState<PhotoDraft | null>(null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const [trialBusy, setTrialBusy] = useState<string | null>(null)
 
   const listQ = useQuery({
     queryKey: ['bloodwork-panels'],
@@ -87,9 +139,166 @@ export default function BloodworkScreen() {
     },
   })
 
+  const deltaQ = useQuery({
+    queryKey: ['bloodwork-delta', selectedId],
+    enabled: configured && Boolean(selectedId),
+    queryFn: async () => {
+      const res = await pensFetch(`/api/bloodwork/panels/${selectedId}/delta`)
+      if (!res.ok) return { present: false, deltas: [] as MarkerDelta[], summaryLine: '' }
+      return (await res.json()) as {
+        present: boolean
+        deltas: MarkerDelta[]
+        summaryLine: string
+        previousDrawDate?: string | null
+      }
+    },
+  })
+
   const panels = listQ.data ?? []
   const panel = detailQ.data
   const criticalCount = panel?.markers.filter(markerCritical).length ?? 0
+
+  const runScan = async (result: ImagePicker.ImagePickerResult) => {
+    if (result.canceled || !result.assets[0]) return
+    const asset = result.assets[0]
+    setAnalyzing(true)
+    setPhotoError(null)
+    setDraft(null)
+    try {
+      const form = new FormData()
+      const mime = asset.mimeType ?? 'image/jpeg'
+      const ext = mime.includes('png') ? 'png' : 'jpg'
+      form.append('file', {
+        uri: asset.uri,
+        name: `lab.${ext}`,
+        type: mime,
+      } as unknown as Blob)
+      const res = await pensFetch('/api/bloodwork/photo-analyze', {
+        method: 'POST',
+        body: form,
+        timeoutMs: PENS_PHOTO_TIMEOUT_MS,
+      })
+      const data = (await res.json()) as PhotoDraft & { error?: string }
+      if (!res.ok) throw new Error(data.error || `Analyze failed (${res.status})`)
+      setDraft({
+        drawDate: data.drawDate ?? null,
+        labName: data.labName ?? null,
+        fasting: typeof data.fasting === 'boolean' ? data.fasting : null,
+        markers: Array.isArray(data.markers) ? data.markers : [],
+        disclaimer: data.disclaimer,
+      })
+    } catch (e: unknown) {
+      setPhotoError(describePensError(e))
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  const takePhoto = async () => {
+    if (!configured) {
+      Alert.alert('API not configured', 'Set EXPO_PUBLIC_PENS_API_URL + TOKEN, then restart Expo.')
+      return
+    }
+    const perm = await ImagePicker.requestCameraPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow camera access to scan a lab photo.')
+      return
+    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 })
+    await runScan(result)
+  }
+
+  const pickPhoto = async () => {
+    if (!configured) {
+      Alert.alert('API not configured', 'Set EXPO_PUBLIC_PENS_API_URL + TOKEN, then restart Expo.')
+      return
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo library access to scan a lab photo.')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 })
+    await runScan(result)
+  }
+
+  const confirmDraft = async () => {
+    if (!draft || saving) return
+    const date =
+      draft.drawDate && /^\d{4}-\d{2}-\d{2}$/.test(draft.drawDate)
+        ? draft.drawDate
+        : today()
+    setSaving(true)
+    setPhotoError(null)
+    try {
+      const res = await pensFetch('/api/bloodwork/panels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          drawDate: date,
+          labName: draft.labName?.trim() || null,
+          fasting: draft.fasting ?? false,
+          markers: draft.markers.map((m, i) => ({
+            code: m.code,
+            label: m.label,
+            valueNum: m.valueNum,
+            valueText: m.valueText,
+            unit: m.unit,
+            refLow: m.refLow,
+            refHigh: m.refHigh,
+            sortOrder: i,
+          })),
+        }),
+      })
+      const d = (await res.json()) as { id?: string; error?: string }
+      if (!res.ok || !d.id) throw new Error(d.error || 'Create failed')
+      setDraft(null)
+      setSelectedId(d.id)
+      void qc.invalidateQueries({ queryKey: ['bloodwork-panels'] })
+      void qc.invalidateQueries({ queryKey: ['bloodwork-panel', d.id] })
+    } catch (e: unknown) {
+      setPhotoError(describePensError(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const startLabTrial = async (signalId: 'iron_low_vs_load' | 'thyroid_out_of_ref') => {
+    setTrialBusy(signalId)
+    try {
+      const action =
+        signalId === 'iron_low_vs_load'
+          ? 'Treat ferritin + load as soft confounders only — ease hard volume one week and review labs with your clinician; not medical advice.'
+          : 'TSH flag is educational context only — do not change BMR or cut calories from labs; discuss with your clinician.'
+      const res = await pensFetch('/api/intervention-trials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signalId, action, horizonDays: 14 }),
+      })
+      const j = (await res.json().catch(() => ({}))) as { error?: string; trial?: { dueAt?: string } }
+      if (!res.ok) throw new Error(j.error || `Trial failed (${res.status})`)
+      Alert.alert('Trial started', `14-day soft trial due ${j.trial?.dueAt ?? 'soon'} — not medical advice.`)
+    } catch (e: unknown) {
+      Alert.alert('Trial', describePensError(e))
+    } finally {
+      setTrialBusy(null)
+    }
+  }
+
+  const ferritinLow = panel?.markers.some(
+    m =>
+      /ferritin/i.test(m.code) &&
+      m.valueNum != null &&
+      m.refLow != null &&
+      m.valueNum < m.refLow,
+  )
+  const tshOut = panel?.markers.some(
+    m =>
+      /^tsh$/i.test(m.code) &&
+      m.valueNum != null &&
+      ((m.refLow != null && m.valueNum < m.refLow) ||
+        (m.refHigh != null && m.valueNum > m.refHigh)),
+  )
 
   return (
     <ContinentalScreen
@@ -100,13 +309,69 @@ export default function BloodworkScreen() {
       onRefresh={() => {
         void listQ.refetch()
         void detailQ.refetch()
+        void deltaQ.refetch()
       }}
     >
       <ApiGate configured={configured}>
+        <SectionLabel>Photo capture</SectionLabel>
+        <View style={styles.photoRow}>
+          <Pressable
+            onPress={() => void takePhoto()}
+            disabled={analyzing}
+            style={[styles.photoBtn, analyzing && { opacity: 0.5 }]}
+          >
+            <Text style={styles.photoBtnText}>{analyzing ? 'Reading…' : 'Take photo'}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void pickPhoto()}
+            disabled={analyzing}
+            style={[styles.photoBtn, styles.photoBtnGhost, analyzing && { opacity: 0.5 }]}
+          >
+            <Text style={styles.photoBtnGhostText}>Pick photo</Text>
+          </Pressable>
+        </View>
+        {analyzing ? <ActivityIndicator color={C.cream} style={{ marginVertical: 8 }} /> : null}
+        {photoError ? <EmptyHint>{photoError}</EmptyHint> : null}
+        {draft ? (
+          <Block elevated>
+            <Text style={styles.draftTitle}>
+              Draft · {draft.markers.length} markers
+              {draft.drawDate ? ` · ${draft.drawDate}` : ''}
+            </Text>
+            {draft.markers.slice(0, 12).map((m, i) => (
+              <View key={`${m.code}-${i}`} style={styles.draftRow}>
+                <Text style={styles.draftLabel} numberOfLines={1}>
+                  {m.label}
+                </Text>
+                <Text style={styles.draftValue}>
+                  {m.valueNum != null ? m.valueNum : m.valueText ?? '—'}
+                  {m.unit ? ` ${m.unit}` : ''}
+                </Text>
+              </View>
+            ))}
+            {draft.markers.length > 12 ? (
+              <Text style={styles.markerMeta}>…and {draft.markers.length - 12} more</Text>
+            ) : null}
+            {draft.disclaimer ? <Text style={styles.notes}>{draft.disclaimer}</Text> : null}
+            <View style={styles.photoRow}>
+              <Pressable
+                onPress={() => void confirmDraft()}
+                disabled={saving || draft.markers.length === 0}
+                style={[styles.photoBtn, (saving || draft.markers.length === 0) && { opacity: 0.5 }]}
+              >
+                <Text style={styles.photoBtnText}>{saving ? 'Saving…' : 'Confirm & save'}</Text>
+              </Pressable>
+              <Pressable onPress={() => setDraft(null)} style={[styles.photoBtn, styles.photoBtnGhost]}>
+                <Text style={styles.photoBtnGhostText}>Discard</Text>
+              </Pressable>
+            </View>
+          </Block>
+        ) : null}
+
         {listQ.isLoading ? <LoadingBlock /> : null}
         {listQ.error ? <EmptyHint>{(listQ.error as Error).message}</EmptyHint> : null}
-        {!listQ.isLoading && panels.length === 0 ? (
-          <EmptyHint>No panels yet. Add labs on the web /bloodwork ledger.</EmptyHint>
+        {!listQ.isLoading && panels.length === 0 && !draft ? (
+          <EmptyHint>No panels yet. Capture a lab photo or add on web /bloodwork.</EmptyHint>
         ) : null}
 
         {panels.length > 0 ? (
@@ -142,12 +407,83 @@ export default function BloodworkScreen() {
               <MetricChip label="Fasting" value={panel.fasting ? 'Yes' : 'No'} />
             </View>
 
+            {deltaQ.data?.present && deltaQ.data.deltas.length > 0 ? (
+              <>
+                <SectionLabel
+                  children={
+                    deltaQ.data.previousDrawDate
+                      ? `vs prior ${deltaQ.data.previousDrawDate}`
+                      : 'vs prior'
+                  }
+                />
+                <Block>
+                  {deltaQ.data.deltas
+                    .filter(d => d.delta != null)
+                    .slice(0, 8)
+                    .map(d => (
+                      <View key={d.code} style={styles.draftRow}>
+                        <Text style={styles.draftLabel} numberOfLines={1}>
+                          {d.label}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.draftValue,
+                            d.trend === 'up' && { color: C.oxblood },
+                            d.trend === 'down' && { color: '#7dd3c0' },
+                          ]}
+                        >
+                          {d.previous} → {d.latest}
+                          {d.unit ? ` ${d.unit}` : ''} ({fmtDelta(d.delta!)})
+                        </Text>
+                      </View>
+                    ))}
+                  <Text style={styles.notes}>
+                    Educational deltas only — not a diagnosis or medical trend.
+                  </Text>
+                </Block>
+              </>
+            ) : null}
+
+            {(ferritinLow || tshOut) && (
+              <Block>
+                <Text style={styles.draftTitle}>Soft n-of-1 trial</Text>
+                <Text style={styles.notes}>
+                  Educational only — start a 14-day file trial; not treatment advice.
+                </Text>
+                <View style={styles.photoRow}>
+                  {ferritinLow ? (
+                    <Pressable
+                      onPress={() => void startLabTrial('iron_low_vs_load')}
+                      disabled={trialBusy != null}
+                      style={[styles.photoBtn, trialBusy && { opacity: 0.5 }]}
+                    >
+                      <Text style={styles.photoBtnText}>
+                        {trialBusy === 'iron_low_vs_load' ? '…' : 'Start 14d iron trial'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {tshOut ? (
+                    <Pressable
+                      onPress={() => void startLabTrial('thyroid_out_of_ref')}
+                      disabled={trialBusy != null}
+                      style={[styles.photoBtn, styles.photoBtnGhost, trialBusy && { opacity: 0.5 }]}
+                    >
+                      <Text style={styles.photoBtnGhostText}>
+                        {trialBusy === 'thyroid_out_of_ref' ? '…' : 'Start 14d thyroid trial'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </Block>
+            )}
+
             <SectionLabel>Serum liabilities</SectionLabel>
             {panel.markers.length === 0 ? (
               <EmptyHint>No markers on this panel.</EmptyHint>
             ) : (
               panel.markers.map(m => {
                 const crit = markerCritical(m)
+                const delta = deltaQ.data?.deltas.find(d => d.code === m.code)
                 return (
                   <Block key={m.id} elevated={crit}>
                     <View style={styles.markerTop}>
@@ -164,6 +500,9 @@ export default function BloodworkScreen() {
                         ? ` · ref ${m.refLow ?? '—'}–${m.refHigh ?? '—'}${m.unit ? ` ${m.unit}` : ''}`
                         : ''}
                       {crit ? ' · OUT OF RANGE' : ''}
+                      {delta?.delta != null
+                        ? ` · Δ ${fmtDelta(delta.delta)} vs prior`
+                        : ''}
                     </Text>
                   </Block>
                 )
@@ -185,6 +524,52 @@ export default function BloodworkScreen() {
 }
 
 const styles = StyleSheet.create({
+  photoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  photoBtn: {
+    backgroundColor: C.oxblood,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  photoBtnGhost: {
+    backgroundColor: C.surfaceHigh,
+  },
+  photoBtnText: {
+    color: C.cream,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  photoBtnGhostText: {
+    color: C.cream,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  draftTitle: {
+    color: C.cream,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  draftRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
+  draftLabel: {
+    color: C.creamMuted,
+    fontSize: 12,
+    flex: 1,
+  },
+  draftValue: {
+    color: C.cream,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   drawRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -235,5 +620,6 @@ const styles = StyleSheet.create({
     color: C.cream,
     fontSize: 13,
     lineHeight: 18,
+    marginTop: 6,
   },
 })

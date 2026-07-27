@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getStaticMacroEventsInRange } from '@/lib/investing/macroStaticDates'
 import { shiftDateStr, today } from '@/lib/timeWindow'
+import { loadBloodworkLatestSummary } from '@/lib/bloodworkLatestSummary'
 
 export const dynamic = 'force-dynamic'
 
@@ -165,6 +166,21 @@ export async function GET() {
     if (latestRegime?.regime) {
       narrativeParts.push(`Investing regime: ${latestRegime.regime} (since ${latestRegime.effectiveDate}).`)
     }
+
+    const labsSummary = await loadBloodworkLatestSummary()
+    let labsLine: string | null = null
+    if (labsSummary.present && labsSummary.flaggedCount > 0) {
+      const names = labsSummary.markers
+        .filter(m => m.flag === 'below' || m.flag === 'above')
+        .map(m => m.label)
+        .slice(0, 3)
+      labsLine =
+        names.length > 0
+          ? `Labs: ${names.join(', ')}${labsSummary.flaggedCount > names.length ? ` +${labsSummary.flaggedCount - names.length}` : ''} outside listed ref (draw ${labsSummary.drawDate ?? '—'}) — soft context only, not diagnosis.`
+          : `Labs: ${labsSummary.flaggedCount} flagged marker(s) on latest panel — soft context only.`
+      narrativeParts.push(labsLine)
+    }
+
     const narrative = narrativeParts.join(' ')
 
     return NextResponse.json({
@@ -172,6 +188,7 @@ export async function GET() {
 
       narrative,
       priorities: priorities.slice(0, 6),
+      labsLine,
 
       sleep: sleep
         ? {

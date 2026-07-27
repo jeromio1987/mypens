@@ -69,6 +69,16 @@ type Cockpit = {
     narrative?: string
     rhrLadder?: { likelyDrinkingDays?: number; heavyStackDays?: number }
     hypotheses?: Array<{ id: string; label: string; confidence: number; text: string }>
+    labSoft?: {
+      present: boolean
+      panelId: string | null
+      drawDate: string | null
+      flaggedCount: number
+      chipLabel: string
+      summary: string
+      disclaimer: string
+      confidenceNote: string
+    }
   }
   periods: { deepAnalysis?: string; headline?: string }
   inventory: Record<string, number>
@@ -542,6 +552,41 @@ export default function PeriodCockpit() {
             <p className="text-sm text-pens-cream/80 whitespace-pre-wrap leading-relaxed">
               {cockpit.causal.narrative}
             </p>
+            {cockpit.causal.labSoft && (
+              <div className="rounded-xl border border-rose-500/25 bg-rose-950/20 p-4 space-y-2">
+                <p className="text-[10px] uppercase tracking-widest text-rose-300/90 font-semibold">
+                  Labs · what we don’t know
+                </p>
+                <p className="text-xs text-amber-200/80">{cockpit.causal.labSoft.confidenceNote}</p>
+                {cockpit.causal.labSoft.present ? (
+                  <>
+                    <p className="text-sm text-pens-cream/80 leading-relaxed">
+                      {cockpit.causal.labSoft.summary || cockpit.causal.labSoft.chipLabel}
+                    </p>
+                    <p className="text-[10px] text-pens-cream/40">
+                      Draw {cockpit.causal.labSoft.drawDate ?? '—'}
+                      {cockpit.causal.labSoft.flaggedCount > 0
+                        ? ` · ${cockpit.causal.labSoft.flaggedCount} flagged`
+                        : ''}{' '}
+                      — soft confounder beside the causal strip, not a cause claim.
+                    </p>
+                    {cockpit.causal.labSoft.panelId ? (
+                      <Link
+                        href={`/bloodwork/${cockpit.causal.labSoft.panelId}`}
+                        className="inline-block text-xs text-rose-300/90 hover:text-rose-200"
+                      >
+                        Open Labs →
+                      </Link>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-sm text-pens-cream/55">{cockpit.causal.labSoft.confidenceNote}</p>
+                )}
+                <p className="text-[10px] text-pens-cream/35 leading-relaxed">
+                  {cockpit.causal.labSoft.disclaimer}
+                </p>
+              </div>
+            )}
             <ul className="space-y-3">
               {(cockpit.causal.hypotheses || []).map(h => (
                 <li key={h.id} className="text-sm border-l-2 border-pens-muted/40 pl-3">

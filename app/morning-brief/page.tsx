@@ -10,6 +10,7 @@ interface MorningBriefData {
   date: string
   narrative?: string
   priorities?: { rank: number; label: string; hint: string; module: string }[]
+  labsLine?: string | null
   sleep: {
     date: string
     hours: number
@@ -418,6 +419,12 @@ export default function MorningBriefPage() {
               <div className="bg-pens-navy/70 border border-pens-gold/25 rounded-2xl p-5">
                 <p className="text-[10px] uppercase tracking-widest text-pens-gold font-semibold mb-2">Today in one pass</p>
                 <p className="text-sm text-pens-cream/85 leading-relaxed">{data.narrative}</p>
+              </div>
+            )}
+            {data.labsLine && (
+              <div className="bg-rose-950/30 border border-rose-500/25 rounded-2xl px-5 py-3">
+                <p className="text-[10px] uppercase tracking-widest text-rose-300/90 font-semibold mb-1">Labs</p>
+                <p className="text-sm text-pens-cream/80 leading-relaxed">{data.labsLine}</p>
               </div>
             )}
             {data.priorities && data.priorities.length > 0 && (
