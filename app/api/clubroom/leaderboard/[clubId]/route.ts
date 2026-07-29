@@ -57,9 +57,13 @@ async function getScoreForUser(userId: string) {
   return { weeklyScore, currentStreak, medalsEarned }
 }
 
-export async function GET(_req: Request, { params }: { params: { clubId: string } }) {
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ clubId: string }> },
+) {
   try {
-    const clubId = Number(params.clubId)
+    const { clubId: clubIdRaw } = await params
+    const clubId = Number(clubIdRaw)
     if (isNaN(clubId)) return NextResponse.json({ error: 'Invalid clubId' }, { status: 400 })
 
     const members = await prisma.clubMember.findMany({
