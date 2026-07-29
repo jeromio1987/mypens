@@ -197,7 +197,7 @@ function computeMedals(data: {
 function buildWeeklyWrap(
   weightEntries: { date: string; trueWeightKg: number }[],
   trainingEntries: { date: string; volume: number }[],
-  sleepEntries: { hours: number; quality: number }[],
+  sleepEntries: { hours: number; quality: number | null }[],
   foodEntries: { date: string; kcal: number }[],
 ): WeeklyWrap {
   const start = rollingWindow(7).from
@@ -216,7 +216,9 @@ function buildWeeklyWrap(
   const trainingVolume   = Math.round(trainingEntries.reduce((s, e) => s + e.volume, 0))
 
   const sleepAvgHours   = avg(sleepEntries.map(e => e.hours))
-  const sleepAvgQuality = avg(sleepEntries.map(e => e.quality))
+  const sleepAvgQuality = avg(
+    sleepEntries.map(e => e.quality).filter((q): q is number => q != null),
+  )
 
   const kcalByDate: Record<string, number> = {}
   for (const e of foodEntries) kcalByDate[e.date] = (kcalByDate[e.date] ?? 0) + e.kcal
@@ -238,7 +240,7 @@ function buildWeeklyWrap(
 
 function buildReportToSelf(
   weightEntries: { date: string; scaleKg: number; trueWeightKg: number; activeConfounders?: number }[],
-  sleepEntries: { hours: number; quality: number }[],
+  sleepEntries: { hours: number; quality: number | null }[],
   trainingEntries: { date: string }[],
   foodEntries: { date: string; kcal: number }[],
 ): ReportCard {
@@ -250,8 +252,9 @@ function buildReportToSelf(
   const avgSleep = sleepEntries.length
     ? parseFloat((sleepEntries.reduce((s, e) => s + e.hours, 0) / sleepEntries.length).toFixed(1))
     : null
-  const avgQuality = sleepEntries.length
-    ? parseFloat((sleepEntries.reduce((s, e) => s + e.quality, 0) / sleepEntries.length).toFixed(1))
+  const qualities = sleepEntries.map(e => e.quality).filter((q): q is number => q != null)
+  const avgQuality = qualities.length
+    ? parseFloat((qualities.reduce((s, q) => s + q, 0) / qualities.length).toFixed(1))
     : null
 
   const sessions = new Set(trainingEntries.map(e => e.date)).size
