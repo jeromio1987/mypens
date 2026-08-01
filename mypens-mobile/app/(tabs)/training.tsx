@@ -22,19 +22,27 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
-import { usePensSync } from '@/hooks/usePensSync'
+import { usePensSync, flushOfflineQueueWithAlert } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
 import { continental as C } from '@/constants/continental'
 import { DESTINATIONS } from '@/lib/destinations'
 import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
-import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
+import { enqueueOp } from '@/lib/offlineQueue'
 import { PlannerWeekCard } from '@/components/PlannerWeekCard'
 import { OrphanActivitiesBanner } from '@/components/OrphanActivitiesBanner'
 import { TrainingReviewCard } from '@/components/TrainingReviewCard'
 import { HealthConnectCard } from '@/components/HealthConnectCard'
-import { mondayOf, today } from '@/lib/timeWindow'
+import { DateNavBar, shortLabel } from '@/components/DateNavBar'
+import { PensLogo } from '@/components/PensLogo'
+import { useSelectedDate } from '@/hooks/useSelectedDate'
+import {
+  TRAIN_COCKPIT_DAYS,
+  cockpitQueryKey,
+  fetchCockpitLive,
+} from '@/lib/cockpitWindow'
+import { mondayOf, rollingWindow, today } from '@/lib/timeWindow'
 
 const MOD = MODULE_COLORS.training
 const EXERCISES_KEY = '@mypens/recent_exercises'
@@ -62,7 +70,13 @@ export default function TrainingScreen() {
   const qc = useQueryClient()
   const useApi = isPensApiConfigured()
   const { pending, online, refresh: refreshQueue } = usePensSync()
-  const dayStr = today()
+  const { date: selectedDate, setDate: setSelectedDate, ready: dateReady } = useSelectedDate()
+  const dayStr = selectedDate
+  const isSelectedToday = selectedDate === today()
+  const sessionLabel = isSelectedToday
+    ? "Today's session"
+    : `Session · ${shortLabel(selectedDate)}`
+  const volumeSubLabel = isSelectedToday ? "today's volume" : 'session volume'
 
   const [exercise, setExercise] = useState('')
   const [sets, setSets] = useState('3')
@@ -108,6 +122,7 @@ export default function TrainingScreen() {
       if (error) throw error
       return data ?? []
     },
+    enabled: dateReady,
   })
 
   const {
@@ -145,6 +160,7 @@ export default function TrainingScreen() {
       if (error) throw error
       return (data ?? []) as TrainingEntry[]
     },
+    enabled: dateReady,
   })
 
   const mutation = useMutation({
@@ -209,7 +225,7 @@ export default function TrainingScreen() {
     onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       if (useApi) {
-        await flushOfflineQueue()
+        await flushOfflineQueueWithAlert()
         await refreshQueue()
       }
       qc.invalidateQueries({ queryKey: ['training'] })
@@ -253,7 +269,7 @@ export default function TrainingScreen() {
     onSuccess: async () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
       if (useApi) {
-        await flushOfflineQueue()
+        await flushOfflineQueueWithAlert()
         await refreshQueue()
       }
       qc.invalidateQueries({ queryKey: ['training'] })
@@ -273,34 +289,26 @@ export default function TrainingScreen() {
     frontColor: i === weekKeys.length - 1 ? MOD.primary : `${MOD.primary}80`,
   }))
 
-  const { data: loadBarData = [] } = useQuery({
-    queryKey: ['training-load-weeks', useApi],
+  // Same query key as TrainingReviewCard — one /api/period-review for Train tab.
+  const trainCockpit = rollingWindow(TRAIN_COCKPIT_DAYS)
+  const { data: cockpitLive } = useQuery({
+    queryKey: cockpitQueryKey(trainCockpit.from, trainCockpit.to),
     enabled: useApi,
-    queryFn: async () => {
-      const to = today()
-      const fromDate = new Date(`${to}T12:00:00`)
-      fromDate.setDate(fromDate.getDate() - 55)
-      const from = `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}-${String(fromDate.getDate()).padStart(2, '0')}`
-      const res = await pensFetch(
-        `/api/period-review?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-      )
-      if (!res.ok) return [] as { value: number; label: string; frontColor: string }[]
-      const j = (await res.json()) as {
-        cockpit?: { series?: { date: string; trainingLoad?: number }[] }
-      }
-      const map = new Map<string, number>()
-      for (const row of j.cockpit?.series ?? []) {
-        const key = mondayOf(row.date)
-        map.set(key, (map.get(key) ?? 0) + (Number(row.trainingLoad) || 0))
-      }
-      const keys = [...map.keys()].sort().slice(-8)
-      return keys.map((k, i) => ({
-        value: Math.round(map.get(k) ?? 0),
-        label: k.slice(5),
-        frontColor: i === keys.length - 1 ? '#38bdf8' : '#38bdf880',
-      }))
-    },
+    queryFn: () => fetchCockpitLive(trainCockpit.from, trainCockpit.to),
   })
+  const loadBarData = (() => {
+    const map = new Map<string, number>()
+    for (const row of cockpitLive?.cockpit?.series ?? []) {
+      const key = mondayOf(row.date)
+      map.set(key, (map.get(key) ?? 0) + (Number(row.trainingLoad) || 0))
+    }
+    const keys = [...map.keys()].sort().slice(-8)
+    return keys.map((k, i) => ({
+      value: Math.round(map.get(k) ?? 0),
+      label: k.slice(5),
+      frontColor: i === keys.length - 1 ? '#38bdf8' : '#38bdf880',
+    }))
+  })()
 
   const todayVolume = todayEntries.reduce((a, e) => a + e.volume, 0)
   const suggestions = recentExercises.filter((e) =>
@@ -310,6 +318,29 @@ export default function TrainingScreen() {
   const chartW = width - 48
   const accentBg = isDark ? MOD.bgDark : MOD.bg
   const topInset = Platform.OS === 'web' ? 67 : insets.top
+
+  if (!dateReady) {
+    return (
+      <ScrollView
+        style={[styles.container, { backgroundColor: C.bg }]}
+        contentContainerStyle={{ paddingTop: topInset + 16, paddingBottom: insets.bottom + 100 }}
+      >
+        <View style={styles.header}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+            <PensLogo size={40} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.kicker}>The Continental · P.E.N.S.</Text>
+              <Text style={styles.title}>Train</Text>
+              <Text style={styles.sub}>{DESTINATIONS.find(d => d.id === 'train')!.blurb}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={{ paddingVertical: 48, alignItems: 'center' }}>
+          <ActivityIndicator color={C.cream} />
+        </View>
+      </ScrollView>
+    )
+  }
 
   return (
     <ScrollView
@@ -329,19 +360,26 @@ export default function TrainingScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.kicker}>The Continental · P.E.N.S.</Text>
-          <Text style={styles.title}>Train</Text>
-          <Text style={styles.sub}>{DESTINATIONS.find(d => d.id === 'train')!.blurb}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+          <PensLogo size={40} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.kicker}>The Continental · P.E.N.S.</Text>
+            <Text style={styles.title}>Train</Text>
+            <Text style={styles.sub}>{DESTINATIONS.find(d => d.id === 'train')!.blurb}</Text>
+          </View>
         </View>
         {todayVolume > 0 && (
           <View style={styles.volumeWrap}>
             <Text style={[styles.volumeValue, { color: C.cream }]}>
               {Math.round(todayVolume).toLocaleString()} kg
             </Text>
-            <Text style={[styles.volumeSub, { color: C.creamMuted }]}>today's volume</Text>
+            <Text style={[styles.volumeSub, { color: C.creamMuted }]}>{volumeSubLabel}</Text>
           </View>
         )}
+      </View>
+
+      <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+        <DateNavBar date={selectedDate} onChange={setSelectedDate} accent={C.cream} />
       </View>
 
       {/* Feedback first — sync chrome last */}
@@ -400,6 +438,9 @@ export default function TrainingScreen() {
       {showLogSet ? (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Log set</Text>
+        <Text style={{ color: colors.mutedForeground, fontSize: 12, marginBottom: 12, fontFamily: 'Inter_400Regular' }}>
+          Logging for {shortLabel(selectedDate)}
+        </Text>
 
         {/* Exercise input with autocomplete */}
         <View style={{ marginBottom: 12 }}>
@@ -530,7 +571,7 @@ export default function TrainingScreen() {
         <ActivityIndicator color={MOD.primary} style={{ marginTop: 8 }} />
       ) : todayEntries.length > 0 ? (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Today's session</Text>
+          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>{sessionLabel}</Text>
           {todayEntries.map((e) => (
             <View key={e.id} style={[styles.sessionRow, { borderTopColor: colors.border }]}>
               <View style={styles.sessionInfo}>
@@ -560,7 +601,7 @@ export default function TrainingScreen() {
             Gym tonnage (logged sets)
           </Text>
           <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular', marginBottom: 12, lineHeight: 16 }}>
-            Alleen sets die je zelf hebt getikt. Garmin- en Health Connect-sessies staan hier niet in. Week begint op maandag.
+            Sets you logged yourself. Garmin and Health Connect sessions are not included. Week starts Monday.
           </Text>
           <BarChart
             data={barData}
@@ -585,7 +626,7 @@ export default function TrainingScreen() {
             Load (all sessions)
           </Text>
           <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular', marginBottom: 12, lineHeight: 16 }}>
-            Belasting uit de dagkern — Garmin + Strava/manual. Niet hetzelfde als gym-tonnage.
+            Load from the day core — Garmin + Strava/manual. Not the same as gym tonnage.
           </Text>
           <BarChart
             data={loadBarData}

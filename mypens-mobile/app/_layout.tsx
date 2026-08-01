@@ -27,7 +27,16 @@ import {
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 60_000,
+      // Avoid remount storms on tab switches; pull-to-refresh / invalidate still force fresh.
+      refetchOnMount: false,
+    },
+  },
+});
 
 function RootLayoutNav() {
   const router = useRouter();

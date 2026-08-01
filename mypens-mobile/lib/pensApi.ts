@@ -1,9 +1,9 @@
 /**
  * Calls the self-hosted MY PENS Next.js API from Expo (Bearer auth).
  *
- * Set in `.env`:
- *   EXPO_PUBLIC_PENS_API_URL=http://192.168.x.x:5000
- *   EXPO_PUBLIC_PENS_API_TOKEN=<same value as server MOBILE_PENS_API_TOKEN>
+ * Set in `.env` (daily phone → Vercel; LAN :5000 only for agents):
+ *   EXPO_PUBLIC_PENS_API_URL=https://mypens.vercel.app
+ *   EXPO_PUBLIC_PENS_API_TOKEN=<same value as Vercel MOBILE_PENS_API_TOKEN>
  */
 
 const base = (process.env.EXPO_PUBLIC_PENS_API_URL ?? '').replace(/\/$/, '')
@@ -142,12 +142,22 @@ export async function pensFetch(
   if (!opts?.skipAuth && token) {
     headers.set('Authorization', `Bearer ${token}`)
   }
+  // RN multipart: never force Content-Type — fetch must set boundary itself.
+  if (typeof FormData !== 'undefined' && rest.body instanceof FormData) {
+    headers.delete('Content-Type')
+  }
   const timer = new AbortController()
   const timerId = setTimeout(() => timer.abort(), timeoutMs)
   const signal = mergeAbortSignals(userSignal ?? null, timer.signal)
   try {
     return await fetch(url, { ...rest, headers, signal })
   } catch (e: unknown) {
+    // Preserve user Cancel so callers can silence the alert (do not rewrite as timeout).
+    if (userSignal?.aborted) {
+      const abortErr = new Error('Aborted')
+      abortErr.name = 'AbortError'
+      throw abortErr
+    }
     throw new Error(describePensError(e))
   } finally {
     clearTimeout(timerId)

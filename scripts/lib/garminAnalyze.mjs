@@ -430,6 +430,8 @@ function maxDate(dates) {
 
 /**
  * Load all Garmin-related rows for a date window (or all history if no bounds).
+ * @param {import('@prisma/client').PrismaClient} prisma
+ * @param {{ weekOf?: string, weekEnd?: string, allTime?: boolean }} [opts]
  */
 export async function loadGarminData(prisma, { weekOf, weekEnd, allTime = false } = {}) {
   const range = !allTime && weekOf && weekEnd ? { gte: weekOf, lte: weekEnd } : undefined

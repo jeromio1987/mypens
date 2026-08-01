@@ -91,10 +91,14 @@ export async function POST(request: Request) {
         },
       })
     } catch (first) {
-      // Pre-migration DB: microsJson/tagsJson columns missing — still save macros.
+      // Pre-migration DB: micros/tags/enrichment columns missing — still save macros.
+      // Note: Prisma RETURNING includes all schema fields; a missing enrichmentJson
+      // column makes even create({ data: base }) fail until migrate deploy.
       const msg = first instanceof Error ? first.message : String(first)
-      if (!/microsJson|tagsJson|does not exist|Unknown argument/i.test(msg)) throw first
-      console.warn('[food POST] micros columns missing; saving without micros/tags', msg.slice(0, 160))
+      if (!/microsJson|tagsJson|enrichmentJson|does not exist|Unknown argument/i.test(msg)) {
+        throw first
+      }
+      console.warn('[food POST] optional food columns missing; retrying macros-only', msg.slice(0, 160))
       entry = await prisma.foodEntry.create({ data: base })
     }
     return NextResponse.json(entry)

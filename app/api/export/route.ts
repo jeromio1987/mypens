@@ -1,5 +1,17 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { prisma } from '@/lib/db'
+import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth'
+
+/** Web session only — rejects mobile bearer (export is not a mobile operation). */
+async function requireSession(): Promise<NextResponse | null> {
+  const jar = await cookies()
+  const session = jar.get(SESSION_COOKIE)?.value
+  if (!(await verifySessionToken(session))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  return null
+}
 
 function toCSV(headers: string[], rows: (string | number | boolean | null | undefined)[][]): string {
   const escape = (v: unknown): string => {
@@ -11,6 +23,8 @@ function toCSV(headers: string[], rows: (string | number | boolean | null | unde
 }
 
 export async function GET(request: Request) {
+  const auth = await requireSession()
+  if (auth) return auth
   try {
     const { searchParams } = new URL(request.url)
     const vaultModule = searchParams.get('module') ?? 'all'

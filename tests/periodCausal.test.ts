@@ -74,6 +74,38 @@ describe('RHR drinking ladder', () => {
     expect(causal.topHypothesis?.id).toBe('rhr_likely_drinking')
     expect(causal.narrative).toMatch(/≥50|likely drinking|above 49/i)
   })
+
+  it('does not rank stale heavy RHR when latest mornings are clean', () => {
+    const days = []
+    let d = '2026-06-01'
+    for (let i = 0; i < 14; i++) {
+      days.push({
+        date: d,
+        sleepHours: 7.2,
+        stress: 28,
+        hrv: 55,
+        // One heavy morning early in the window; last 5 days clean (≤49)
+        restingHr: i === 2 ? 58 : 46,
+        steps: 7000,
+        activityMinutes: i % 2 === 0 ? 40 : 0,
+        activityCount: i % 2 === 0 ? 1 : 0,
+      })
+      d = shiftDateStr(d, 1)
+    }
+    const causal = analyzeCausal(days, {
+      recoveries: [],
+      domains: {
+        activity: { sessions: 7, activeDays: 7, zeroActivityShare: 0.5, daysInWindow: 14 },
+        restingHr: { latest: 46, avg: 47 },
+      },
+    })
+    expect(causal.rhrLadder.heavyStackDays).toBe(1)
+    expect(causal.rhrLadder.latestBand).toBe('clean_band')
+    expect(causal.topHypothesis?.id).not.toBe('rhr_heavy_stack')
+    expect(causal.topHypothesis?.id).not.toBe('rhr_likely_drinking')
+    expect(causal.hypotheses.some(h => h.id === 'rhr_heavy_stack')).toBe(false)
+    expect(causal.narrative).toMatch(/historical in-window|clean-band/i)
+  })
 })
 
 describe('15 beers + no activity + RHR 53', () => {

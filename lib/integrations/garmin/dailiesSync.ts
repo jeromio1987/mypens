@@ -17,7 +17,6 @@ export type GarminDailyWellness = {
   totalKilocalories?: number
   sleepingSeconds?: number
   avgSleepingHRV?: number
-  [key: string]: unknown
 }
 
 async function upsertMetric(

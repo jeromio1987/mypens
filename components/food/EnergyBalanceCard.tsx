@@ -30,6 +30,7 @@ type Balance = {
   estimatedOut: number
   delta: number
   incompleteCapture: boolean
+  foodCoverage?: boolean
   foodIncomplete?: boolean
   neatSource?: string
   sources: Source[]
@@ -44,24 +45,70 @@ type Balance = {
   }
 }
 
+type WeekDay = {
+  date?: string
+  eatKcal?: number
+  foodKcal?: number
+  imputed?: boolean
+}
+
 export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string; refresh?: number }) {
   const [data, setData] = useState<Balance | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [showDisclaimer, setShowDisclaimer] = useState(false)
+  const [avgSessionDayEat, setAvgSessionDayEat] = useState<number | null>(null)
+  const [avgFoodKcal, setAvgFoodKcal] = useState<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
     setErr(null)
-    fetch(`/api/energy-balance?date=${encodeURIComponent(date)}`)
-      .then(async r => {
-        const j = await r.json()
-        if (!r.ok) throw new Error(j.error || 'failed')
+    Promise.all([
+      fetch(`/api/energy-balance?date=${encodeURIComponent(date)}`),
+      fetch(`/api/energy-balance?week=1&date=${encodeURIComponent(date)}`),
+    ])
+      .then(async ([dayRes, weekRes]) => {
+        const j = await dayRes.json()
+        if (!dayRes.ok) throw new Error(j.error || 'failed')
         if (!cancelled) setData(j)
+
+        if (weekRes.ok) {
+          const w = await weekRes.json()
+          const days = Array.isArray(w.days) ? (w.days as WeekDay[]) : []
+          const eatDays = days
+            .filter(
+              d =>
+                !d.imputed &&
+                d.date !== date &&
+                typeof d.eatKcal === 'number' &&
+                d.eatKcal > 0,
+            )
+            .map(d => d.eatKcal as number)
+          const foodDays = days
+            .filter(
+              d =>
+                !d.imputed &&
+                d.date !== date &&
+                typeof d.foodKcal === 'number' &&
+                d.foodKcal > 0,
+            )
+            .map(d => d.foodKcal as number)
+          const mean = (xs: number[]) =>
+            xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null
+          if (!cancelled) {
+            setAvgSessionDayEat(mean(eatDays))
+            setAvgFoodKcal(mean(foodDays))
+          }
+        } else if (!cancelled) {
+          setAvgSessionDayEat(null)
+          setAvgFoodKcal(null)
+        }
       })
       .catch(e => {
         if (!cancelled) setErr(e instanceof Error ? e.message : 'failed')
       })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [date, refresh])
 
   if (err) {
@@ -80,13 +127,21 @@ export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string;
   }
 
   const surplus = data.delta >= 0
-  const sessionSources = data.sources.filter(s =>
-    s.origin === 'garmin_activity' || s.origin === 'training' || s.origin === 'notes' || s.origin === 'pushed',
+  const sessionSources = data.sources.filter(
+    s =>
+      s.origin === 'garmin_activity' ||
+      s.origin === 'training' ||
+      s.origin === 'notes' ||
+      s.origin === 'pushed',
   )
   const steps = data.deviceRef?.steps
   const neatUnknown = data.neatSource === 'none'
-  const eatUnknown = data.incompleteCapture && !data.foodIncomplete && data.eatKcal === 0
-  const hideDelta = data.incompleteCapture
+  const neatFromSteps = data.neatSource === 'steps_model'
+  // Prefer explicit foodCoverage; fall back to foodKcal>0 for older payloads.
+  const hasFood = data.foodCoverage != null ? data.foodCoverage : data.foodKcal > 0
+  const eatUnknown =
+    data.incompleteCapture && !data.foodIncomplete && hasFood && data.eatKcal === 0
+  const hideDelta = data.incompleteCapture || !hasFood
 
   const ENERGY_BMR = '#64748b'
   const ENERGY_EAT = '#fb923c'
@@ -98,6 +153,38 @@ export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string;
   const food = Math.max(0, data.foodKcal)
   const outTotal = bmr + eat + neat
   const maxBar = Math.max(outTotal, food, 1)
+  const sessionCount = sessionSources.length
+
+  const sessionChip = eatUnknown
+    ? 'Sessions — kcal not synced'
+    : sessionCount > 0
+      ? `Sessions ${eat} kcal · ${sessionCount} logged`
+      : `Sessions ${eat} kcal`
+
+  let sessionVsUsual: string | null = null
+  if (!eatUnknown && eat > 0 && avgSessionDayEat != null && avgSessionDayEat > 0) {
+    const pct = (eat - avgSessionDayEat) / avgSessionDayEat
+    const usual = `~${avgSessionDayEat} kcal · 7d session days`
+    if (Math.abs(pct) < 0.12) sessionVsUsual = `Near your usual session (${usual})`
+    else if (pct > 0) sessionVsUsual = `Above your usual session (${usual})`
+    else sessionVsUsual = `Below your usual session (${usual})`
+  }
+
+  const feedbackChips: string[] = []
+  if (!hasFood) feedbackChips.push('No food logged')
+  else if (data.foodIncomplete) feedbackChips.push('Food capture incomplete')
+  else if (data.incompleteCapture) feedbackChips.push('Session kcal missing')
+  if (data.foodCoverage7d?.thin) {
+    feedbackChips.push(`Coverage ${data.foodCoverage7d.loggedDays}/${data.foodCoverage7d.windowDays}`)
+  }
+  if (avgFoodKcal != null && avgFoodKcal > 0 && food > 0 && !data.foodIncomplete) {
+    const pct = (food - avgFoodKcal) / avgFoodKcal
+    if (Math.abs(pct) >= 0.12) {
+      feedbackChips.push(
+        pct > 0 ? `Food above 7d avg (~${avgFoodKcal})` : `Food below 7d avg (~${avgFoodKcal})`,
+      )
+    }
+  }
 
   const StackCol = ({
     label,
@@ -145,7 +232,7 @@ export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string;
         <p className="font-grotesk text-[0.625rem] uppercase tracking-[0.18em] text-ct-second/55">Energy ledger</p>
         <div className={`text-right ${hideDelta ? 'text-ct-second/35' : surplus ? 'text-ct-blood' : 'text-ct-second'}`}>
           {hideDelta ? (
-            <p className="font-headline text-xl">saldo —</p>
+            <p className="font-headline text-xl">—</p>
           ) : (
             <p className="font-headline text-xl tabular-nums leading-none">
               {surplus ? '+' : ''}
@@ -165,17 +252,19 @@ export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string;
         </div>
       )}
 
-      {data.incompleteCapture && (
-        <div className="text-xs text-ct-blood bg-ct-bloodc/40 px-3 py-2 space-y-2">
+      {hideDelta && (
+        <div className="text-xs text-ct-second/70 bg-ct-lowest px-3 py-2 space-y-2">
           <p>
-            {data.foodIncomplete
-              ? 'Eten deels gelogd — saldo voorlopig.'
-              : 'Sessies zonder calorieën — sync Garmin / Health Connect.'}
+            {!hasFood
+              ? 'No meals logged for this day yet. A deficit here would be a capture gap, not a result.'
+              : data.foodIncomplete
+                ? 'Food partly logged — balance is provisional.'
+                : 'Training sessions missing kcal — sync Garmin / Health Connect.'}
           </p>
           <div className="flex flex-wrap gap-2">
-            {data.foodIncomplete ? (
+            {!hasFood || data.foodIncomplete ? (
               <Link href="/food" className="underline text-ct-blood">
-                Naar Food
+                Finish logging food
               </Link>
             ) : (
               <Link href="/integrations" className="underline text-ct-blood">
@@ -185,6 +274,11 @@ export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string;
           </div>
         </div>
       )}
+      {!hideDelta ? (
+        <p className="text-xs text-ct-second/55">
+          Food minus estimated burn. Device estimates, not measured.
+        </p>
+      ) : null}
 
       <div className="flex gap-6 justify-center px-2 pt-1">
         <StackCol
@@ -207,21 +301,48 @@ export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string;
       <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-[11px] text-ct-second/55">
         <span className="inline-flex items-center gap-1.5">
           <span className="w-2 h-2" style={{ backgroundColor: ENERGY_BMR }} />
-          Rust {bmr}
+          Resting ~{bmr} kcal
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="w-2 h-2" style={{ backgroundColor: ENERGY_EAT }} />
-          {eatUnknown ? 'Sessies —' : `Sessies ${eat}`}
+          {sessionChip}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="w-2 h-2" style={{ backgroundColor: ENERGY_NEAT }} />
-          {neatUnknown ? 'Overige —' : `Overige ${neat}`}
+          {neatUnknown
+            ? 'Other movement — no step data'
+            : neatFromSteps
+              ? `Other movement ${neat} kcal · steps estimate`
+              : `Other movement ${neat} kcal`}
         </span>
         <span className="inline-flex items-center gap-1.5 text-ct-blood">
           <span className="w-2 h-2" style={{ backgroundColor: ENERGY_FOOD }} />
-          Food {food}
+          Food {food} kcal
         </span>
       </div>
+
+      {sessionVsUsual ? <p className="text-[11px] text-orange-300/90">{sessionVsUsual}</p> : null}
+
+      {neatFromSteps ? (
+        <p className="text-[11px] text-teal-300/80">
+          NEAT from steps model
+          {steps != null ? ` · ${steps.toLocaleString()} steps` : ''}
+          {data.neatDetail ? ` · session burn subtracted` : ''}
+        </p>
+      ) : null}
+
+      {feedbackChips.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {feedbackChips.map(chip => (
+            <span
+              key={chip}
+              className="text-[10px] px-2 py-1 border border-ct-blood/25 text-ct-second/60 bg-ct-bloodc/20"
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <button
         type="button"
@@ -232,7 +353,10 @@ export default function EnergyBalanceCard({ date, refresh = 0 }: { date: string;
       </button>
       {showDisclaimer ? (
         <div className="space-y-2 text-[11px] text-ct-second/45 leading-relaxed">
-          <p>Out = rust (BMR) + sessies (EAT) + overige (NEAT). In = food. Delta = In − Out.</p>
+          <p>
+            Out = resting (BMR) + training sessions (EAT) + other movement (NEAT). In = food. Delta = In −
+            Out.
+          </p>
           {(steps != null || data.neatDetail) && (
             <p>
               {steps != null ? `Steps ${steps.toLocaleString()}` : 'Steps —'}

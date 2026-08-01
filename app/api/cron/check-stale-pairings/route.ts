@@ -19,9 +19,8 @@ import { getMobileStaleThresholdHours } from '@/lib/integrations/staleThreshold'
  *   We only create the Notification if the claim affected exactly 1 row,
  *   which is what makes two overlapping cron invocations safe.
  *
- * Auth: requires `Authorization: Bearer <CRON_SECRET>` header. The query-
- *   param fallback used by some other cron endpoints is intentionally NOT
- *   accepted here to avoid leaking the secret via request logs.
+ * Auth: `Authorization: Bearer <CRON_SECRET>` (header only, to avoid leaking
+ *   the secret via request logs).
  */
 function isAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET

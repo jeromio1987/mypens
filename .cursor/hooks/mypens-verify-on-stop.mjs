@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Cursor stop hook: if myPENS paths are dirty, run mobile tsc and follow up loudly on FAIL.
+ * Cursor stop hook: if myPENS paths are dirty, run mobile tsc + wiring-check.
  * Stdin: stop hook JSON. Stdout: {} or { followup_message }.
+ * Does not run full verify-ship (ship-skill duty). Avoids silent PASS spam.
  */
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -64,6 +65,8 @@ function mypensDirty(mypens) {
       p.startsWith('lib/food') ||
       p.startsWith('lib/energy') ||
       p.includes('.cursor/skills/mypens-verify-ship') ||
+      p.includes('.cursor/skills/mypens-adversarial-pre-apk') ||
+      p.includes('.cursor/rules/mypens-') ||
       p.includes('.cursor/hooks/mypens')
     )
   })
@@ -102,26 +105,68 @@ const tsc = spawnSync('npx', ['tsc', '--noEmit'], {
   shell: process.platform === 'win32',
   timeout: 180_000,
 })
+const tscOk = (tsc.status ?? 1) === 0
 
-if ((tsc.status ?? 1) === 0) {
-  // tsc green: stay silent. Dirty+PASS used to nag every agent turn (incl. ISZE
-  // chats in multi-root). Full verify is a ship-skill duty, not a stop spam loop.
+const wiringScript = path.join(
+  mypens,
+  '.cursor',
+  'skills',
+  'mypens-adversarial-pre-apk',
+  'scripts',
+  'wiring-check.mjs',
+)
+let wiringOk = true
+let wiringTail = ''
+if (fs.existsSync(wiringScript)) {
+  const wiring = spawnSync('node', [wiringScript], {
+    cwd: mypens,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+    timeout: 60_000,
+  })
+  wiringOk = (wiring.status ?? 1) === 0
+  wiringTail = `${wiring.stdout || ''}${wiring.stderr || ''}`
+    .split(/\r?\n/)
+    .filter((l) => /^(FAIL|PASS|  ✗|  ·|===)/.test(l) || l.includes('W1') || l.includes('W2') || l.includes('W3') || l.includes('W4'))
+    .slice(0, 40)
+    .join('\n')
+}
+
+if (tscOk && wiringOk) {
+  // Stay silent on green — full verify-ship remains a ship-skill duty.
   emit({})
   process.exit(0)
 }
 
-const errTail = `${tsc.stdout || ''}${tsc.stderr || ''}`
-  .split(/\r?\n/)
-  .filter((l) => /error TS/.test(l))
-  .slice(0, 20)
-  .join('\n')
+const parts = []
+parts.push('myPENS stop hook FAIL — fix before claiming ship done.')
 
-emit({
-  followup_message:
-    `myPENS stop hook FAIL — \`npx tsc --noEmit\` in mypens-mobile failed. Fix before claiming ship done.\n\n` +
-    '```text\n' +
-    (errTail || '(no TS lines — see full tsc output in terminal)') +
-    '\n```\n\n' +
-    'Then run full skill: `node .cursor/skills/mypens-verify-ship/scripts/verify-ship.mjs`',
-})
+if (!tscOk) {
+  const errTail = `${tsc.stdout || ''}${tsc.stderr || ''}`
+    .split(/\r?\n/)
+    .filter((l) => /error TS/.test(l))
+    .slice(0, 20)
+    .join('\n')
+  parts.push(
+    '\n### mobile tsc\n```text\n' +
+      (errTail || '(no TS lines — see full tsc output in terminal)') +
+      '\n```',
+  )
+}
+
+if (!wiringOk) {
+  parts.push(
+    '\n### wiring-check\n```text\n' +
+      (wiringTail || '(wiring-check failed — run script manually)') +
+      '\n```\n' +
+      'Skill: `.cursor/skills/mypens-adversarial-pre-apk/SKILL.md`',
+  )
+}
+
+parts.push(
+  '\nThen: `node .cursor/skills/mypens-adversarial-pre-apk/scripts/wiring-check.mjs` ' +
+    '→ `node .cursor/skills/mypens-verify-ship/scripts/verify-ship.mjs`',
+)
+
+emit({ followup_message: parts.join('\n') })
 process.exit(0)

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Camera, FlaskConical, ChevronRight } from 'lucide-react'
+import BloodworkChart from '@/components/bloodwork/BloodworkChart'
 
 type PanelRow = {
   id: string
@@ -217,6 +218,10 @@ export default function BloodworkClient() {
           Manual entry or photo OCR draft. This module is for <strong className="text-pens-cream/80">self-tracking and context</strong> — not diagnosis or
           treatment. Discuss results with a clinician.
         </p>
+
+        {!loading && panels.length > 0 && (
+          <BloodworkChart refreshKey={panels.length} />
+        )}
 
         {settings && (
           <div className="grid sm:grid-cols-2 gap-4">

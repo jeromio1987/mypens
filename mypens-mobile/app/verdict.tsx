@@ -71,6 +71,12 @@ export default function VerdictScreen() {
       <ApiGate configured={configured}>
         {isLoading && !data ? <LoadingBlock /> : null}
         {error ? <EmptyHint>{(error as Error).message}</EmptyHint> : null}
+        {data && !data.hasEnoughData ? (
+          <EmptyHint>
+            Not enough data for a full verdict yet. Select a mode each morning, log sleep, and record
+            one training session — then the pillar ledger unlocks.
+          </EmptyHint>
+        ) : null}
         {data ? (
           <>
             <Block elevated>

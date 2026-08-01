@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { planWeek, type GoalKind, type LongDay, type Sport } from '@/lib/planner/planWeek'
-import { mondayOf, shiftDateStr, toDateStr } from '@/lib/weekDates'
+import { mondayOf, shiftDateStr, toDateStr, today } from '@/lib/weekDates'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,8 +17,20 @@ function parseSports(raw: string | null | undefined): Sport[] {
   }
 }
 
-async function recentContext(before: string) {
-  const from = shiftDateStr(before, -14)
+/**
+ * Last calendar day included in planner context for a week.
+ * Current/past weeks include through today (or week Sunday) so mid-week food logs count.
+ * Future weeks still stop the day before Monday.
+ */
+export function plannerContextThrough(weekOf: string, now = new Date()): string {
+  const weekEnd = shiftDateStr(weekOf, 6)
+  const todayStr = today(now)
+  if (todayStr < weekOf) return shiftDateStr(weekOf, -1)
+  return todayStr <= weekEnd ? todayStr : weekEnd
+}
+
+async function recentContext(through: string) {
+  const from = shiftDateStr(through, -14)
   const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
     try {
       return await fn()
@@ -31,7 +43,7 @@ async function recentContext(before: string) {
     safe(
       () =>
         prisma.sleepEntry.findMany({
-          where: { date: { gte: from, lte: before } },
+          where: { date: { gte: from, lte: through } },
           select: { hours: true },
         }),
       [],
@@ -39,7 +51,7 @@ async function recentContext(before: string) {
     safe(
       () =>
         prisma.trainingEntry.findMany({
-          where: { date: { gte: from, lte: before } },
+          where: { date: { gte: from, lte: through } },
           select: { date: true, exercise: true, source: true },
         }),
       [],
@@ -47,7 +59,7 @@ async function recentContext(before: string) {
     safe(
       () =>
         prisma.garminActivity.findMany({
-          where: { date: { gte: from, lte: before } },
+          where: { date: { gte: from, lte: through } },
           select: { date: true, sport: true },
         }),
       [],
@@ -55,7 +67,7 @@ async function recentContext(before: string) {
     safe(
       () =>
         prisma.foodEntry.findMany({
-          where: { date: { gte: from, lte: before } },
+          where: { date: { gte: from, lte: through } },
           select: { date: true, proteinG: true, kcal: true },
         }),
       [],
@@ -63,7 +75,7 @@ async function recentContext(before: string) {
     safe(
       () =>
         prisma.recoveryEntry.findMany({
-          where: { date: { gte: from, lte: before } },
+          where: { date: { gte: from, lte: through } },
           select: { alcoholDrinks: true },
         }),
       [],
@@ -71,7 +83,7 @@ async function recentContext(before: string) {
     safe(
       () =>
         prisma.garminDailyMetric.findMany({
-          where: { date: { gte: from, lte: before }, kind: 'resting_hr' },
+          where: { date: { gte: from, lte: through }, kind: 'resting_hr' },
           select: { valueNum: true },
         }),
       [],
@@ -124,7 +136,7 @@ async function recentContext(before: string) {
   const foodWindowDays = Math.max(
     1,
     Math.round(
-      (new Date(`${before}T12:00:00Z`).getTime() - new Date(`${from}T12:00:00Z`).getTime()) /
+      (new Date(`${through}T12:00:00Z`).getTime() - new Date(`${from}T12:00:00Z`).getTime()) /
         86_400_000,
     ) + 1,
   )
@@ -137,6 +149,7 @@ async function recentContext(before: string) {
     avgKcal: avg(dailyKcals),
     foodDaysLogged: foodByDate.size,
     foodWindowDays,
+    foodByDate,
   }
 }
 
@@ -187,8 +200,23 @@ export async function GET(req: Request) {
           phase: bodyPhase,
         }
 
-    const ctx = await recentContext(shiftDateStr(weekOf, -1))
-    const plan = planWeek(weekOf, goalInput, ctx)
+    const through = plannerContextThrough(weekOf)
+    const ctx = await recentContext(through)
+    const { foodByDate, ...planCtx } = ctx
+    const plan = planWeek(weekOf, goalInput, planCtx)
+
+    // Honest per-day fueling: show logged capture only — never invent kcal/protein targets.
+    plan.days = plan.days.map(d => {
+      const food = foodByDate.get(d.date)
+      if (!food) return d
+      const kcal = Math.round(food.kcal)
+      const protein = Math.round(food.protein)
+      return {
+        ...d,
+        why: `${d.why} Fueling logged: ${kcal} kcal · ${protein}g protein.`.trim(),
+      }
+    })
+
     const saved = await safe(() => prisma.plannerWeek.findUnique({ where: { weekOf } }), null)
 
     return NextResponse.json({
@@ -199,6 +227,11 @@ export async function GET(req: Request) {
       saved: saved
         ? { id: saved.id, accepted: saved.accepted, createdAt: saved.createdAt.toISOString() }
         : null,
+      foodContext: {
+        through,
+        logged: planCtx.foodDaysLogged,
+        windowDays: planCtx.foodWindowDays,
+      },
     })
   } catch (error) {
     console.error('[planner GET]', error)

@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -9,6 +11,7 @@ import {
 } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as ImagePicker from 'expo-image-picker'
+import { useRouter } from 'expo-router'
 
 import {
   ApiGate,
@@ -26,6 +29,7 @@ import {
   pensFetch,
   PENS_PHOTO_TIMEOUT_MS,
 } from '@/lib/pensApi'
+import { appendImageFormFile, readPensJson } from '@/lib/photoUpload'
 import { today } from '@/lib/timeWindow'
 
 type PanelListItem = {
@@ -80,6 +84,23 @@ type MarkerDelta = {
   trend: 'up' | 'down' | 'flat' | 'unknown'
 }
 
+type ChartSeries = {
+  code: string
+  label: string
+  unit: string | null
+  prior: number | null
+  latest: number | null
+  deltaPct: number | null
+  latestFlag: 'below' | 'within' | 'above' | 'unknown'
+  group: string
+}
+
+type ChartPayload = {
+  series: ChartSeries[]
+  panels: Array<{ id: string; drawDate: string }>
+  disclaimer: string
+}
+
 function markerCritical(m: Marker): boolean {
   if (m.valueNum == null) return false
   if (m.refHigh != null && m.valueNum > m.refHigh) return true
@@ -102,6 +123,8 @@ function fmtDelta(n: number): string {
 export default function BloodworkScreen() {
   const configured = isPensApiConfigured()
   const qc = useQueryClient()
+  const router = useRouter()
+  const photoAbortRef = useRef<AbortController | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -119,6 +142,19 @@ export default function BloodworkScreen() {
         throw new Error(j.error ?? `Panels ${res.status}`)
       }
       return (await res.json()) as PanelListItem[]
+    },
+  })
+
+  const chartQ = useQuery({
+    queryKey: ['bloodwork-chart'],
+    enabled: configured,
+    queryFn: async (): Promise<ChartPayload> => {
+      const res = await pensFetch('/api/bloodwork/chart')
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(j.error ?? `Chart ${res.status}`)
+      }
+      return (await res.json()) as ChartPayload
     },
   })
 
@@ -158,27 +194,41 @@ export default function BloodworkScreen() {
   const panel = detailQ.data
   const criticalCount = panel?.markers.filter(markerCritical).length ?? 0
 
+  const alertPhotoPermission = (kind: 'camera' | 'library') => {
+    const title = kind === 'camera' ? 'Camera permission' : 'Photos permission'
+    const body =
+      kind === 'camera'
+        ? Platform.OS === 'android'
+          ? 'Camera is blocked. Open Settings → Apps → My Pens → Permissions → Camera → Allow.'
+          : 'Camera is blocked. Open Settings → My Pens → Camera → Allow.'
+        : Platform.OS === 'android'
+          ? 'Photos access is blocked. Open Settings → Apps → My Pens → Permissions → Photos / Files → Allow.'
+          : 'Photos access is blocked. Open Settings → My Pens → Photos → Allow.'
+    Alert.alert(title, body, [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+    ])
+  }
+
   const runScan = async (result: ImagePicker.ImagePickerResult) => {
     if (result.canceled || !result.assets[0]) return
     const asset = result.assets[0]
+    photoAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    photoAbortRef.current = ctrl
     setAnalyzing(true)
     setPhotoError(null)
     setDraft(null)
     try {
       const form = new FormData()
-      const mime = asset.mimeType ?? 'image/jpeg'
-      const ext = mime.includes('png') ? 'png' : 'jpg'
-      form.append('file', {
-        uri: asset.uri,
-        name: `lab.${ext}`,
-        type: mime,
-      } as unknown as Blob)
+      appendImageFormFile(form, 'file', asset, 'lab')
       const res = await pensFetch('/api/bloodwork/photo-analyze', {
         method: 'POST',
         body: form,
         timeoutMs: PENS_PHOTO_TIMEOUT_MS,
+        signal: ctrl.signal,
       })
-      const data = (await res.json()) as PhotoDraft & { error?: string }
+      const data = await readPensJson<PhotoDraft>(res)
       if (!res.ok) throw new Error(data.error || `Analyze failed (${res.status})`)
       setDraft({
         drawDate: data.drawDate ?? null,
@@ -188,10 +238,20 @@ export default function BloodworkScreen() {
         disclaimer: data.disclaimer,
       })
     } catch (e: unknown) {
-      setPhotoError(describePensError(e))
+      const aborted =
+        ctrl.signal.aborted ||
+        (e instanceof Error && (e.name === 'AbortError' || /abort/i.test(e.message)))
+      if (!aborted) setPhotoError(describePensError(e))
     } finally {
+      if (photoAbortRef.current === ctrl) photoAbortRef.current = null
       setAnalyzing(false)
     }
+  }
+
+  const cancelPhoto = () => {
+    photoAbortRef.current?.abort()
+    photoAbortRef.current = null
+    setAnalyzing(false)
   }
 
   const takePhoto = async () => {
@@ -199,13 +259,22 @@ export default function BloodworkScreen() {
       Alert.alert('API not configured', 'Set EXPO_PUBLIC_PENS_API_URL + TOKEN, then restart Expo.')
       return
     }
-    const perm = await ImagePicker.requestCameraPermissionsAsync()
-    if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow camera access to scan a lab photo.')
-      return
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync()
+      if (!perm.granted) {
+        alertPhotoPermission('camera')
+        return
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        exif: false,
+      })
+      await runScan(result)
+    } catch (e: unknown) {
+      setAnalyzing(false)
+      setPhotoError(describePensError(e))
     }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 })
-    await runScan(result)
   }
 
   const pickPhoto = async () => {
@@ -213,13 +282,22 @@ export default function BloodworkScreen() {
       Alert.alert('API not configured', 'Set EXPO_PUBLIC_PENS_API_URL + TOKEN, then restart Expo.')
       return
     }
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
-    if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo library access to scan a lab photo.')
-      return
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!perm.granted) {
+        alertPhotoPermission('library')
+        return
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        exif: false,
+      })
+      await runScan(result)
+    } catch (e: unknown) {
+      setAnalyzing(false)
+      setPhotoError(describePensError(e))
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 })
-    await runScan(result)
   }
 
   const confirmDraft = async () => {
@@ -256,6 +334,8 @@ export default function BloodworkScreen() {
       setSelectedId(d.id)
       void qc.invalidateQueries({ queryKey: ['bloodwork-panels'] })
       void qc.invalidateQueries({ queryKey: ['bloodwork-panel', d.id] })
+      void qc.invalidateQueries({ queryKey: ['bloodwork-chart'] })
+      void qc.invalidateQueries({ queryKey: ['bloodwork-latest-summary'] })
     } catch (e: unknown) {
       setPhotoError(describePensError(e))
     } finally {
@@ -305,14 +385,19 @@ export default function BloodworkScreen() {
       eyebrow="Hematological statement"
       title="Bloodwork"
       subtitle="Serum liabilities from stored lab panels."
+      showBack
       refreshing={listQ.isRefetching || detailQ.isRefetching}
       onRefresh={() => {
         void listQ.refetch()
         void detailQ.refetch()
         void deltaQ.refetch()
+        void chartQ.refetch()
       }}
     >
       <ApiGate configured={configured}>
+        <Pressable onPress={() => router.push('/audit' as never)} style={styles.auditLink}>
+          <Text style={styles.auditLinkText}>← The Audit</Text>
+        </Pressable>
         <SectionLabel>Photo capture</SectionLabel>
         <View style={styles.photoRow}>
           <Pressable
@@ -330,6 +415,11 @@ export default function BloodworkScreen() {
             <Text style={styles.photoBtnGhostText}>Pick photo</Text>
           </Pressable>
         </View>
+        {analyzing ? (
+          <Pressable onPress={cancelPhoto} style={[styles.photoBtn, styles.photoBtnGhost, { marginBottom: 8 }]}>
+            <Text style={styles.photoBtnGhostText}>Cancel</Text>
+          </Pressable>
+        ) : null}
         {analyzing ? <ActivityIndicator color={C.cream} style={{ marginVertical: 8 }} /> : null}
         {photoError ? <EmptyHint>{photoError}</EmptyHint> : null}
         {draft ? (
@@ -391,6 +481,44 @@ export default function BloodworkScreen() {
                 )
               })}
             </View>
+          </>
+        ) : null}
+
+        {chartQ.data && chartQ.data.series.length > 0 ? (
+          <>
+            <SectionLabel>Blood chart · prior → latest</SectionLabel>
+            <Block elevated>
+              <Text style={styles.notes}>
+                Educational ledger only. Flagged or high-signal rows from stored panels.
+              </Text>
+              {chartQ.data.series
+                .filter(
+                  s =>
+                    s.latestFlag === 'below' ||
+                    s.latestFlag === 'above' ||
+                    s.deltaPct != null ||
+                    ['iron', 'ferritin', 'ldl', 'hdl', 'hemoglobin', 'testosterone', 'cortisol'].includes(
+                      s.code,
+                    ),
+                )
+                .slice(0, 12)
+                .map(s => (
+                  <View key={s.code} style={styles.draftRow}>
+                    <Text style={styles.draftLabel} numberOfLines={1}>
+                      {s.label}
+                      {s.latestFlag === 'below' || s.latestFlag === 'above' ? ' · flag' : ''}
+                    </Text>
+                    <Text style={styles.draftValue}>
+                      {s.prior != null ? `${s.prior} → ` : ''}
+                      {s.latest ?? '—'}
+                      {s.unit ? ` ${s.unit}` : ''}
+                      {s.deltaPct != null
+                        ? ` (${s.deltaPct > 0 ? '↑' : s.deltaPct < 0 ? '↓' : '→'}${Math.abs(s.deltaPct)}%)`
+                        : ''}
+                    </Text>
+                  </View>
+                ))}
+            </Block>
           </>
         ) : null}
 
@@ -524,6 +652,15 @@ export default function BloodworkScreen() {
 }
 
 const styles = StyleSheet.create({
+  auditLink: {
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  auditLinkText: {
+    color: C.creamMuted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
   photoRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

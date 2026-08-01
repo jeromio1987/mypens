@@ -114,6 +114,7 @@ export default function FoodEntry({ date, onSaved }: Props) {
   const [anthropicFileId, setAnthropicFileId] = useState<string | null>(null)
   const [priorJson, setPriorJson] = useState<string | null>(null)
   const [refineText, setRefineText] = useState('')
+  const photoAbortRef = useRef<AbortController | null>(null)
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -217,6 +218,7 @@ export default function FoodEntry({ date, onSaved }: Props) {
           assumedGrams: catalogPick.assumedGrams,
           packGrams: catalogPick.packGrams,
           brand: catalogPick.brand,
+          micros: catalogPick.micros ?? null,
         },
         catalogEatenG,
       )
@@ -282,6 +284,10 @@ export default function FoodEntry({ date, onSaved }: Props) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    photoAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    photoAbortRef.current = ctrl
+    const timer = window.setTimeout(() => ctrl.abort(), 90_000)
     setAnalyzing(true)
     setPhotoError(null)
     setDishSummary(null)
@@ -296,9 +302,27 @@ export default function FoodEntry({ date, onSaved }: Props) {
       fd.append('file', file)
       fd.append('date', date)
       fd.append('meal', form.meal)
-      const res = await fetch('/api/food/photo-analyze', { method: 'POST', body: fd })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Photo scan failed')
+      const res = await fetch('/api/food/photo-analyze', {
+        method: 'POST',
+        body: fd,
+        signal: ctrl.signal,
+      })
+      const raw = await res.text()
+      let data: {
+        error?: string
+        items?: unknown
+        dishSummary?: string
+        analysisMode?: string
+        anthropicFileId?: string | null
+      } = {}
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {}
+      } catch {
+        throw new Error(
+          `Photo scan returned non-JSON (${res.status}). Is Next wedged? Try refresh or restart npm run dev.`,
+        )
+      }
+      if (!res.ok) throw new Error(data.error || `Photo scan failed (${res.status})`)
       const cleaned = mapScanItems(Array.isArray(data.items) ? data.items : [], form.meal)
       const dish = typeof data.dishSummary === 'string' ? data.dishSummary : null
       const mode = typeof data.analysisMode === 'string' ? data.analysisMode : null
@@ -314,10 +338,29 @@ export default function FoodEntry({ date, onSaved }: Props) {
         setPhotoError('No food detected. Try a clearer photo or log manually.')
       }
     } catch (err: unknown) {
-      setPhotoError(err instanceof Error ? err.message : 'Photo scan failed')
+      const aborted =
+        ctrl.signal.aborted ||
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        (err instanceof Error && /abort/i.test(err.message))
+      if (!aborted) {
+        setPhotoError(err instanceof Error ? err.message : 'Photo scan failed')
+      } else if (photoAbortRef.current === ctrl) {
+        // Still the active scan → AbortController timer (Cancel clears the ref first)
+        setPhotoError('Photo scan timed out (90s). Check /api/health, restart Next if wedged, then retry.')
+      }
+      // User Cancel already set copy via cancelPhotoScan
     } finally {
+      window.clearTimeout(timer)
+      if (photoAbortRef.current === ctrl) photoAbortRef.current = null
       setAnalyzing(false)
     }
+  }
+
+  const cancelPhotoScan = () => {
+    photoAbortRef.current?.abort()
+    photoAbortRef.current = null
+    setAnalyzing(false)
+    setPhotoError('Photo scan cancelled.')
   }
 
   const runRefine = async () => {
@@ -490,6 +533,15 @@ export default function FoodEntry({ date, onSaved }: Props) {
           <Camera size={16} className="text-emerald-400 shrink-0" />
           {analyzing ? 'Scanning photo…' : 'Photo (AI estimate)'}
         </button>
+        {analyzing ? (
+          <button
+            type="button"
+            onClick={cancelPhotoScan}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-pens-muted/40 text-pens-cream/70 hover:border-pens-cream/40 transition-colors"
+          >
+            Cancel
+          </button>
+        ) : null}
         <span className="text-xs text-pens-cream/40">Uses your meal slot as a hint · needs ANTHROPIC_API_KEY</span>
       </div>
 

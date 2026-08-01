@@ -58,6 +58,25 @@ describe('buildWeekEnergyRecap imputation', () => {
     expect(recap.days[0].delta).toBe(-160)
     expect(recap.summary.weekNetKcal).toBe(-160 * 7)
   })
+
+  it('does not treat activity-only days as tracked (E6)', () => {
+    const raw = [
+      { date: '2026-07-19', foodKcal: 2000, activityKcal: 400, weightKg: 80 },
+      { date: '2026-07-20', foodKcal: 2000, activityKcal: 400, weightKg: 80 },
+      { date: '2026-07-21', foodKcal: 2000, activityKcal: 400, weightKg: 80 },
+      { date: '2026-07-22', foodKcal: 2000, activityKcal: 400, weightKg: 80 },
+      { date: '2026-07-23', foodKcal: 2000, activityKcal: 400, weightKg: 80 },
+      // Activity without food — must impute, not invent a −(BMR+EAT+NEAT) deficit
+      { date: '2026-07-24', foodKcal: 0, activityKcal: 800, weightKg: 80 },
+      { date: '2026-07-25', foodKcal: 0, activityKcal: 900, weightKg: 80 },
+    ]
+    const recap = buildWeekEnergyRecap(raw)
+    expect(recap.summary.daysTracked).toBe(5)
+    expect(recap.summary.daysImputed).toBe(2)
+    const activityOnly = recap.days.filter(d => d.date >= '2026-07-24')
+    expect(activityOnly.every(d => d.imputed)).toBe(true)
+    expect(activityOnly.every(d => d.foodKcal === 2000)).toBe(true)
+  })
 })
 
 describe('calibrateWeekVsWeight', () => {

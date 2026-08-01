@@ -100,14 +100,21 @@ export async function GET(req: NextRequest) {
     const totProtein = [...dayProtein.values()].reduce((a, b) => a + b, 0)
     const totCarbs = [...dayCarbs.values()].reduce((a, b) => a + b, 0)
     const totFat = [...dayFat.values()].reduce((a, b) => a + b, 0)
+    // Divide by logged food days — never silent ÷7 when only a subset has food (Audit 7 C1).
     const nFoodDays = [...dayKcal.keys()].length
-    const ak = nFoodDays > 0 ? totKcal / daysInWeek : null
-    const ap = nFoodDays > 0 ? totProtein / daysInWeek : null
-    const acarb = nFoodDays > 0 ? totCarbs / daysInWeek : null
-    const af = nFoodDays > 0 ? totFat / daysInWeek : null
+    const ak = nFoodDays > 0 ? totKcal / nFoodDays : null
+    const ap = nFoodDays > 0 ? totProtein / nFoodDays : null
+    const acarb = nFoodDays > 0 ? totCarbs / nFoodDays : null
+    const af = nFoodDays > 0 ? totFat / nFoodDays : null
+    const foodCoverageLabel =
+      nFoodDays > 0
+        ? `avg over ${nFoodDays} logged day${nFoodDays === 1 ? '' : 's'} (${nFoodDays} of ${daysInWeek})`
+        : 'no food days logged'
 
     const sh = sleeps.map(s => s.hours)
-    const sq = sleeps.map(s => s.quality)
+    const sq = sleeps
+      .map(s => s.quality)
+      .filter((x): x is number => typeof x === 'number' && !Number.isNaN(x))
     const hrvs = sleeps.map(s => s.hrv).filter((x): x is number => typeof x === 'number' && !Number.isNaN(x))
     const ah = avg(sh)
     const aq = avg(sq)
@@ -158,6 +165,8 @@ export async function GET(req: NextRequest) {
       nutritionDetail: {
         carbs: fmt(acarb, 0),
         fat: fmt(af, 0),
+        foodCoverage: foodCoverageLabel,
+        nFoodDays,
       },
       sleepHrv: fmt(ahrv, 0),
       topExercises: top3.length ? top3 : ['—'],
@@ -175,7 +184,9 @@ export async function GET(req: NextRequest) {
         'Content-Disposition': 'attachment; filename="my-pens-weekly.pdf"',
       },
     })
-  } catch {
-    return NextResponse.json({ error: 'Report failed' }, { status: 500 })
+  } catch (err) {
+    console.error('[report/weekly]', err)
+    const message = err instanceof Error ? err.message : 'Report failed'
+    return NextResponse.json({ error: 'Report failed', detail: message }, { status: 500 })
   }
 }

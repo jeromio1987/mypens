@@ -11,16 +11,21 @@ type DayMetricIn = {
   activeKcal?: number
 }
 
+/**
+ * HC day metrics land on side-kinds (`steps_hc` / `active_calories_hc`) so they
+ * never overwrite Garmin `steps` / `active_calories` (D1). Readers resolve via
+ * lib/dayMetricPrecedence.ts — Garmin wins when both exist.
+ */
 async function upsertDayMetrics(metrics: DayMetricIn[]): Promise<number> {
   let n = 0
   for (const m of metrics) {
     if (!m?.date || !/^\d{4}-\d{2}-\d{2}$/.test(m.date)) continue
     if (m.steps != null && Number.isFinite(m.steps) && m.steps > 0) {
       await prisma.garminDailyMetric.upsert({
-        where: { date_kind: { date: m.date, kind: 'steps' } },
+        where: { date_kind: { date: m.date, kind: 'steps_hc' } },
         create: {
           date: m.date,
-          kind: 'steps',
+          kind: 'steps_hc',
           valueNum: Math.round(m.steps),
           unit: 'count',
           sourceFile: 'healthconnect',
@@ -36,10 +41,10 @@ async function upsertDayMetrics(metrics: DayMetricIn[]): Promise<number> {
     }
     if (m.activeKcal != null && Number.isFinite(m.activeKcal) && m.activeKcal > 0) {
       await prisma.garminDailyMetric.upsert({
-        where: { date_kind: { date: m.date, kind: 'active_calories' } },
+        where: { date_kind: { date: m.date, kind: 'active_calories_hc' } },
         create: {
           date: m.date,
-          kind: 'active_calories',
+          kind: 'active_calories_hc',
           valueNum: Math.round(m.activeKcal),
           unit: 'kcal',
           sourceFile: 'healthconnect',

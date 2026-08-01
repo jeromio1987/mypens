@@ -108,6 +108,63 @@ async function fetchWithTimeout(url, init, ms = 8000) {
   }
 }
 
+async function smokePhotoAnalyze(healthBase, token) {
+  try {
+    const empty = new FormData()
+    const noAuth = await fetchWithTimeout(
+      `${healthBase}/api/food/photo-analyze`,
+      { method: 'POST', body: empty },
+      10000,
+    )
+    const okish = new Set([400, 401, 413, 415, 422])
+    // 503 = missing ANTHROPIC key (route still mounted)
+    const noAuthOk =
+      okish.has(noAuth.status) ||
+      (noAuth.status === 503 && /ANTHROPIC/i.test(await noAuth.clone().text().catch(() => '')))
+    if (noAuth.status === 404 || (noAuth.status >= 500 && noAuth.status !== 503) || !noAuthOk) {
+      return {
+        status: 'FAIL',
+        detail: `photo-analyze no-auth → ${noAuth.status} (want 400/401, not 404/5xx)`,
+      }
+    }
+
+    if (token) {
+      const withTok = await fetchWithTimeout(
+        `${healthBase}/api/food/photo-analyze`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: new FormData(),
+        },
+        10000,
+      )
+      if (withTok.status === 401) {
+        return {
+          status: 'FAIL',
+          detail: 'photo-analyze bearer → 401 (token mismatch — mobile camera will fail)',
+        }
+      }
+      if (withTok.status === 404 || (withTok.status >= 500 && withTok.status !== 503)) {
+        return {
+          status: 'FAIL',
+          detail: `photo-analyze bearer → ${withTok.status}`,
+        }
+      }
+    }
+
+    return {
+      status: 'PASS',
+      detail: `photo-analyze alive (no-auth ${noAuth.status}; no Anthropic burn)`,
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (/abort|timeout/i.test(msg)) {
+      return { status: 'FAIL', detail: `photo-analyze wedged: ${msg}` }
+    }
+    return { status: 'FAIL', detail: msg }
+  }
+}
+
 async function smokeApi() {
   const mobileEnv = readEnvFile(path.join(MOBILE, '.env'))
   const webEnv = readEnvFile(path.join(MYPENS, '.env'))
@@ -153,8 +210,13 @@ async function smokeApi() {
     return { status: 'SKIP', detail: `API down — ${healthDetail}` }
   }
 
+  const photo = await smokePhotoAnalyze(healthBase, token)
+
   if (!token) {
-    return { status: 'SKIP', detail: `Health OK at ${healthBase}; no bearer token for food/energy smoke` }
+    return {
+      status: photo.status === 'FAIL' ? 'FAIL' : 'SKIP',
+      detail: `Health OK at ${healthBase}; no bearer for food/energy; ${photo.detail}`,
+    }
   }
 
   const headers = { Authorization: `Bearer ${token}` }
@@ -167,11 +229,14 @@ async function smokeApi() {
     )
     if (!food.ok) return { status: 'FAIL', detail: `food ${food.status} at ${healthBase}` }
     if (!energy.ok) return { status: 'FAIL', detail: `energy-balance ${energy.status} at ${healthBase}` }
+    if (photo.status === 'FAIL') {
+      return { status: 'FAIL', detail: photo.detail }
+    }
     const foodJson = await food.json()
     const n = Array.isArray(foodJson) ? foodJson.length : '?'
     return {
       status: 'PASS',
-      detail: `${healthBase} food(${DATE})=${n} entries; energy-balance OK`,
+      detail: `${healthBase} food(${DATE})=${n} entries; energy-balance OK; ${photo.detail}`,
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -212,14 +277,20 @@ function checkWebTsc() {
 }
 
 function checkApk() {
-  if (SKIP_APK) return { status: 'SKIP', detail: 'Jerome --skip-apk' }
+  if (SKIP_APK) {
+    return {
+      status: 'SKIP',
+      detail:
+        'Jerome --skip-apk (photo path unverified for this APK unless photo_smoke PASS documented above — do not claim camera fixed on device)',
+    }
+  }
   const dirty = mobileUiDirty()
   if (!dirty) return { status: 'PASS', detail: 'no dirty mobile UI paths in git' }
   if (apkStampOk()) return { status: 'PASS', detail: 'mobile UI dirty; APK stamp / --apk-rebuilt present' }
   return {
     status: 'FAIL',
     detail:
-      'mobile UI changed (debuggableVariants=[]) but APK not rebuilt this session — rebuild + adb install -r, then --apk-rebuilt or docs/.verify_apk_rebuilt',
+      'mobile UI changed (debuggableVariants=[]) but APK not rebuilt this session — rebuild + adb install -r ONLY when Jerome asks; until then use --skip-apk with explicit photo unverified',
   }
 }
 

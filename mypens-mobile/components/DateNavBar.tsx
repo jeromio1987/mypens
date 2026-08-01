@@ -4,6 +4,9 @@ import { Feather } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
 
+/** Match web food history freedom, with a sane floor so we never scroll forever. */
+export const DATE_NAV_LOOKBACK_DAYS = 90
+
 export function isoToday(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -19,35 +22,75 @@ export function shiftIso(iso: string, days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** Today / Yesterday / "Sat 27 Jul" — use in body copy instead of raw ISO. */
+export function shortLabel(iso: string): string {
+  if (iso === isoToday()) return 'Today'
+  if (iso === isoYesterday()) return 'Yesterday'
+  const d = new Date(iso + 'T12:00:00')
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
 type Props = {
   date: string
   onChange: (next: string) => void
-  /** Kept for call-site compat; chips removed so Fueling only shows one date row. */
+  /**
+   * Kept for call-site compat only — ignored.
+   * History chips were removed (P0 double date chrome). Do not re-render a chip strip here or in consumers.
+   */
   recentDates?: string[]
   accent?: string
+  /** How far back ← may go (default 90). */
+  lookbackDays?: number
 }
 
-/** Single row: ← / Yesterday / Today / → + ISO — no second chip bar. */
-export function DateNavBar({ date, onChange, accent }: Props) {
+/**
+ * Single date chrome: ← / Yesterday / Today / → + shortLabel.
+ * This IS the history UI (arrows + lookbackDays) — do not add a second chip strip in consumers.
+ */
+export function DateNavBar({
+  date,
+  onChange,
+  recentDates: _recentDates,
+  accent,
+  lookbackDays = DATE_NAV_LOOKBACK_DAYS,
+}: Props) {
+  void _recentDates
   const colors = useColors()
   const primary = accent ?? colors.primary
   const today = isoToday()
   const yesterday = isoYesterday()
+  const earliest = shiftIso(today, -Math.max(1, lookbackDays))
   const isToday = date === today
   const isYesterday = date === yesterday
+  const atFloor = date <= earliest
+
+  const go = (next: string) => {
+    if (next > today) onChange(today)
+    else if (next < earliest) onChange(earliest)
+    else onChange(next)
+  }
 
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
         <Pressable
-          onPress={() => onChange(shiftIso(date, -1))}
-          style={[styles.iconBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+          onPress={() => go(shiftIso(date, -1))}
+          disabled={atFloor}
+          accessibilityLabel="Previous day"
+          style={[
+            styles.iconBtn,
+            {
+              backgroundColor: colors.secondary,
+              borderColor: colors.border,
+              opacity: atFloor ? 0.35 : 1,
+            },
+          ]}
           hitSlop={8}
         >
           <Feather name="chevron-left" size={18} color={colors.foreground} />
         </Pressable>
         <Pressable
-          onPress={() => onChange(yesterday)}
+          onPress={() => go(yesterday)}
           style={[
             styles.pill,
             {
@@ -67,7 +110,7 @@ export function DateNavBar({ date, onChange, accent }: Props) {
           </Text>
         </Pressable>
         <Pressable
-          onPress={() => onChange(today)}
+          onPress={() => go(today)}
           style={[
             styles.pill,
             {
@@ -87,8 +130,9 @@ export function DateNavBar({ date, onChange, accent }: Props) {
           </Text>
         </Pressable>
         <Pressable
-          onPress={() => onChange(shiftIso(date, 1))}
+          onPress={() => go(shiftIso(date, 1))}
           disabled={isToday}
+          accessibilityLabel="Next day"
           style={[
             styles.iconBtn,
             {
@@ -101,7 +145,9 @@ export function DateNavBar({ date, onChange, accent }: Props) {
         >
           <Feather name="chevron-right" size={18} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.iso, { color: colors.mutedForeground }]}>{date}</Text>
+        <Text style={[styles.iso, { color: colors.mutedForeground }]}>
+          {shortLabel(date)}
+        </Text>
       </View>
     </View>
   )

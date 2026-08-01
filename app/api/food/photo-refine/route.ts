@@ -9,6 +9,7 @@ import { AiResponseError, callClaude, getAnthropicClient } from '@/lib/aiCall'
 import { today } from '@/lib/timeWindow'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
 
 const VISION_MODEL = 'claude-sonnet-4-6' as Model
 const FILES_BETA = 'files-api-2025-04-14'

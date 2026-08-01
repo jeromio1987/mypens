@@ -50,6 +50,18 @@ describe('comparePanelMarkers', () => {
     expect(result.present).toBe(false)
     expect(result.summaryLine).toBe('')
   })
+
+  it('suppresses delta when units are incompatible (B1)', () => {
+    const result = comparePanelMarkers(
+      [{ code: 'cholesterol', valueNum: 5.2, unit: 'mmol/L' }],
+      [{ code: 'cholesterol', valueNum: 200, unit: 'mg/dL' }],
+    )
+    expect(result.sharedCount).toBe(1)
+    expect(result.deltas[0]?.delta).toBeNull()
+    expect(result.deltas[0]?.trend).toBe('unknown')
+    expect(result.deltas[0]?.unitMismatch).toBe(true)
+    expect(trendChipLabel(result.deltas[0]!)).toMatch(/unit mismatch/i)
+  })
 })
 
 describe('foodCoverageNudge', () => {

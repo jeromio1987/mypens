@@ -1,0 +1,24 @@
+# Keep production uploads lean — web app only
+mypens-mobile
+.next
+node_modules
+.git
+.env
+.env.*
+!.env.example
+.tmp-verdict-diag
+_from_Downloads_stitch
+uploads
+*.apk
+*.log
+screen.png
+docs/.verify_apk_rebuilt
+mypens-mobile/docs/.verify_apk_rebuilt
+Gezondheidsrapport*.pdf
+Hematologie*.pdf
+Van_der_Pluym*.pdf
+*.png.bak*
+mypens_*.png
+mypens-*-qr.png
+.cursor
+agent-transcripts

@@ -27,7 +27,8 @@ activityKcal = EAT + NEAT   // legacy "Activity" aggregate
 
 ### BMR (`lib/energyBmr.ts`)
 
-1. **Mifflin–St Jeor** if `UserSettings.heightCm`, `birthYear`, `sex` (`male`\|`female`) **and** latest `WeightEntry.scaleKg` on/before date:
+1. **Katch–McArdle** if plausible `WeightEntry.bodyFatPct` (3–60%) on/before date: `FFM = kg·(1 − BF%/100)`; `BMR = round(370 + 21.6·FFM)`.
+2. Else **Mifflin–St Jeor** if `UserSettings.heightCm`, `birthYear`, `sex` (`male`\|`female`) **and** latest `WeightEntry.scaleKg` on/before date:
 
    ```
    male:   round(10·kg + 6.25·cm − 5·age + 5)
@@ -35,10 +36,10 @@ activityKcal = EAT + NEAT   // legacy "Activity" aggregate
    age = calendarYear − birthYear (clamped 10–120)
    ```
 
-2. Else **stub:** `round(22 · kg)` (`BMR_KCAL_PER_KG` in `lib/energyWeek.ts`).
-3. Else **missing:** `0` (flagged `bmrMissing` on week days).
+3. Else **stub:** `round(22 · kg)` (`BMR_KCAL_PER_KG` in `lib/energyWeek.ts`).
+4. Else **missing:** `0` (flagged `bmrMissing` on week days).
 
-Label always exposed (`bmrLabel` / `bmrMethod`).
+Label always exposed (`bmrLabel` / `bmrMethod`). `muscleMassKg` is stored but **not** used in BMR.
 
 ### EAT — session kcal extraction (`lib/energyKcalExtract.ts`)
 
@@ -52,21 +53,24 @@ Also counted toward EAT:
 
 - `GarminActivity.calories` (FIT archive) when `> 0`
 - Unpromoted `PushedWorkout` with calories (HC/HK inbox), unless already imported (`externalId` match)
-- Dedup: if any FIT `GarminActivity` that day has calories, skip `source === 'garmin'` training rows (avoid double-count with archive)
+- Dedup: shared `dedupeSessions()` (time-overlap ≥50% of shorter) across FIT / TrainingEntry / pushed — prefers FIT archive over Strava/HC duplicates; keeps non-overlapping evening sessions (E3–E5)
 
 ### NEAT (`lib/energyNeat.ts`) — pick **one** path (never both)
 
-1. **Preferred — device Active residual** when `GarminDailyMetric` `kind=active_calories` present:
+1. **Preferred — device Active residual** when `kind=active_calories` present **and** `deviceActive ≥ Σ(session EAT)`:
 
    ```
    neatKcal = max(0, deviceActive − Σ(session EAT))
    ```
 
-2. Else **steps model** when `kind=steps` present:
+2. Else **steps model** when `kind=steps` present (also if Active exists but Active &lt; sessions — HC under-report fallback).
+   **Fixed 2026-08-01 (E1):** gross steps→kcal minus session EAT so walk/run session burn is not
+   re-counted when day steps already include those sessions:
 
    ```
    perStep = 0.04 · (weightKg / 70)   // STEPS_KCAL_BASE @ STEPS_REF_KG
-   neatKcal = round(steps · perStep)
+   gross   = round(steps · perStep)
+   neatKcal = max(0, gross − Σ(session EAT))
    ```
 
 3. Else `neatKcal = 0`, source `none`.
@@ -74,12 +78,17 @@ Also counted toward EAT:
 ### Incomplete capture
 
 ```
+foodCoverage = foodEntryCount > 0   // at least one FoodEntry that day
+
 incompleteCapture =
-  (sessionCount > 0 && eatKcal === 0)
+  foodIncomplete
+  || !foodCoverage
+  || (sessionCount > 0 && eatKcal === 0)
   || (sessionsMissingKcal > 0 && eatKcal === 0)
 ```
 
-Clears once structured kcal is present on sessions.
+Zero-food mornings are incomplete — UI must hide the bold delta (not show a confident −BMR artefact).
+`foodIncomplete` is the user tag `food_incomplete` on `DayEntry`. Session-kcal gaps clear once structured kcal is present on sessions.
 
 ### Device reference (Phase C — never summed)
 
@@ -147,11 +156,12 @@ Latest `BloodworkPanel` → `schildklierRead` (`lib/bloodworkThyroidRead.ts`). A
 |---------------|-----|
 | Garmin **Total** + anything into MY PENS out | Total already = Active + Resting |
 | Garmin **day Active** + Σ(sessions) + steps-NEAT | Use residual **or** steps, not both |
-| Session kcal twice (Garmin FIT + garmin TrainingEntry) | Skip training when FIT has cals that day |
+| Session kcal twice (FIT / Strava / HC / garmin TrainingEntry) | `dedupeSessions()` time-overlap (≥50% shorter); prefer FIT |
+| Steps-model NEAT + full session EAT | `neatKcal = max(0, steps→kcal − Σ EAT)` (E1 fixed 2026-08-01) |
 | Inbox `PushedWorkout` + already-imported TrainingEntry | Skip by `externalId` |
 | NEAT residual + steps model | Exclusive pick in `estimateNeat` |
 
-**Safe:** `BMR_estimate + Σ(session EAT) + residual NEAT` **or** steps-NEAT when no device Active.
+**Safe:** `BMR_estimate + Σ(session EAT) + residual NEAT` **or** steps-NEAT with session EAT subtracted.
 
 ---
 
@@ -180,6 +190,30 @@ Latest `BloodworkPanel` → `schildklierRead` (`lib/bloodworkThyroidRead.ts`). A
 | HealthKit | `lib/integrations/healthkit/mapping.ts` | `totalEnergyKcal` |
 
 HC/HK **ingest** upserts `PushedWorkout` when kcal arrives later (`app/api/integrations/healthconnect/ingest/route.ts`, `…/healthkit/ingest/route.ts`).
+
+### Training metrics engine (Fitness / Freshness / GAP / peaks)
+
+**Module:** `lib/engines/trainingMetrics/`
+
+Daily **PLU** (`scripts/lib/trainingLoad.mjs`) feeds Banister impulse–response:
+
+```
+CTLₜ = α₄₂·loadₜ + (1−α₄₂)·CTLₜ₋₁     // Fitness
+ATLₜ = α₇·loadₜ  + (1−α₇)·ATLₜ₋₁      // Fatigue
+TSBₜ = CTLₜ − ATLₜ                      // Form / Freshness
+ACWR = EWMA₇ / EWMA₂₈                   // null until chronic ≥ 5
+α = 1 − e^(−1/τ)
+```
+
+Also: Foster monotony/strain (7d), Minetti GAP, Edwards zone Relative Effort, peak rolling averages, session efficiency (kcal/km, HR/km).
+
+**Wired:** `lib/engines/cockpitData.ts` enriches each series day with `ctl`/`atl`/`tsb`/`acwr` (90d lookback) and returns `fosterWeek` + `fitnessFreshness`. No dedicated UI yet — payload only.
+
+**Honesty:** descriptive load models, not medical readiness. GAP activity-level totals are coarse without GPS streams.
+
+GAP identity: `gapSpeed = speed × Cr(grade)/Cr(0)` (uphill → faster equivalent flat pace).
+
+**Out of scope:** Strava segments, matched runs, segment PRs — not needed for v1; would require a segment catalog and GPS streams we do not store.
 
 ---
 
@@ -230,7 +264,6 @@ Affects **sports planner** notes/caps, not the energy ledger sum:
 
 - Sleep avg `< 6.5h` → volume capped
 - Protein floor / very-low kcal / coverage ratio vs lookback window (`minCoverage`)
-
 ---
 
 ## 7. Sleep scoring / quality / sync
@@ -349,12 +382,12 @@ Period Review step/sleep domain scores are **window-relative**; do not conflate 
 
 ## 13. Known gaps & open research questions (for external LLM)
 
-1. **Mifflin profile** — fields exist but no settings UI yet; until filled, stub ~22 kcal/kg remains.
+1. **Mifflin profile** — fields exist but no settings UI yet; without height/age/sex, BMR falls back to stub ~22 kcal/kg **unless** `bodyFatPct` is logged (then Katch–McArdle wins).
 2. **Steps→kcal curve** — linear 0.04×weight/70 is a rule of thumb; research better age/sex/terrain models without claiming lab accuracy.
 3. **Session vs day Active attribution** — residual assumes device Active ⊇ sessions; Garmin sport definitions may diverge.
-4. **Multi-source same workout** (Garmin + HC + Strava) — only FIT-vs-garmin-training dedup today; time-window dedup not built.
+4. **Multi-source same workout** (Garmin + HC + Strava) — shared `dedupeSessions()` time-overlap dedup (fixed 2026-08-01 E3–E5/T1); legacy rows without `startedAt` use synthetic noon windows.
 5. **Strava strength multi-row** — parent `calories` not split across parsed exercises (left null on sub-rows).
-6. **HC steps** — not yet ingested; NEAT falls back only when Garmin (or dump) steps/Active exist.
+6. **HC steps/Active** — ingested via companion → `dayMetrics` on HC ingest (`GarminDailyMetric` kinds `steps` / `active_calories`). Read-time precedence prefers Garmin over HC when both exist (D1). Steps-model NEAT subtracts session EAT (E1 fixed 2026-08-01).
 7. **Sleep quality from HRV** — coarse buckets; not compared to Garmin’s own sleep score.
 8. **7700 kcal/kg** — popular heuristic; short windows dominated by water/glycogen (calibration disclaimer already states this).
 9. **Thyroid → energy** — intentionally non-causal; research whether soft “context chips” should appear on day strip too.

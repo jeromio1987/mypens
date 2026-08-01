@@ -111,8 +111,9 @@ export default function WeekEnergyRecapCard({
     )
   }
 
-  const net = data.summary.weekNetKcal
-  const surplus = net >= 0
+  const tracked = data.summary.trackedNetKcal
+  const projected = data.summary.weekNetKcal
+  const surplus = tracked >= 0
   const label = windowDays === 30 ? '30-day ledger' : '7-day ledger'
 
   if (compact) {
@@ -121,13 +122,16 @@ export default function WeekEnergyRecapCard({
         <div className="min-w-0">
           <p className="font-grotesk text-[0.5625rem] uppercase tracking-[0.18em] text-ct-second/55">{label}</p>
           <p className="text-xs text-ct-second/50 truncate">
-            {data.window.from} → {data.window.to} · {data.summary.daysTracked} tracked
-            {data.summary.daysImputed ? ` · ${data.summary.daysImputed} imputed` : ''}
+            {data.window.from} → {data.window.to} · over {data.summary.daysTracked} logged day
+            {data.summary.daysTracked === 1 ? '' : 's'}
+            {data.summary.daysImputed
+              ? ` · projected ${projected >= 0 ? '+' : ''}${projected}`
+              : ''}
           </p>
         </div>
         <p className={`font-headline text-lg tabular-nums shrink-0 ${surplus ? 'text-ct-blood' : 'text-ct-second'}`}>
           {surplus ? '+' : ''}
-          {net}
+          {tracked}
           <span className="ml-1 font-grotesk text-xs font-normal text-ct-second/50">kcal</span>
         </p>
       </div>
@@ -149,7 +153,7 @@ export default function WeekEnergyRecapCard({
         </div>
         <p className={`font-headline text-lg tabular-nums shrink-0 ${surplus ? 'text-ct-blood' : 'text-ct-second'}`}>
           {surplus ? '+' : ''}
-          {net}
+          {tracked}
           <span className="ml-1 font-grotesk text-xs font-normal text-ct-second/50">kcal</span>
         </p>
       </button>
@@ -169,16 +173,25 @@ export default function WeekEnergyRecapCard({
         </div>
         <div className="flex items-start gap-2">
           <div className={`text-right ${surplus ? 'text-ct-blood' : 'text-ct-second'}`}>
-            <p className="text-xs text-ct-second/40">{surplus ? 'window surplus' : 'window deficit'}</p>
+            <p className="text-xs text-ct-second/40">
+              over {data.summary.daysTracked} logged day{data.summary.daysTracked === 1 ? '' : 's'}
+            </p>
             <p className="font-headline text-xl tabular-nums leading-none">
               {surplus ? '+' : ''}
-              {net}
+              {tracked}
               <span className="text-sm font-normal text-pens-cream/50"> kcal</span>
             </p>
-            <p className="text-[10px] text-pens-cream/40 tabular-nums">
-              avg {surplus ? '+' : ''}
-              {data.summary.avgDailyNetKcal}/day
-            </p>
+            {data.summary.daysImputed > 0 ? (
+              <p className="text-[10px] text-pens-cream/40 tabular-nums">
+                projected to {windowDays}d: {projected >= 0 ? '+' : ''}
+                {projected}
+              </p>
+            ) : (
+              <p className="text-[10px] text-pens-cream/40 tabular-nums">
+                avg {surplus ? '+' : ''}
+                {data.summary.avgDailyNetKcal}/day
+              </p>
+            )}
           </div>
           {defaultCollapsed ? (
             <button

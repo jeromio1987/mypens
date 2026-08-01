@@ -25,6 +25,39 @@ export type MarkerDelta = {
   latestFlag: RefFlag
   /** up | down | flat | unknown */
   trend: 'up' | 'down' | 'flat' | 'unknown'
+  /** Set when units differ and no safe conversion — delta suppressed (B1). */
+  unitMismatch?: boolean
+}
+
+/** Normalize unit strings for compatibility checks (not full UCUM). */
+export function normalizeUnit(unit: string | null | undefined): string | null {
+  if (unit == null) return null
+  const u = unit.trim().toLowerCase().replace(/\s+/g, '')
+  if (!u) return null
+  const aliases: Record<string, string> = {
+    'µg/l': 'ug/l',
+    'ug/l': 'ug/l',
+    'ng/ml': 'ng/ml',
+    'mg/dl': 'mg/dl',
+    'mmol/l': 'mmol/l',
+    'miu/l': 'miu/l',
+    'uiu/ml': 'uiu/ml',
+    '%': '%',
+    'g/l': 'g/l',
+    'g/dl': 'g/dl',
+  }
+  return aliases[u] ?? u
+}
+
+function unitsCompatible(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  const na = normalizeUnit(a)
+  const nb = normalizeUnit(b)
+  // Missing unit on one side: allow (same lab often omits once) but both present must match.
+  if (na == null || nb == null) return true
+  return na === nb
 }
 
 export type PanelDeltaResult = {
@@ -65,11 +98,16 @@ export function comparePanelMarkers(
 
     const latestVal = m.valueNum != null && Number.isFinite(m.valueNum) ? m.valueNum : null
     const prevVal = prev.valueNum != null && Number.isFinite(prev.valueNum) ? prev.valueNum : null
+    const unitOk = unitsCompatible(m.unit, prev.unit)
     const delta =
-      latestVal != null && prevVal != null ? Math.round((latestVal - prevVal) * 100) / 100 : null
+      unitOk && latestVal != null && prevVal != null
+        ? Math.round((latestVal - prevVal) * 100) / 100
+        : null
 
     let trend: MarkerDelta['trend'] = 'unknown'
-    if (delta != null) {
+    if (!unitOk && latestVal != null && prevVal != null) {
+      trend = 'unknown'
+    } else if (delta != null) {
       if (delta > 0) trend = 'up'
       else if (delta < 0) trend = 'down'
       else trend = 'flat'
@@ -81,10 +119,11 @@ export function comparePanelMarkers(
       previous: prevVal,
       latest: latestVal,
       delta,
-      unit: m.unit ?? prev.unit ?? null,
+      unit: unitOk ? (m.unit ?? prev.unit ?? null) : m.unit ?? prev.unit ?? null,
       previousFlag: flagRefRange(prevVal, prev.refLow, prev.refHigh),
       latestFlag: flagRefRange(latestVal, m.refLow, m.refHigh),
       trend,
+      ...(unitOk ? {} : { unitMismatch: true }),
     })
   }
 
@@ -114,6 +153,7 @@ export function comparePanelMarkers(
 
 /** Chip-friendly trend label. */
 export function trendChipLabel(d: MarkerDelta): string {
+  if (d.unitMismatch) return 'unit mismatch — no Δ'
   if (d.delta == null || d.latest == null || d.previous == null) return 'no Δ'
   const u = d.unit ? ` ${d.unit}` : ''
   return `${d.previous}${u} → ${d.latest}${u} (${fmtDelta(d.delta)})`

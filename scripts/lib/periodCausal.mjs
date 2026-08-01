@@ -60,6 +60,53 @@ export function rhrDrinkWindowStats(daily) {
   }
 }
 
+/**
+ * Last `tailDays` rows in the window — used so a single elevated morning weeks ago
+ * cannot dominate Cause/Risk when the current tail is clean.
+ */
+/**
+ * Calendar-aware recent slice ending on the latest day in `daily` (R2).
+ * Falls back to row slice when dates are missing.
+ */
+export function calendarTail(daily, tailDays = 5) {
+  const rows = daily || []
+  if (!rows.length) return []
+  const n = Math.max(1, Number(tailDays) || 5)
+  const sorted = [...rows].sort((a, b) => String(a.date).localeCompare(String(b.date)))
+  const last = sorted[sorted.length - 1]
+  if (!last?.date || !/^\d{4}-\d{2}-\d{2}$/.test(last.date)) {
+    return sorted.slice(-n)
+  }
+  const end = last.date
+  const [y, m, d] = end.split('-').map(Number)
+  const endUtc = Date.UTC(y, m - 1, d)
+  const fromUtc = endUtc - (n - 1) * 86400000
+  const fromDate = new Date(fromUtc)
+  const from = `${fromDate.getUTCFullYear()}-${String(fromDate.getUTCMonth() + 1).padStart(2, '0')}-${String(fromDate.getUTCDate()).padStart(2, '0')}`
+  return sorted.filter(r => r.date >= from && r.date <= end)
+}
+
+export function recentRhrDrinkEvidence(daily, tailDays = 5) {
+  return rhrDrinkWindowStats(calendarTail(daily, tailDays))
+}
+
+/** True when elevated RHR is still a *current* situation (recent tail or latest band). */
+export function rhrDrinkSignalIsCurrent(daily, { tailDays = 5 } = {}) {
+  const full = rhrDrinkWindowStats(daily)
+  const recent = recentRhrDrinkEvidence(daily, tailDays)
+  const latest = full.latestBand
+  return {
+    full,
+    recent,
+    heavyNow:
+      recent.heavyStackDays > 0 || latest === 'heavy_stack',
+    likelyNow:
+      recent.likelyDrinkingDays > 0 ||
+      latest === 'likely_drinking' ||
+      latest === 'heavy_stack',
+  }
+}
+
 function avg(nums) {
   const a = nums.filter(n => typeof n === 'number' && !Number.isNaN(n))
   if (!a.length) return null
@@ -272,6 +319,9 @@ export function foodEnergyWindowStats(daily) {
   const deficitDays = withDelta.filter(d => d.energyDelta <= -400).length
   const surplusDays = withDelta.filter(d => d.energyDelta >= 400).length
   const loggedDays = (daily || []).filter(d => d.foodCoverage).length
+  const stepsModelDays = withDelta.filter(d => d.neatSource === 'steps_model').length
+  const stepsModelShare =
+    Math.round((stepsModelDays / withDelta.length) * 100) / 100
   return {
     daysWithDelta: withDelta.length,
     loggedDays,
@@ -280,6 +330,8 @@ export function foodEnergyWindowStats(daily) {
     surplusDays,
     deficitShare: Math.round((deficitDays / withDelta.length) * 100) / 100,
     surplusShare: Math.round((surplusDays / withDelta.length) * 100) / 100,
+    stepsModelDays,
+    stepsModelShare,
   }
 }
 
@@ -330,36 +382,48 @@ export function rankHypotheses({ daily, domains, alcohol, lags, food }) {
   }
 
   // --- H1b: RHR drinking ladder (when Anchor drinks are thin / absent) ---
-  const rhrStats = rhrDrinkWindowStats(daily)
+  // Gate on *current* evidence: recent tail / latest band. Historical ≥50/≥55
+  // mornings alone must not spam Cause/Risk when Form is fine and RHR is clean now.
+  const { full: rhrStats, recent: recentRhr, heavyNow, likelyNow } = rhrDrinkSignalIsCurrent(daily)
   const anchorStrong =
     alcohol && (alcohol.bingeDays > 0 || alcohol.maxDrinks >= 10 || alcohol.totalDrinks >= 20)
-  if (!anchorStrong && rhrStats.heavyStackDays > 0) {
-    let conf = 0.62 + Math.min(0.25, rhrStats.heavyStackDays * 0.06)
+  if (!anchorStrong && rhrStats.heavyStackDays > 0 && heavyNow) {
+    let conf = 0.62 + Math.min(0.25, recentRhr.heavyStackDays * 0.08 + rhrStats.heavyStackDays * 0.03)
     if (noActivity) conf += 0.08
     if (rhrStats.shareHeavy >= 0.3) conf += 0.08
+    if (rhrStats.latestBand === 'heavy_stack') conf += 0.05
     hypotheses.push({
       id: 'rhr_heavy_stack',
       label: 'Very high resting HR — heavy drinking and/or other load',
       confidence: Math.min(0.92, Math.round(conf * 100) / 100),
       priority: 1,
       text:
-        `${rhrStats.heavyStackDays} morning(s) with resting HR ≥55 (band: very bad). ` +
+        `${rhrStats.heavyStackDays} morning(s) in window with resting HR ≥55` +
+        (recentRhr.heavyStackDays
+          ? ` (${recentRhr.heavyStackDays} in the last ${Math.min(5, daily?.length || 5)} days)`
+          : '') +
+        `; latest ${rhrStats.latestRhr ?? '—'} bpm. ` +
         `Above 54 bpm on this ladder means heavy drinking and/or other physiological load — not a fitness peak. ` +
         (rhrStats.exampleHeavyDates?.length
           ? `Examples: ${rhrStats.exampleHeavyDates.join(', ')}. `
           : '') +
         `Log Anchor alcoholDrinks the same night so the engine can confirm; until then treat these mornings as contaminated.`,
     })
-  } else if (!anchorStrong && rhrStats.likelyDrinkingDays > 0) {
-    let conf = 0.5 + Math.min(0.25, rhrStats.likelyDrinkingDays * 0.05)
+  } else if (!anchorStrong && rhrStats.likelyDrinkingDays > 0 && likelyNow) {
+    let conf = 0.5 + Math.min(0.25, recentRhr.likelyDrinkingDays * 0.07 + rhrStats.likelyDrinkingDays * 0.03)
     if (noActivity) conf += 0.05
+    if (rhrStats.latestBand === 'likely_drinking' || rhrStats.latestBand === 'heavy_stack') conf += 0.05
     hypotheses.push({
       id: 'rhr_likely_drinking',
       label: 'Elevated resting HR — likely drinking',
       confidence: Math.min(0.85, Math.round(conf * 100) / 100),
       priority: 2,
       text:
-        `${rhrStats.likelyDrinkingDays} morning(s) with resting HR ≥50 (above 49 = definitely been drinking on this ladder). ` +
+        `${rhrStats.likelyDrinkingDays} morning(s) in window with resting HR ≥50` +
+        (recentRhr.likelyDrinkingDays
+          ? ` (${recentRhr.likelyDrinkingDays} recent)`
+          : '') +
+        `; latest ${rhrStats.latestRhr ?? '—'} bpm. ` +
         (rhrStats.exampleLikelyDates?.length
           ? `Examples: ${rhrStats.exampleLikelyDates.join(', ')}. `
           : '') +
@@ -439,16 +503,23 @@ export function rankHypotheses({ daily, domains, alcohol, lags, food }) {
   // --- H_food: Sustained caloric deficit/surplus (soft, additive candidate) ---
   if (food && food.daysWithDelta >= 4 && food.avgDelta != null) {
     if (food.deficitShare >= 0.5 && food.avgDelta <= -300) {
-      hypotheses.push({
-        id: 'food_energy_deficit',
-        label: 'Sustained caloric deficit',
-        confidence: Math.min(0.75, 0.4 + food.deficitShare * 0.35),
-        priority: 3,
-        text:
-          `${food.deficitDays}/${food.daysWithDelta} logged days show an estimated deficit ≥400 kcal ` +
-          `(avg ${food.avgDelta} kcal/day, food − BMR/EAT/NEAT estimate). Chronic under-fuelling can mimic ` +
-          `overtraining/illness signals (low HRV, elevated RHR, poor sleep) — check food logging before blaming training load alone.`,
-      })
+      // E2: steps_model NEAT can inflate estimatedOut — down-rank or skip.
+      const stepsHeavy = (food.stepsModelShare ?? 0) >= 0.5
+      if (!stepsHeavy || food.avgDelta <= -500) {
+        const baseConf = Math.min(0.75, 0.4 + food.deficitShare * 0.35)
+        hypotheses.push({
+          id: 'food_energy_deficit',
+          label: 'Sustained caloric deficit',
+          confidence: stepsHeavy ? Math.min(0.4, baseConf * 0.5) : baseConf,
+          priority: 3,
+          text:
+            `${food.deficitDays}/${food.daysWithDelta} logged days show an estimated deficit ≥400 kcal ` +
+            `(avg ${food.avgDelta} kcal/day, food − BMR/EAT/NEAT estimate)` +
+            (stepsHeavy
+              ? `. Note: ${food.stepsModelDays}/${food.daysWithDelta} days used steps-model NEAT — treat deficit as tentative.`
+              : `. Chronic under-fuelling can mimic overtraining/illness signals (low HRV, elevated RHR, poor sleep) — check food logging before blaming training load alone.`),
+        })
+      }
     } else if (food.surplusShare >= 0.5 && food.avgDelta >= 300) {
       hypotheses.push({
         id: 'food_energy_surplus',
@@ -624,10 +695,15 @@ export function buildCausalNarrative({ alcohol, lags, hypotheses, enriched, rhrL
   )
 
   if (rhrLadder && (rhrLadder.likelyDrinkingDays > 0 || rhrLadder.heavyStackDays > 0)) {
+    const current =
+      rhrLadder.latestBand === 'heavy_stack' || rhrLadder.latestBand === 'likely_drinking'
     paras.push(
-      `RHR drinking ladder: ${rhrLadder.likelyDrinkingDays} day(s) ≥50 (likely drinking), ` +
+      `RHR drinking ladder (window counts): ${rhrLadder.likelyDrinkingDays} day(s) ≥50 (likely drinking), ` +
         `${rhrLadder.heavyStackDays} day(s) ≥55 (heavy stack). ` +
-        `Thresholds: above 49 = drinking signal; above 54 = very bad — heavy drinking and/or other load.`,
+        `Thresholds: above 49 = drinking signal; above 54 = very bad — heavy drinking and/or other load. ` +
+        (current
+          ? `Latest morning still elevated (${rhrLadder.latestRhr} bpm, ${rhrLadder.latestBand}).`
+          : `Latest morning is clean-band (${rhrLadder.latestRhr ?? '—'} bpm) — elevated days above are historical in-window, not current.`),
     )
   }
 

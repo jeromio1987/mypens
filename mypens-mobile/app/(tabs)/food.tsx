@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -36,14 +37,16 @@ import {
   PENS_PHOTO_TIMEOUT_MS,
   type PensApiProbe,
 } from '@/lib/pensApi'
-import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
-import { usePensSync } from '@/hooks/usePensSync'
+import { enqueueOp } from '@/lib/offlineQueue'
+import { usePensSync, flushOfflineQueueWithAlert } from '@/hooks/usePensSync'
 import { defaultEatenGrams, scalePortion } from '@/lib/foodPortion'
-import { fuelingRead } from '@/lib/fuelingRead'
-import { DateNavBar, shiftIso } from '@/components/DateNavBar'
+import { fuelingRead, fuelingReadEyebrow } from '@/lib/fuelingRead'
+import { DateNavBar, shiftIso, shortLabel } from '@/components/DateNavBar'
 import { FoodIncompleteMobile } from '@/components/FoodIncompleteMobile'
+import { PensLogo } from '@/components/PensLogo'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { DESTINATIONS } from '@/lib/destinations'
+import { appendImageFormFile, readPensJson } from '@/lib/photoUpload'
 
 const MOD = MODULE_COLORS.food
 const TARGETS_KEY = '@mypens/food_targets'
@@ -98,7 +101,7 @@ export default function FoodScreen() {
   const router = useRouter()
   const { online, refresh: refreshQueue } = usePensSync()
 
-  const { date: selectedDate, setDate: setSelectedDate } = useSelectedDate()
+  const { date: selectedDate, setDate: setSelectedDate, ready: dateReady } = useSelectedDate()
   const [selectedMeal, setSelectedMeal] = useState<FoodEntry['meal']>('breakfast')
   const [name, setName] = useState('')
   const [kcal, setKcal] = useState('')
@@ -120,6 +123,7 @@ export default function FoodScreen() {
   const [hrNote, setHrNote] = useState<string | null>(null)
 
   const [aiBusy, setAiBusy] = useState(false)
+  const scanAbortRef = useRef<AbortController | null>(null)
   const [scanItems, setScanItems] = useState<ScanItem[]>([])
   const [eatenGrams, setEatenGrams] = useState<number[]>([])
   const [dishSummary, setDishSummary] = useState<string | null>(null)
@@ -147,7 +151,7 @@ export default function FoodScreen() {
   const [apiProbe, setApiProbe] = useState<PensApiProbe | null>(null)
   const [productSearchError, setProductSearchError] = useState<string | null>(null)
   const [showManualAdd, setShowManualAdd] = useState(false)
-  const [showNumbers, setShowNumbers] = useState(false)
+  const [showNumbers, setShowNumbers] = useState(true)
   const [showPeriodEnergy, setShowPeriodEnergy] = useState(false)
   const [energyTick, setEnergyTick] = useState(0)
   const [copySource, setCopySource] = useState(() => shiftIso(today(), -1))
@@ -169,9 +173,12 @@ export default function FoodScreen() {
     eatKcal: number
     neatKcal: number
     bmrKcal: number
+    bmrLabel?: string
+    bmrMethod?: string
     estimatedOut: number
     delta: number
     incompleteCapture: boolean
+    foodCoverage?: boolean
     foodIncomplete?: boolean
     neatSource?: string
     neatDetail?: string
@@ -189,11 +196,17 @@ export default function FoodScreen() {
   const [showEnergyHelp, setShowEnergyHelp] = useState(false)
   const [weekEnergy, setWeekEnergy] = useState<{
     weekNetKcal: number
+    trackedNetKcal: number
     daysTracked: number
     daysImputed: number
     from: string
     to: string
     calibrationNote: string | null
+    /** Mean daily session EAT on days with eat > 0 in the 7d window (ledger, not medical). */
+    avgSessionDayEatKcal: number | null
+    /** Mean food kcal on days with food > 0 in the 7d window. */
+    avgFoodKcal: number | null
+    avgDailyNetKcal: number | null
     thyroidContext: {
       present: boolean
       title: string
@@ -203,6 +216,7 @@ export default function FoodScreen() {
   } | null>(null)
   const [monthEnergy, setMonthEnergy] = useState<{
     weekNetKcal: number
+    trackedNetKcal: number
     daysTracked: number
     from: string
     to: string
@@ -339,7 +353,8 @@ export default function FoodScreen() {
   }, [])
 
   useEffect(() => {
-    if (!isPensApiConfigured()) {
+    if (!dateReady || !isPensApiConfigured()) {
+      if (!dateReady) return
       setEnergy(null)
       setWeekEnergy(null)
       setMonthEnergy(null)
@@ -362,9 +377,15 @@ export default function FoodScreen() {
               eatKcal: j.eatKcal ?? 0,
               neatKcal: j.neatKcal ?? 0,
               bmrKcal: j.bmrKcal ?? 0,
+              bmrLabel: typeof j.bmrLabel === 'string' ? j.bmrLabel : undefined,
+              bmrMethod: typeof j.bmrMethod === 'string' ? j.bmrMethod : undefined,
               estimatedOut: j.estimatedOut ?? 0,
               delta: j.delta ?? 0,
               incompleteCapture: Boolean(j.incompleteCapture),
+              foodCoverage:
+                typeof j.foodCoverage === 'boolean'
+                  ? j.foodCoverage
+                  : (j.foodKcal ?? 0) > 0,
               foodIncomplete: Boolean(j.foodIncomplete),
               neatSource: typeof j.neatSource === 'string' ? j.neatSource : undefined,
               neatDetail: typeof j.neatDetail === 'string' ? j.neatDetail : undefined,
@@ -391,13 +412,46 @@ export default function FoodScreen() {
           const w = await weekRes.json()
           if (!cancelled) {
             const tc = w.thyroidContext
+            const days = Array.isArray(w.days)
+              ? (w.days as Array<{
+                  date?: string
+                  eatKcal?: number
+                  foodKcal?: number
+                  imputed?: boolean
+                }>)
+              : []
+            const eatDays = days
+              .filter(
+                (d) =>
+                  !d.imputed &&
+                  d.date !== selectedDate &&
+                  typeof d.eatKcal === 'number' &&
+                  d.eatKcal > 0,
+              )
+              .map((d) => d.eatKcal as number)
+            const foodDays = days
+              .filter(
+                (d) =>
+                  !d.imputed &&
+                  d.date !== selectedDate &&
+                  typeof d.foodKcal === 'number' &&
+                  d.foodKcal > 0,
+              )
+              .map((d) => d.foodKcal as number)
+            const mean = (xs: number[]) =>
+              xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null
             setWeekEnergy({
               weekNetKcal: w.summary?.weekNetKcal ?? 0,
+              trackedNetKcal: w.summary?.trackedNetKcal ?? 0,
               daysTracked: w.summary?.daysTracked ?? 0,
               daysImputed: w.summary?.daysImputed ?? 0,
               from: w.window?.from ?? '',
               to: w.window?.to ?? '',
               calibrationNote: w.calibration?.note ?? null,
+              avgSessionDayEatKcal: mean(eatDays),
+              avgFoodKcal: mean(foodDays),
+              avgDailyNetKcal:
+                typeof w.summary?.avgDailyNetKcal === 'number' ? w.summary.avgDailyNetKcal : null,
               thyroidContext:
                 tc?.present
                   ? {
@@ -419,6 +473,7 @@ export default function FoodScreen() {
             const tc = m.thyroidContext
             setMonthEnergy({
               weekNetKcal: m.summary?.weekNetKcal ?? 0,
+              trackedNetKcal: m.summary?.trackedNetKcal ?? 0,
               daysTracked: m.summary?.daysTracked ?? 0,
               from: m.window?.from ?? '',
               to: m.window?.to ?? '',
@@ -449,7 +504,7 @@ export default function FoodScreen() {
     return () => {
       cancelled = true
     }
-  }, [selectedDate, energyTick])
+  }, [selectedDate, energyTick, dateReady])
 
   useEffect(() => {
     if (!isPensApiConfigured() || name.trim().length < 2) {
@@ -517,7 +572,7 @@ export default function FoodScreen() {
       const data = await res.json()
       return Array.isArray(data) ? data : []
     },
-    enabled: isPensApiConfigured(),
+    enabled: isPensApiConfigured() && dateReady,
     retry: 1,
   })
 
@@ -534,7 +589,7 @@ export default function FoodScreen() {
       const cutoffStr = shiftDateStr(today(), -90)
       return list.filter((e) => e.date >= cutoffStr)
     },
-    enabled: isPensApiConfigured(),
+    enabled: isPensApiConfigured() && dateReady,
   })
 
   type RotationPreset = {
@@ -628,10 +683,11 @@ export default function FoodScreen() {
         notes: e.notes,
       })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      await flushOfflineQueue()
+      await flushOfflineQueueWithAlert()
       await refreshQueue()
       qc.invalidateQueries({ queryKey: ['food'] })
       qc.invalidateQueries({ queryKey: ['food-chart'] })
+      setEnergyTick((t) => t + 1)
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed')
     } finally {
@@ -662,11 +718,12 @@ export default function FoodScreen() {
         body: JSON.stringify({ id: preset.id }),
       }).catch(() => {})
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      await flushOfflineQueue()
+      await flushOfflineQueueWithAlert()
       await refreshQueue()
       qc.invalidateQueries({ queryKey: ['food'] })
       qc.invalidateQueries({ queryKey: ['food-chart'] })
       qc.invalidateQueries({ queryKey: ['food-presets'] })
+      setEnergyTick((t) => t + 1)
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed')
     } finally {
@@ -740,10 +797,11 @@ export default function FoodScreen() {
     },
     onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      await flushOfflineQueue()
+      await flushOfflineQueueWithAlert()
       await refreshQueue()
       qc.invalidateQueries({ queryKey: ['food'] })
       qc.invalidateQueries({ queryKey: ['food-chart'] })
+      setEnergyTick((t) => t + 1)
       setName('')
       setKcal('')
       setProteinG('')
@@ -776,10 +834,11 @@ export default function FoodScreen() {
     },
     onSuccess: async () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-      await flushOfflineQueue()
+      await flushOfflineQueueWithAlert()
       await refreshQueue()
       qc.invalidateQueries({ queryKey: ['food'] })
       qc.invalidateQueries({ queryKey: ['food-chart'] })
+      setEnergyTick((t) => t + 1)
     },
   })
 
@@ -833,7 +892,7 @@ export default function FoodScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       setEditingId(null)
       setEditForm(null)
-      await flushOfflineQueue()
+      await flushOfflineQueueWithAlert()
       await refreshQueue()
       qc.invalidateQueries({ queryKey: ['food'] })
       qc.invalidateQueries({ queryKey: ['food-chart'] })
@@ -883,7 +942,7 @@ export default function FoodScreen() {
         }
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      await flushOfflineQueue()
+      await flushOfflineQueueWithAlert()
       await refreshQueue()
       qc.invalidateQueries({ queryKey: ['food'] })
       qc.invalidateQueries({ queryKey: ['food-chart'] })
@@ -903,25 +962,68 @@ export default function FoodScreen() {
     return true
   }
 
+  const alertPhotoPermission = (kind: 'camera' | 'library') => {
+    const title = kind === 'camera' ? 'Camera permission' : 'Photos permission'
+    const body =
+      kind === 'camera'
+        ? Platform.OS === 'android'
+          ? 'Camera is blocked. Open Settings → Apps → My Pens → Permissions → Camera → Allow, then retry Take photo.'
+          : 'Camera is blocked. Open Settings → My Pens → Camera → Allow, then retry Take photo.'
+        : Platform.OS === 'android'
+          ? 'Photos access is blocked. Open Settings → Apps → My Pens → Permissions → Photos / Files → Allow, then retry Choose photo.'
+          : 'Photos access is blocked. Open Settings → My Pens → Photos → Allow, then retry Choose photo.'
+    Alert.alert(title, body, [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+    ])
+  }
+
   const pickAndScan = async () => {
     if (!checkApiOrAlert()) return
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
-    if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo library access to scan food.'); return }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.75 })
-    await runScan(result)
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!perm.granted) {
+        alertPhotoPermission('library')
+        return
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.75,
+        exif: false,
+      })
+      await runScan(result)
+    } catch (e: unknown) {
+      setAiBusy(false)
+      Alert.alert('Choose photo', describePensError(e))
+    }
   }
 
   const takeAndScan = async () => {
     if (!checkApiOrAlert()) return
-    const perm = await ImagePicker.requestCameraPermissionsAsync()
-    if (!perm.granted) { Alert.alert('Permission needed', 'Allow camera access to scan food.'); return }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.75 })
-    await runScan(result)
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync()
+      if (!perm.granted) {
+        alertPhotoPermission('camera')
+        return
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.75,
+        exif: false,
+      })
+      await runScan(result)
+    } catch (e: unknown) {
+      setAiBusy(false)
+      Alert.alert('Take photo', describePensError(e))
+    }
   }
 
   const runScan = async (result: ImagePicker.ImagePickerResult) => {
     if (result.canceled || !result.assets[0]) return
     const asset = result.assets[0]
+    scanAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    scanAbortRef.current = ctrl
     setAiBusy(true)
     setScanItems([])
     setEatenGrams([])
@@ -931,27 +1033,21 @@ export default function FoodScreen() {
     setPriorJson(null)
     try {
       const form = new FormData()
-      const mime = asset.mimeType ?? 'image/jpeg'
-      const ext = mime.includes('png') ? 'png' : 'jpg'
-      form.append('file', {
-        uri: asset.uri,
-        name: `scan.${ext}`,
-        type: mime,
-      } as unknown as Blob)
+      appendImageFormFile(form, 'file', asset, 'scan')
       form.append('date', selectedDate)
       form.append('meal', selectedMeal)
       const res = await pensFetch('/api/food/photo-analyze', {
         method: 'POST',
         body: form,
         timeoutMs: PENS_PHOTO_TIMEOUT_MS,
+        signal: ctrl.signal,
       })
-      const j = (await res.json()) as {
-        error?: string
+      const j = await readPensJson<{
         items?: ScanItem[]
         dishSummary?: string
         analysisMode?: string
         anthropicFileId?: string | null
-      }
+      }>(res)
       if (!res.ok) throw new Error(j.error ?? `Scan failed (${res.status})`)
       const items = Array.isArray(j.items) ? j.items : []
       setScanItems(items)
@@ -965,12 +1061,28 @@ export default function FoodScreen() {
         dishSummary: j.dishSummary ?? '',
         items,
       }))
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      if (items.length === 0 && !j.dishSummary) {
+        Alert.alert('Photo scan', 'No food detected. Try a clearer pack/plate photo, or log manually.')
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      }
     } catch (e: unknown) {
-      Alert.alert('Photo scan', describePensError(e))
+      const aborted =
+        ctrl.signal.aborted ||
+        (e instanceof Error && (e.name === 'AbortError' || /abort/i.test(e.message)))
+      if (!aborted) {
+        Alert.alert('Photo scan', describePensError(e))
+      }
     } finally {
+      if (scanAbortRef.current === ctrl) scanAbortRef.current = null
       setAiBusy(false)
     }
+  }
+
+  const cancelScan = () => {
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    setAiBusy(false)
   }
 
   const runRefine = async () => {
@@ -988,13 +1100,12 @@ export default function FoodScreen() {
           refine: refineText.trim(),
         }),
       })
-      const j = (await res.json()) as {
-        error?: string
+      const j = await readPensJson<{
         items?: ScanItem[]
         dishSummary?: string
         analysisMode?: string
         anthropicFileId?: string | null
-      }
+      }>(res)
       if (!res.ok) throw new Error(j.error ?? `Refine failed (${res.status})`)
       const items = Array.isArray(j.items) ? j.items : []
       setScanItems(items)
@@ -1086,6 +1197,7 @@ export default function FoodScreen() {
       }
       qc.invalidateQueries({ queryKey: ['food'] })
       qc.invalidateQueries({ queryKey: ['food-chart'] })
+      setEnergyTick((t) => t + 1)
       setScanItems([])
       setEatenGrams([])
       setDishSummary(null)
@@ -1152,6 +1264,7 @@ export default function FoodScreen() {
     // While food is still loading / failed, do not claim "no meals" — that lied when Next was wedged.
     entryCount: !isFetched || foodFetchError || isLoading ? -1 : entries.length,
     targets,
+    date: selectedDate,
   })
 
   const chartW = width - 48
@@ -1162,18 +1275,81 @@ export default function FoodScreen() {
   const apiProbing = isPensApiConfigured() && apiProbe === null
 
   // Energy ledger: stacked Out (BMR → EAT → NEAT) vs Food In — chart-first.
+  // Food In must equal Today's Read (sum of /api/food list). energy.foodKcal
+  // lagged after quick-log/photo/delete because energyTick was only bumped on
+  // edit+copy — 2026-07-28: Read 1734 vs In 1063 (= first 8 of 11 DB rows).
   const ENERGY_BMR = '#64748b'
   const ENERGY_EAT = '#fb923c'
   const ENERGY_NEAT = '#2dd4bf'
   const ENERGY_FOOD = '#E8B84A'
+  const foodListReady = Boolean(isFetched && !foodFetchError && !isLoading)
+  const liveFoodKcal = foodListReady
+    ? Math.round(totals.kcal)
+    : Math.max(0, energy?.foodKcal ?? 0)
   const eatUnknown =
-    Boolean(energy?.incompleteCapture && !energy?.foodIncomplete && energy?.eatKcal === 0)
+    Boolean(energy?.incompleteCapture && !energy?.foodIncomplete && energy?.foodCoverage && energy?.eatKcal === 0)
   const neatUnknown = energy?.neatSource === 'none'
+  const hasFood = foodListReady
+    ? entries.length > 0
+    : energy?.foodCoverage != null
+      ? energy.foodCoverage
+      : (energy?.foodKcal ?? 0) > 0
+  // Gate on live food + session gap — not stale energy.foodCoverage after a food write.
+  const hideEnergyDelta = Boolean(!hasFood || energy?.foodIncomplete || eatUnknown)
   const eatChart = eatUnknown ? 0 : Math.max(0, energy?.eatKcal ?? 0)
   const neatChart = neatUnknown ? 0 : Math.max(0, energy?.neatKcal ?? 0)
   const bmrChart = Math.max(0, energy?.bmrKcal ?? 0)
-  const foodChart = Math.max(0, energy?.foodKcal ?? 0)
+  const foodChart = Math.max(0, liveFoodKcal)
+  const liveDelta =
+    energy != null ? Math.round(foodChart - (energy.estimatedOut ?? 0)) : 0
   const outStackTotal = bmrChart + eatChart + neatChart
+  const sessionSources =
+    energy?.sources.filter(
+      (s) =>
+        s.origin === 'garmin_activity' ||
+        s.origin === 'training' ||
+        s.origin === 'notes' ||
+        s.origin === 'pushed',
+    ) ?? []
+  const sessionCount = sessionSources.length
+  const avgSessionDay = weekEnergy?.avgSessionDayEatKcal ?? null
+  const sessionVsUsual = (() => {
+    if (eatUnknown || eatChart <= 0 || avgSessionDay == null || avgSessionDay <= 0) return null
+    const pct = (eatChart - avgSessionDay) / avgSessionDay
+    const usual = `~${avgSessionDay} kcal · 7d session days`
+    if (Math.abs(pct) < 0.12) return `Near your usual session (${usual})`
+    if (pct > 0) return `Above your usual session (${usual})`
+    return `Below your usual session (${usual})`
+  })()
+  const sessionChipLabel = eatUnknown
+    ? 'Sessions — kcal not synced'
+    : sessionCount > 0
+      ? `Sessions ${eatChart} kcal · ${sessionCount} logged`
+      : `Sessions ${eatChart} kcal`
+  const energyFeedbackChips: string[] = []
+  if (energy && !hasFood) energyFeedbackChips.push('No food logged')
+  else if (energy?.foodIncomplete) energyFeedbackChips.push('Food capture incomplete')
+  else if (energy?.incompleteCapture) energyFeedbackChips.push('Session kcal missing')
+  if (energy?.foodCoverage7d?.thin) {
+    energyFeedbackChips.push(
+      `Coverage ${energy.foodCoverage7d.loggedDays}/${energy.foodCoverage7d.windowDays}`,
+    )
+  }
+  if (
+    weekEnergy?.avgFoodKcal != null &&
+    weekEnergy.avgFoodKcal > 0 &&
+    foodChart > 0 &&
+    !energy?.foodIncomplete
+  ) {
+    const pct = (foodChart - weekEnergy.avgFoodKcal) / weekEnergy.avgFoodKcal
+    if (Math.abs(pct) >= 0.12) {
+      energyFeedbackChips.push(
+        pct > 0
+          ? `Food above 7d avg (~${weekEnergy.avgFoodKcal})`
+          : `Food below 7d avg (~${weekEnergy.avgFoodKcal})`,
+      )
+    }
+  }
   const energyStackData = energy
     ? [
         {
@@ -1215,6 +1391,29 @@ export default function FoodScreen() {
       ]
     : []
 
+  if (!dateReady) {
+    return (
+      <ScrollView
+        style={[styles.container, { backgroundColor: C.bg }]}
+        contentContainerStyle={{ paddingTop: topInset + 16, paddingBottom: insets.bottom + 100 }}
+      >
+        <View style={styles.header}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+            <PensLogo size={40} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.kicker}>The Continental · P.E.N.S.</Text>
+              <Text style={styles.title}>Fueling</Text>
+              <Text style={styles.sub}>{DESTINATIONS.find(d => d.id === 'fueling')!.blurb}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={{ paddingVertical: 48, alignItems: 'center' }}>
+          <ActivityIndicator color={C.cream} />
+        </View>
+      </ScrollView>
+    )
+  }
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: C.bg }]}
@@ -1223,10 +1422,13 @@ export default function FoodScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.header}>
-        <View>
-          <Text style={styles.kicker}>The Continental · P.E.N.S.</Text>
-          <Text style={styles.title}>Fueling</Text>
-          <Text style={styles.sub}>{DESTINATIONS.find(d => d.id === 'fueling')!.blurb}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+          <PensLogo size={40} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.kicker}>The Continental · P.E.N.S.</Text>
+            <Text style={styles.title}>Fueling</Text>
+            <Text style={styles.sub}>{DESTINATIONS.find(d => d.id === 'fueling')!.blurb}</Text>
+          </View>
         </View>
         <Pressable onPress={() => setShowTargets((s) => !s)} hitSlop={12}>
           <Feather name="settings" size={20} color={C.creamMuted} />
@@ -1234,12 +1436,7 @@ export default function FoodScreen() {
       </View>
 
       <View style={{ marginHorizontal: 16, marginBottom: 4 }}>
-        <DateNavBar
-          date={selectedDate}
-          onChange={setSelectedDate}
-          accent={C.cream}
-          recentDates={last14.map(([d]) => d).reverse()}
-        />
+        <DateNavBar date={selectedDate} onChange={setSelectedDate} accent={C.cream} />
         {apiOk ? (
           <FoodIncompleteMobile date={selectedDate} onChanged={() => setEnergyTick((t) => t + 1)} />
         ) : null}
@@ -1288,7 +1485,9 @@ export default function FoodScreen() {
 
       {apiOk && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Today's Read</Text>
+          <Text style={[styles.readEyebrow, { color: MOD.primary }]}>
+            {fuelingReadEyebrow(selectedDate)}
+          </Text>
           <Text style={[styles.readVerdict, { color: colors.foreground }]}>{read.verdict}</Text>
           <Text style={[styles.readCause, { color: colors.mutedForeground }]}>
             <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.foreground }}>Cause · </Text>
@@ -1331,30 +1530,39 @@ export default function FoodScreen() {
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: `${ENERGY_FOOD}55` }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
             <Text style={[styles.readEyebrow, { color: ENERGY_FOOD }]}>Energy ledger</Text>
-            {energy.incompleteCapture ? (
-              <Text style={{ color: '#f59e0b', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>saldo —</Text>
+            {hideEnergyDelta ? (
+              <Text style={{ color: C.creamMuted, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>—</Text>
             ) : (
               <Text
                 style={{
-                  color: energy.delta >= 0 ? ENERGY_FOOD : '#38bdf8',
+                  color: liveDelta >= 0 ? ENERGY_FOOD : '#38bdf8',
                   fontFamily: 'Inter_700Bold',
                   fontSize: 16,
                 }}
               >
-                {energy.delta >= 0 ? '+' : ''}
-                {energy.delta} kcal
+                {liveDelta >= 0 ? '+' : ''}
+                {liveDelta} kcal
               </Text>
             )}
           </View>
 
-          {energy.foodIncomplete ? (
-            <Text style={[styles.readCause, { color: '#f59e0b', marginBottom: 8 }]}>
-              Eten deels gelogd — saldo voorlopig.
+          {!hasFood ? (
+            <Text style={[styles.readCause, { color: C.creamMuted, marginBottom: 8 }]}>
+              No meals logged for this day yet. A deficit here would be a capture gap, not a result.
+            </Text>
+          ) : energy.foodIncomplete ? (
+            <Text style={[styles.readCause, { color: C.creamMuted, marginBottom: 8 }]}>
+              Food partly logged — balance is provisional.
             </Text>
           ) : null}
-          {energy.incompleteCapture && !energy.foodIncomplete ? (
-            <Text style={[styles.readCause, { color: '#f59e0b', marginBottom: 8 }]}>
-              Sessies zonder kcal — sync HC, dan refresh.
+          {hasFood && energy.incompleteCapture && !energy.foodIncomplete ? (
+            <Text style={[styles.readCause, { color: C.creamMuted, marginBottom: 8 }]}>
+              Training sessions missing kcal — sync HC, then refresh.
+            </Text>
+          ) : null}
+          {!hideEnergyDelta ? (
+            <Text style={[styles.readCause, { color: C.creamMuted, marginBottom: 8 }]}>
+              Food minus estimated burn. Device estimates, not measured.
             </Text>
           ) : null}
 
@@ -1381,10 +1589,25 @@ export default function FoodScreen() {
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
             {[
-              { c: ENERGY_BMR, l: `Rust ${bmrChart}` },
-              { c: ENERGY_EAT, l: eatUnknown ? 'Sessies —' : `Sessies ${eatChart}` },
-              { c: ENERGY_NEAT, l: neatUnknown ? 'Overige —' : `Overige ${neatChart}` },
-              { c: ENERGY_FOOD, l: `Food ${foodChart}` },
+              {
+                c: ENERGY_BMR,
+                l:
+                  energy.bmrMethod === 'stub_22kcal_kg'
+                    ? `Resting ~${bmrChart} kcal · est. 22/kg`
+                    : energy.bmrLabel
+                      ? `Resting ~${bmrChart} kcal · ${energy.bmrLabel}`
+                      : `Resting ~${bmrChart} kcal`,
+              },
+              { c: ENERGY_EAT, l: sessionChipLabel },
+              {
+                c: ENERGY_NEAT,
+                l: neatUnknown
+                  ? 'Other movement — no step data'
+                  : energy?.neatSource === 'steps_model'
+                    ? `Other movement ${neatChart} kcal · steps estimate`
+                    : `Other movement ${neatChart} kcal`,
+              },
+              { c: ENERGY_FOOD, l: `Food ${foodChart} kcal` },
             ].map((chip) => (
               <View key={chip.l} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                 <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: chip.c }} />
@@ -1395,11 +1618,49 @@ export default function FoodScreen() {
             ))}
           </View>
 
-          {energy.incompleteCapture ? (
+          {sessionVsUsual ? (
+            <Text
+              style={{
+                marginTop: 8,
+                color: ENERGY_EAT,
+                fontSize: 11,
+                fontFamily: 'Inter_500Medium',
+                lineHeight: 15,
+              }}
+            >
+              {sessionVsUsual}
+            </Text>
+          ) : null}
+
+          {energyFeedbackChips.length > 0 ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {energyFeedbackChips.map((chip) => (
+                <View
+                  key={chip}
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: `${ENERGY_FOOD}66`,
+                    backgroundColor: 'rgba(232,184,74,0.08)',
+                  }}
+                >
+                  <Text style={{ color: colors.mutedForeground, fontSize: 10, fontFamily: 'Inter_500Medium' }}>
+                    {chip}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {hideEnergyDelta ? (
             <Pressable
               onPress={() =>
                 router.push(
-                  (energy.foodIncomplete ? '/(tabs)/food' : '/(tabs)/training') as never,
+                  (!hasFood || energy.foodIncomplete
+                    ? '/(tabs)/food'
+                    : '/(tabs)/training') as never,
                 )
               }
               style={{
@@ -1413,7 +1674,7 @@ export default function FoodScreen() {
               }}
             >
               <Text style={{ color: '#f59e0b', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
-                {energy.foodIncomplete ? 'Afronden eten' : 'Sync Health Connect'}
+                {!hasFood || energy.foodIncomplete ? 'Finish logging food' : 'Sync Health Connect'}
               </Text>
             </Pressable>
           ) : null}
@@ -1426,7 +1687,7 @@ export default function FoodScreen() {
           {showEnergyHelp ? (
             <View style={{ marginTop: 8, gap: 6 }}>
               <Text style={{ color: colors.mutedForeground, fontSize: 11, lineHeight: 16 }}>
-                Out = rust (BMR) + sessies (EAT) + overige (NEAT). In = food. Delta = In − Out.
+                Out = resting (BMR) + training sessions (EAT) + other movement (NEAT). In = food. Delta = In − Out.
               </Text>
               {energy.steps != null ? (
                 <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>
@@ -1477,13 +1738,19 @@ export default function FoodScreen() {
             <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
               <Text style={[styles.readEyebrow, { color: MOD.primary }]}>7-day</Text>
               <Text style={[styles.readVerdict, { color: colors.foreground, fontSize: 16 }]}>
-                {weekEnergy.weekNetKcal >= 0 ? '+' : ''}
-                {weekEnergy.weekNetKcal} kcal
+                {weekEnergy.trackedNetKcal >= 0 ? '+' : ''}
+                {weekEnergy.trackedNetKcal} kcal
               </Text>
               <Text style={[styles.readCause, { color: colors.mutedForeground }]}>
-                {weekEnergy.from} → {weekEnergy.to} · {weekEnergy.daysTracked} tracked
-                {weekEnergy.daysImputed ? ` · ${weekEnergy.daysImputed} imputed` : ''}
+                over {weekEnergy.daysTracked} logged day{weekEnergy.daysTracked === 1 ? '' : 's'} ·{' '}
+                {weekEnergy.from} → {weekEnergy.to}
               </Text>
+              {weekEnergy.daysImputed > 0 ? (
+                <Text style={[styles.readCause, { color: colors.mutedForeground, marginTop: 2 }]}>
+                  Projected to 7 days: {weekEnergy.weekNetKcal >= 0 ? '+' : ''}
+                  {weekEnergy.weekNetKcal} kcal ({weekEnergy.daysImputed} imputed)
+                </Text>
+              ) : null}
               {weekEnergy.calibrationNote ? (
                 <Text style={[styles.readCause, { color: colors.mutedForeground, marginTop: 4 }]}>
                   Scale check: {weekEnergy.calibrationNote}
@@ -1509,11 +1776,16 @@ export default function FoodScreen() {
             <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
               <Text style={[styles.readEyebrow, { color: MOD.primary }]}>30-day</Text>
               <Text style={[styles.readVerdict, { color: colors.foreground, fontSize: 16 }]}>
-                {monthEnergy.weekNetKcal >= 0 ? '+' : ''}
-                {monthEnergy.weekNetKcal} kcal
+                {monthEnergy.trackedNetKcal >= 0 ? '+' : ''}
+                {monthEnergy.trackedNetKcal} kcal
               </Text>
               <Text style={[styles.readCause, { color: colors.mutedForeground }]}>
-                {monthEnergy.from} → {monthEnergy.to} · {monthEnergy.daysTracked} tracked
+                over {monthEnergy.daysTracked} logged day{monthEnergy.daysTracked === 1 ? '' : 's'} ·{' '}
+                {monthEnergy.from} → {monthEnergy.to}
+              </Text>
+              <Text style={[styles.readCause, { color: colors.mutedForeground, marginTop: 2 }]}>
+                Projected to 30 days: {monthEnergy.weekNetKcal >= 0 ? '+' : ''}
+                {monthEnergy.weekNetKcal} kcal
               </Text>
               {monthEnergy.calibrationNote ? (
                 <Text style={[styles.readCause, { color: colors.mutedForeground, marginTop: 4 }]}>
@@ -1642,7 +1914,7 @@ export default function FoodScreen() {
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: `${MOD.primary}55` }]}>
           <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Tap to log</Text>
           <Text style={[styles.dateHint, { color: colors.mutedForeground, marginBottom: 10 }]}>
-            One tap logs for {selectedDate} · {selectedMeal}. Lowest friction.
+            One tap logs for {shortLabel(selectedDate)} · {selectedMeal}. Lowest friction.
           </Text>
           {rotationPresets.length > 0 && (
             <>
@@ -1696,7 +1968,7 @@ export default function FoodScreen() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Capture</Text>
         <Text style={[styles.dateHint, { color: colors.mutedForeground, marginBottom: 10 }]}>
-          One photo of the pack or plate — adjust grams if needed. Not a food diary. Logging for {selectedDate}.
+          One photo of the pack or plate — adjust grams if needed. Not a food diary. Logging for {shortLabel(selectedDate)}.
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable
@@ -1718,6 +1990,14 @@ export default function FoodScreen() {
             <Text style={[styles.secondaryBtnText, { color: MOD.primary }]}>Choose photo</Text>
           </Pressable>
         </View>
+        {aiBusy ? (
+          <Pressable
+            onPress={cancelScan}
+            style={[styles.secondaryBtn, { marginTop: 8, borderColor: colors.border }]}
+          >
+            <Text style={[styles.secondaryBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
+          </Pressable>
+        ) : null}
         {analysisMode && (
           <Text style={[styles.aiMeta, { color: colors.mutedForeground }]}>Mode: {analysisMode}</Text>
         )}
@@ -2090,7 +2370,7 @@ export default function FoodScreen() {
         <>
           {apiOk ? (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Copy meal into {selectedDate}</Text>
+              <Text style={[styles.readEyebrow, { color: MOD.primary }]}>Copy meal into {shortLabel(selectedDate)}</Text>
               <Text style={[styles.dateHint, { color: colors.mutedForeground, marginBottom: 8 }]}>
                 Source day (yyyy-mm-dd) · tap a meal to copy all items
               </Text>

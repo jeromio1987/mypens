@@ -4,16 +4,30 @@
  */
 
 import { prisma } from '@/lib/db'
-import { buildDailySignals, scoreDay, analyzePeriods } from '../../scripts/lib/periodAnalyze.mjs'
+import {
+  buildDailySignals,
+  scoreDay,
+  analyzePeriods,
+  FORM_MIN_INPUTS,
+  FORM_SIGNAL_COUNT,
+} from '../../scripts/lib/periodAnalyze.mjs'
 import { analyzeCausal, classifyRhrDrinkBand } from '../../scripts/lib/periodCausal.mjs'
 import { loadGarminData } from '../../scripts/lib/garminAnalyze.mjs'
 import { loadConfounders } from '../../scripts/lib/periodCausal.mjs'
 import { getEnergyBalanceForRange, type WindowDayEnergy } from '@/lib/energyBalance'
 import { loadBloodworkLatestSummary } from '@/lib/bloodworkLatestSummary'
+import {
+  addDaysIso,
+  buildFitnessSeries,
+  fosterWeekEnding,
+  type FosterWeek,
+} from '@/lib/engines/trainingMetrics'
 
 export type CockpitDay = {
   date: string
   formScore: number | null
+  /** How many of FORM_SIGNAL_COUNT inputs contributed to formScore (0 when none). */
+  formInputs: number
   sleepHours: number | null
   stress: number | null
   hrv: number | null
@@ -25,6 +39,14 @@ export type CockpitDay = {
   trainingLoad: number
   hardLoad: number
   easyLoad: number
+  /** Banister CTL — Fitness (42d EWMA of PLU). */
+  ctl: number | null
+  /** Banister ATL — Fatigue (7d EWMA of PLU). */
+  atl: number | null
+  /** TSB = CTL − ATL — Form / Freshness (not cockpit formScore). */
+  tsb: number | null
+  /** Acute:Chronic = EWMA₇ / EWMA₂₈. */
+  acwr: number | null
   /** WP 2.1 — nutrition from FoodEntry (window-scoped). */
   kcalIn: number | null
   proteinG: number | null
@@ -32,6 +54,8 @@ export type CockpitDay = {
   fatG: number | null
   foodLogged: boolean
   energyDelta: number | null
+  /** NEAT path for the day — `steps_model` down-ranks deficit narratives (E2). */
+  neatSource: string | null
   foodIncomplete: boolean
 }
 
@@ -45,17 +69,66 @@ function spanOf(rows: { date: string }[]) {
   return { count: rows.length, from: dates[0], to: dates[dates.length - 1] }
 }
 
-export async function buildCockpitWindow(opts: { from: string; to: string; asOf?: string }) {
+type RiskPattern = { id?: string; severity: string; title: string }
+
+/**
+ * First high-severity pattern that is not the same finding as leadingCause.
+ * Causal patterns are prepended into topPatterns with title `${label} (N%)`,
+ * so a naive `.find(severity===high)` reprints Cause as Risk.
+ */
+export function pickDistinctTopRisk(
+  patterns: RiskPattern[] | null | undefined,
+  leadingCause: { id: string; label: string } | null,
+): string | null {
+  if (!patterns?.length) return null
+  const causeId = leadingCause?.id ?? null
+  const causeLabel = leadingCause?.label?.trim().toLowerCase() ?? null
+
+  const sameAsCause = (p: RiskPattern) => {
+    if (causeId && p.id && p.id === causeId) return true
+    if (!causeLabel) return false
+    const bare = p.title.replace(/\s*\(\d+%\)\s*$/, '').trim().toLowerCase()
+    return bare === causeLabel
+  }
+
+  return patterns.find(p => p.severity === 'high' && !sameAsCause(p))?.title ?? null
+}
+
+/**
+ * Period-analyze headlines describe Form-week stretches / multi-month views —
+ * not the rolling chip window. Prefix so The Read does not look like the chip range.
+ */
+export function formatTheReadHeadline(raw: string | null | undefined): string {
+  const h = (raw || '').trim()
+  if (!h) return 'No read yet for this window.'
+  // Always label — headlines describe Form-week stretches, not the chip window (R1).
+  if (/^Form weeks\s*·/i.test(h)) return h
+  return `Form weeks · ${h}`
+}
+
+export async function buildCockpitWindow(opts: {
+  from: string
+  to: string
+  asOf?: string
+  /** When true, run five prisma.count() ledger cross-checks (debug only). */
+  debug?: boolean
+}) {
   const { from, to } = opts
   const asOf = opts.asOf || to
+  const debug = Boolean(opts.debug)
+
+  // Live path: clip ledger load to window + 90d lookback (CTL warm-start / fitness).
+  // Do NOT use allTime — that wedges the API on large ledgers.
+  // Bloodwork uses loadBloodworkLatestSummary separately (not this clip).
+  const loadFrom = addDaysIso(from, -90)
 
   const loadNotes: string[] = []
   let garmin: Awaited<ReturnType<typeof loadGarminData>>
   let confounders: Awaited<ReturnType<typeof loadConfounders>>
   try {
     ;[garmin, confounders] = await Promise.all([
-      loadGarminData(prisma, { allTime: true }),
-      loadConfounders(prisma, {}),
+      loadGarminData(prisma, { weekOf: loadFrom, weekEnd: to, allTime: false }),
+      loadConfounders(prisma, { from: loadFrom, to }),
     ])
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -109,51 +182,59 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
   const suggestedSpan =
     allDates.length > 0 ? { from: allDates[0], to: allDates[allDates.length - 1] } : null
 
-  // Cross-check with raw counts (not wrapped in loadGarminData's silent safe()).
-  let rawCounts: Record<string, number> | null = null
-  try {
-    const [sleepN, actN, trainN, weightN, metricN] = await Promise.all([
-      prisma.sleepEntry.count(),
-      prisma.garminActivity.count(),
-      prisma.trainingEntry.count(),
-      prisma.weightEntry.count(),
-      prisma.garminDailyMetric ? prisma.garminDailyMetric.count() : Promise.resolve(0),
-    ])
-    rawCounts = {
-      sleep: sleepN,
-      activities: actN,
-      trainings: trainN,
-      weights: weightN,
-      metrics: metricN,
+  // Cross-check with raw counts — gated behind ?debug=1 (five COUNT(*) scans).
+  let rawCounts: {
+    sleep: number
+    activities: number
+    trainings: number
+    weights: number
+    metrics: number
+  } | null = null
+  if (debug) {
+    try {
+      const [sleepN, actN, trainN, weightN, metricN] = await Promise.all([
+        prisma.sleepEntry.count(),
+        prisma.garminActivity.count(),
+        prisma.trainingEntry.count(),
+        prisma.weightEntry.count(),
+        prisma.garminDailyMetric ? prisma.garminDailyMetric.count() : Promise.resolve(0),
+      ])
+      rawCounts = {
+        sleep: sleepN,
+        activities: actN,
+        trainings: trainN,
+        weights: weightN,
+        metrics: metricN,
+      }
+      const rawTotal = sleepN + actN + trainN + weightN + metricN
+      if (ledger.totalRows === 0 && rawTotal > 0) {
+        loadNotes.push(
+          `Prisma tables have ${rawTotal} rows, but the cockpit loader returned 0 (likely a query/select mismatch). Check the Next.js terminal for [garmin-analyze] warnings.`,
+        )
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (/must start with the protocol|DATABASE_URL|datasource `db`/i.test(msg)) {
+        loadNotes.push(
+          'DATABASE_URL is missing or invalid in this app’s .env (must start with postgresql:// or postgres://). Fix .env, then fully restart npm run dev — Supabase SQL working does not mean local Next can connect.',
+        )
+      } else {
+        loadNotes.push(`Could not count ledger tables: ${msg}`)
+      }
     }
-    const rawTotal = sleepN + actN + trainN + weightN + metricN
-    if (ledger.totalRows === 0 && rawTotal > 0) {
-      loadNotes.push(
-        `Prisma tables have ${rawTotal} rows, but the cockpit loader returned 0 (likely a query/select mismatch). Check the Next.js terminal for [garmin-analyze] warnings.`,
-      )
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    if (/must start with the protocol|DATABASE_URL|datasource `db`/i.test(msg)) {
-      loadNotes.push(
-        'DATABASE_URL is missing or invalid in this app’s .env (must start with postgresql:// or postgres://). Fix .env, then fully restart npm run dev — Supabase SQL working does not mean local Next can connect.',
-      )
-    } else {
-      loadNotes.push(`Could not count ledger tables: ${msg}`)
-    }
-  }
 
-  if (
-    ledger.totalRows === 0 &&
-    rawCounts &&
-    Object.values(rawCounts).every(n => n === 0) &&
-    !loadNotes.some(n => /DATABASE_URL is missing/i.test(n))
-  ) {
-    loadNotes.push(
-      'Supabase ledger is empty for SleepEntry / GarminActivity / TrainingEntry / WeightEntry / GarminDailyMetric. Re-run the Garmin dump import against this same DATABASE_URL.',
-    )
-  } else if (ledger.totalRows === 0 && rawCounts == null) {
-    // Count failed (e.g. bad URL) — do not claim the ledger is empty.
+    if (
+      ledger.totalRows === 0 &&
+      rawCounts &&
+      Object.values(rawCounts).every(n => n === 0) &&
+      !loadNotes.some(n => /DATABASE_URL is missing/i.test(n))
+    ) {
+      loadNotes.push(
+        'Supabase ledger is empty for SleepEntry / GarminActivity / TrainingEntry / WeightEntry / GarminDailyMetric. Re-run the Garmin dump import against this same DATABASE_URL.',
+      )
+    } else if (ledger.totalRows === 0 && rawCounts == null) {
+      // Count failed (e.g. bad URL) — do not claim the ledger is empty.
+    }
   }
 
   const metricKindCounts: Record<string, number> = {}
@@ -188,6 +269,9 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
   // only (not allTime). Fed into buildDailySignals as data.food so the
   // periodAnalyze/periodCausal nutrition hypothesis (foodEnergyWindowStats)
   // sees real kcalIn/energyDelta instead of staying dark.
+  //
+  // Run energy + incomplete tags + hrMax + labs in one wave after the ledger
+  // load — sequential awaits here used to add multi-second eu-west-1 RTT.
   const foodByDate = new Map<
     string,
     {
@@ -197,20 +281,37 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
       fatG: number
       foodLogged: boolean
       energyDelta: number | null
+      neatSource: string | null
     }
   >()
   const incompleteByDate = new Map<string, boolean>()
-  try {
-    const [energyRows, incompleteRows] = await Promise.all([
-      getEnergyBalanceForRange(from, to),
-      prisma.dayEntry
-        .findMany({
-          where: { date: { gte: from, lte: to } },
-          select: { date: true, tags: true },
-        })
-        .catch(() => [] as { date: string; tags: string | null }[]),
-    ])
-    for (const row of energyRows) {
+
+  const [energyResult, incompleteRows, hrMax, labsSummary] = await Promise.all([
+    getEnergyBalanceForRange(from, to)
+      .then(rows => ({ ok: true as const, rows }))
+      .catch((err: unknown) => ({
+        ok: false as const,
+        rows: [] as WindowDayEnergy[],
+        err,
+      })),
+    prisma.dayEntry
+      .findMany({
+        where: { date: { gte: from, lte: to } },
+        select: { date: true, tags: true },
+      })
+      .catch(() => [] as { date: string; tags: string | null }[]),
+    prisma.userSettings
+      .findUnique({ where: { id: 'default' }, select: { hrMax: true } })
+      .then(s => (s?.hrMax != null && s.hrMax > 0 ? s.hrMax : null))
+      .catch(() => null as number | null),
+    loadBloodworkLatestSummary().catch(() => null),
+  ])
+
+  if (!energyResult.ok) {
+    const msg = energyResult.err instanceof Error ? energyResult.err.message : String(energyResult.err)
+    loadNotes.push(`Food/energy window load failed: ${msg}`)
+  } else {
+    for (const row of energyResult.rows) {
       foodByDate.set(row.date, {
         kcalIn: row.kcalIn,
         proteinG: row.proteinG,
@@ -218,21 +319,19 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
         fatG: row.fatG,
         foodLogged: row.foodCoverage,
         energyDelta: row.delta,
+        neatSource: row.neatSource ?? null,
       })
     }
-    for (const d of incompleteRows) {
-      try {
-        const tags = JSON.parse(String(d.tags || '[]')) as unknown
-        if (Array.isArray(tags) && tags.includes('food_incomplete')) {
-          incompleteByDate.set(d.date, true)
-        }
-      } catch {
-        /* ignore */
+  }
+  for (const d of incompleteRows) {
+    try {
+      const tags = JSON.parse(String(d.tags || '[]')) as unknown
+      if (Array.isArray(tags) && tags.includes('food_incomplete')) {
+        incompleteByDate.set(d.date, true)
       }
+    } catch {
+      /* ignore */
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    loadNotes.push(`Food/energy window load failed: ${msg}`)
   }
 
   const foodForSignals = [...foodByDate.entries()]
@@ -244,18 +343,8 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
       carbsG: food.carbsG,
       fatG: food.fatG,
       energyDelta: food.energyDelta ?? undefined,
+      neatSource: food.neatSource ?? undefined,
     }))
-
-  let hrMax: number | null = null
-  try {
-    const settings = await prisma.userSettings.findUnique({
-      where: { id: 'default' },
-      select: { hrMax: true },
-    })
-    if (settings?.hrMax != null && settings.hrMax > 0) hrMax = settings.hrMax
-  } catch {
-    /* optional profile */
-  }
 
   const daily = buildDailySignals({
     ...data,
@@ -263,12 +352,44 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     ...(hrMax != null ? { hrMax } : {}),
   })
 
+  // Fitness/Freshness needs ~CTL τ lookback so window-start CTL isn't cold-started.
+  const fitnessFrom = addDaysIso(from, -90)
+  const lookbackDaily = buildDailySignals({
+    sleeps: clip(allSleeps, fitnessFrom, to),
+    metrics: clip(allMetrics, fitnessFrom, to),
+    activities: clip(allActivities, fitnessFrom, to),
+    trainings: clip(allTrainings, fitnessFrom, to),
+    weights: clip(allWeights, fitnessFrom, to),
+    recoveries: clip(confounders.recoveries || [], fitnessFrom, to),
+    dayEntries: clip(confounders.dayEntries || [], fitnessFrom, to),
+    ...(hrMax != null ? { hrMax } : {}),
+  })
+  const fitnessSeries = buildFitnessSeries(
+    lookbackDaily.map((d: { date: string; trainingLoad?: number }) => ({
+      date: d.date,
+      load: Number(d.trainingLoad) || 0,
+    })),
+    { from: fitnessFrom, to },
+  )
+  const fitnessByDate = new Map(fitnessSeries.map(f => [f.date, f]))
+  const fosterWeek: FosterWeek = fosterWeekEnding(
+    fitnessSeries.map(f => ({ date: f.date, load: f.load })),
+    to,
+    7,
+  )
+
   const series: CockpitDay[] = daily.map((d: Record<string, unknown>) => {
     const date = d.date as string
     const food = foodByDate.get(date)
+    const fit = fitnessByDate.get(date)
+    const scored = scoreDay(d) as { score: number; formInputs: number } | null
+    const formInputs = scored?.formInputs ?? 0
+    const formScore =
+      scored != null && formInputs >= FORM_MIN_INPUTS ? scored.score : null
     return {
       date,
-      formScore: scoreDay(d),
+      formScore,
+      formInputs,
       sleepHours: (d.sleepHours as number | null) ?? null,
       stress: (d.stress as number | null) ?? null,
       hrv: (d.hrv as number | null) ?? null,
@@ -280,12 +401,17 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
       trainingLoad: (d.trainingLoad as number) || 0,
       hardLoad: (d.hardLoad as number) || 0,
       easyLoad: (d.easyLoad as number) || 0,
+      ctl: fit?.ctl ?? null,
+      atl: fit?.atl ?? null,
+      tsb: fit?.tsb ?? null,
+      acwr: fit?.acwr ?? null,
       kcalIn: food?.foodLogged ? Math.round(food.kcalIn) : null,
       proteinG: food?.foodLogged ? Math.round(food.proteinG) : null,
       carbsG: food?.foodLogged ? Math.round(food.carbsG) : null,
       fatG: food?.foodLogged ? Math.round(food.fatG) : null,
       foodLogged: Boolean(food?.foodLogged),
       energyDelta: food?.energyDelta ?? null,
+      neatSource: food?.neatSource ?? null,
       foodIncomplete: incompleteByDate.get(date) ?? false,
     }
   })
@@ -293,9 +419,11 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
   for (const [date, food] of foodByDate) {
     if (series.some(s => s.date === date)) continue
     if (!food.foodLogged) continue
+    const fit = fitnessByDate.get(date)
     series.push({
       date,
       formScore: null,
+      formInputs: 0,
       sleepHours: null,
       stress: null,
       hrv: null,
@@ -307,12 +435,17 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
       trainingLoad: 0,
       hardLoad: 0,
       easyLoad: 0,
+      ctl: fit?.ctl ?? null,
+      atl: fit?.atl ?? null,
+      tsb: fit?.tsb ?? null,
+      acwr: fit?.acwr ?? null,
       kcalIn: Math.round(food.kcalIn),
       proteinG: Math.round(food.proteinG),
       carbsG: Math.round(food.carbsG),
       fatG: Math.round(food.fatG),
       foodLogged: true,
       energyDelta: food.energyDelta,
+      neatSource: food.neatSource ?? null,
       foodIncomplete: incompleteByDate.get(date) ?? false,
     })
   }
@@ -338,11 +471,21 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     }
   }
 
-  const formScores = series.map(s => s.formScore).filter((n): n is number => n != null)
+  const formReady = series.filter(
+    s => s.formScore != null && s.formInputs >= FORM_MIN_INPUTS,
+  )
   const avgForm =
-    formScores.length === 0
+    formReady.length === 0
       ? null
-      : Math.round((formScores.reduce((a, b) => a + b, 0) / formScores.length) * 10) / 10
+      : Math.round(
+          (formReady.reduce((a, s) => a + (s.formScore as number), 0) / formReady.length) * 10,
+        ) / 10
+  const avgFormInputs =
+    formReady.length === 0
+      ? null
+      : Math.round(
+          (formReady.reduce((a, s) => a + s.formInputs, 0) / formReady.length) * 10,
+        ) / 10
 
   const fullData = {
     sleeps: allSleeps,
@@ -354,10 +497,11 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     dayEntries: confounders.dayEntries || [],
   }
 
-  // Horizons relative to `to` so zoom end drives the read
+  // Horizons relative to `to`. Live path ledger is clipped to loadFrom…to (~window+90d),
+  // so 12m would be empty/misleading — drop it here. Offline stored reports keep full horizons.
   const periods = analyzePeriods(fullData, {
     asOf,
-    horizonsMonths: [1, 3, 6, 12],
+    horizonsMonths: [1, 3, 6],
   })
 
   const causal = analyzeCausal(daily, {
@@ -367,8 +511,8 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
   })
 
   // Soft lab confounder block — additive only; does not touch periodCausal alcohol helpers.
-  const labsSummary = await loadBloodworkLatestSummary()
-  const labSoft = labsSummary.present
+  // labsSummary loaded in the post-ledger Promise.all wave (or null on failure).
+  const labSoft = labsSummary?.present
     ? {
         present: true as const,
         panelId: labsSummary.panelId,
@@ -387,7 +531,9 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
         flaggedCount: 0,
         chipLabel: 'No labs yet',
         summary: '',
-        disclaimer: labsSummary.disclaimer,
+        disclaimer:
+          labsSummary?.disclaimer ??
+          'Educational self-tracking only — not a diagnosis or medical advice. Discuss results with your clinician.',
         confidenceNote:
           'No blood panel on file — lab confounders unavailable for this window.',
       }
@@ -399,6 +545,9 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     tone:
       avgForm == null ? null : avgForm >= 65 ? 'good' : avgForm >= 45 ? 'mixed' : 'bad',
     avgForm,
+    /** Mean input count among days that cleared FORM_MIN_INPUTS (null when Form suppressed). */
+    avgFormInputs,
+    formSignalCount: FORM_SIGNAL_COUNT,
     leadingCause: causal.topHypothesis
       ? {
           id: causal.topHypothesis.id,
@@ -406,7 +555,14 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
           confidence: causal.topHypothesis.confidence,
         }
       : null,
-    topRisk: periods.topPatterns?.find((p: { severity: string }) => p.severity === 'high')?.title || null,
+    // Window-scoped causal patterns only — periods.topPatterns is multi-month / all-history
+    // and was reprinting stale RHR-drinking Risk on every short Read.
+    topRisk: pickDistinctTopRisk(
+      causal.patterns as RiskPattern[] | undefined,
+      causal.topHypothesis
+        ? { id: causal.topHypothesis.id, label: causal.topHypothesis.label }
+        : null,
+    ),
     topWin:
       series.filter(s => (s.activityCount || 0) > 0).length >= 3
         ? `${series.filter(s => (s.activityCount || 0) > 0).length} active days in window`
@@ -417,7 +573,7 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
       : avgForm != null && avgForm < 45
         ? 'Prioritise sleep floor 7h+ before adding intensity.'
         : 'Keep the weekend long session; keep mid-week easy if Form dips.',
-    headline: periods.headline,
+    headline: formatTheReadHeadline(periods.headline),
   }
 
   return {
@@ -426,6 +582,21 @@ export async function buildCockpitWindow(opts: { from: string; to: string; asOf?
     asOf,
     theRead,
     series,
+    /** Foster monotony/strain for the 7 days ending `to`. */
+    fosterWeek,
+    /** Latest Fitness/Freshness point in window (convenience). */
+    fitnessFreshness: (() => {
+      const last = [...series].reverse().find(s => s.ctl != null)
+      if (!last || last.ctl == null) return null
+      return {
+        date: last.date,
+        ctl: last.ctl,
+        atl: last.atl,
+        tsb: last.tsb,
+        acwr: last.acwr,
+        note: 'CTL/ATL/TSB from Banister EWMA on daily PLU. Distinct from cockpit formScore.',
+      }
+    })(),
     thresholds: { rhrLikely: 50, rhrHeavy: 55 },
     ledger,
     rawCounts,

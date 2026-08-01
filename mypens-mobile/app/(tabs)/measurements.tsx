@@ -21,12 +21,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
-import { usePensSync } from '@/hooks/usePensSync'
+import { usePensSync, flushOfflineQueueWithAlert } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
-import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
+import { enqueueOp } from '@/lib/offlineQueue'
 
 const MOD = MODULE_COLORS.measurements
 const today = () => {
@@ -157,7 +157,7 @@ export default function MeasurementsScreen() {
     onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       if (useApi) {
-        await flushOfflineQueue()
+        await flushOfflineQueueWithAlert()
         await refreshQueue()
       }
       qc.invalidateQueries({ queryKey: ['measurements'] })

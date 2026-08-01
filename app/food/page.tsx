@@ -73,7 +73,7 @@ export default function FoodPage() {
           </div>
         </div>
 
-        <FoodRecentFeed refresh={refresh} selectedDate={date} onSelectDate={setDate} onChanged={bump} />
+        <FoodRecentFeed refresh={refresh} selectedDate={date} onChanged={bump} />
 
         <FoodIncompleteToggle date={date} refresh={refresh} onChanged={bump} />
 

@@ -128,10 +128,14 @@ and **RPE** (`:152-156`). It is absent from the formula book and from `lib/`.
 
 | Metric | Formula | Status |
 |---|---|---|
-| **ACWR** | EWMA 7 d load ÷ EWMA 28 d load | Not present anywhere. Standard load-management ratio — report it descriptively, and state its known statistical criticisms rather than overselling it |
-| **Monotony / strain** (Foster) | `monotony = mean(dailyLoad)/SD(dailyLoad)`; `strain = weeklyLoad × monotony` | Catches "same session every time", which duration and load totals both miss |
+| **ACWR** | EWMA 7 d load ÷ EWMA 28 d load | **Built** — `lib/engines/trainingMetrics` (`buildFitnessSeries` → `acwr`) |
+| **Monotony / strain** (Foster) | `monotony = mean(dailyLoad)/SD(dailyLoad)`; `strain = weeklyLoad × monotony` | **Built** — `fosterWeekEnding` / cockpit `fosterWeek` |
+| **Fitness / Freshness** (CTL/ATL/TSB) | Banister EWMA τ=42 / τ=7; TSB = CTL − ATL | **Built** — series fields + `fitnessFreshness` on period-review payload |
+| **GAP** (Minetti) | `gapSpeed = speed × Cr(grade)/Cr(0)` | **Built** (engine) — needs GPS stream or elevation/distance totals; no UI |
+| **Peak power/pace curves** | max rolling mean over windows | **Built** (engine) — callers pass FIT samples; GarminActivity has no streams yet |
+| **Edwards Relative Effort** | zone minutes × zone index | **Built** (engine) — alternative to PLU for Strava-like zone effort |
 | **RPE vs device divergence** 🟢 | `rpe` vs `hrIntensityFactor(avgHr)` — both already stored | **The creative one.** Systematic divergence between how hard it felt and how hard it measured is a genuine under-recovery signal, and nothing in the app compares them |
-| **Efficiency drift** 🟢 | kcal or HR per km at matched sport | `GarminActivity` already stores `distanceM`, `durationSec`, `calories` — a fitness trend from stored data |
+| **Efficiency drift** 🟢 | kcal or HR per km at matched sport | **Built** (engine) — `sessionEfficiency` / `medianEfficiency` |
 
 ---
 

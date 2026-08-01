@@ -19,7 +19,11 @@ export type InterventionTrial = {
   notes: string
 }
 
-const DEFAULT_STORE = path.join(process.cwd(), 'data', 'intervention_trials.json')
+const DEFAULT_STORE = path.join(
+  /* turbopackIgnore: true */ process.cwd(),
+  'data',
+  'intervention_trials.json',
+)
 
 /** Override for tests — set null to restore default. */
 let storeOverride: string | null = null

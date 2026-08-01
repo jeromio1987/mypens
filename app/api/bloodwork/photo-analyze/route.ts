@@ -7,46 +7,17 @@ import { normalizeMarkerCode } from '@/lib/bloodworkFlags'
 import { parseJsonFromAssistant } from '@/lib/foodPhotoJson'
 import { BLOODWORK_VISION_SCHEMA } from '@/lib/aiSchemas'
 import { AiResponseError, callClaude, getAnthropicClient } from '@/lib/aiCall'
+import {
+  extToMediaType,
+  heicToJpeg,
+  readPhotoFormFile,
+} from '@/lib/photoFormUpload'
 
 export const runtime = 'nodejs'
-
-const MAX_BYTES = 8 * 1024 * 1024
-const ALLOWED_EXT: Record<string, string> = {
-  'image/jpeg': '.jpg',
-  'image/jpg': '.jpg',
-  'image/png': '.png',
-  'image/webp': '.webp',
-  'image/heic': '.heic',
-  'image/heif': '.heic',
-}
+export const maxDuration = 60
 
 const VISION_MODEL = 'claude-sonnet-4-6' as Model
 const FILES_BETA = 'files-api-2025-04-14'
-
-function sniffImageExt(buf: Buffer): string | null {
-  if (buf.length < 12) return null
-  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return '.jpg'
-  if (
-    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
-    buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
-  ) return '.png'
-  if (
-    buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
-    buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
-  ) return '.webp'
-  if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) {
-    const brand = buf.slice(8, 12).toString('ascii')
-    const heicBrands = new Set(['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1', 'heim', 'heis'])
-    if (heicBrands.has(brand)) return '.heic'
-  }
-  return null
-}
-
-function extToMediaType(ext: string): 'image/jpeg' | 'image/png' | 'image/webp' {
-  if (ext === '.png') return 'image/png'
-  if (ext === '.webp') return 'image/webp'
-  return 'image/jpeg'
-}
 
 function filenameForExt(ext: string): string {
   if (ext === '.png') return 'lab.png'
@@ -119,41 +90,26 @@ export async function POST(req: Request) {
   try {
     const rl = consume('bloodwork-photo:global', { capacity: 8, refillPerSec: 8 / 3600 })
     if (!rl.ok) {
-      return NextResponse.json({ error: 'rate limited' }, { status: 429 })
+      return NextResponse.json({ error: 'rate limited — wait a minute and retry' }, { status: 429 })
     }
 
     const form = await req.formData()
-    const file = form.get('file')
-
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'file is required' }, { status: 400 })
-    }
-    if (file.size <= 0) {
-      return NextResponse.json({ error: 'empty file' }, { status: 400 })
-    }
-    if (file.size > MAX_BYTES) {
-      return NextResponse.json({ error: `file too large (max ${MAX_BYTES / 1024 / 1024} MB)` }, { status: 413 })
-    }
-    if (!ALLOWED_EXT[file.type]) {
-      return NextResponse.json({ error: `unsupported type: ${file.type}` }, { status: 415 })
+    const uploaded = await readPhotoFormFile(form.get('file'))
+    if (!uploaded.ok) {
+      return NextResponse.json({ error: uploaded.error }, { status: uploaded.status })
     }
 
-    const buf = Buffer.from(await file.arrayBuffer())
-    const sniffed = sniffImageExt(buf)
-    if (!sniffed) {
-      return NextResponse.json({ error: 'file is not a recognised image' }, { status: 415 })
-    }
-
-    let imageBuf = buf
-    let ext = sniffed
-    if (sniffed === '.heic') {
+    let imageBuf = uploaded.buf
+    let ext = uploaded.ext
+    if (ext === '.heic') {
       try {
-        const heicConvert = (await import('heic-convert')).default
-        const out = await heicConvert({ buffer: buf, format: 'JPEG', quality: 0.85 })
-        imageBuf = Buffer.from(out)
+        imageBuf = await heicToJpeg(uploaded.buf)
         ext = '.jpg'
       } catch {
-        return NextResponse.json({ error: 'could not decode HEIC image' }, { status: 422 })
+        return NextResponse.json(
+          { error: 'could not decode HEIC — export the lab sheet as JPEG/PNG and retry' },
+          { status: 422 },
+        )
       }
     }
 
@@ -182,11 +138,11 @@ export async function POST(req: Request) {
     try {
       const uint8 = new Uint8Array(imageBuf)
       const uploadable = new File([uint8], filenameForExt(ext), { type: mediaType })
-      const uploaded = await client.beta.files.upload({ file: uploadable, betas: [FILES_BETA] })
+      const fileOnAnthropic = await client.beta.files.upload({ file: uploadable, betas: [FILES_BETA] })
       const res = await callClaude(
         client,
         'bloodwork.photo-analyze',
-        paramsFor({ type: 'image', source: { type: 'file', file_id: uploaded.id } }),
+        paramsFor({ type: 'image', source: { type: 'file', file_id: fileOnAnthropic.id } }),
       )
       text = res.text
     } catch (fileErr) {
@@ -212,7 +168,26 @@ export async function POST(req: Request) {
       console.error('[bloodwork/photo-analyze]', err.message)
       return NextResponse.json({ error: err.message }, { status: 502 })
     }
+    const raw = err instanceof Error ? err.message : String(err)
+    let detail = raw
+    try {
+      const m = raw.match(/\{[\s\S]*\}$/)
+      if (m) {
+        const j = JSON.parse(m[0]) as { error?: { message?: string } }
+        if (j?.error?.message) detail = j.error.message
+      }
+    } catch {
+      /* keep raw */
+    }
     console.error('[bloodwork/photo-analyze]', err)
-    return NextResponse.json({ error: 'Photo analyze failed' }, { status: 500 })
+    return NextResponse.json(
+      {
+        error:
+          detail.length > 0 && detail.length < 280
+            ? `Photo analyze failed: ${detail}`
+            : 'Photo analyze failed — check API/key and retry',
+      },
+      { status: 500 },
+    )
   }
 }

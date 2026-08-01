@@ -41,6 +41,8 @@ type Cockpit = {
   theRead: {
     verdict: string | null
     avgForm: number | null
+    avgFormInputs?: number | null
+    formSignalCount?: number
     leadingCause: { id: string; label: string; confidence: number } | null
     topRisk: string | null
     topWin: string | null
@@ -67,7 +69,12 @@ type Cockpit = {
   causal: {
     topHypothesis?: { id: string; label: string; confidence: number; text?: string } | null
     narrative?: string
-    rhrLadder?: { likelyDrinkingDays?: number; heavyStackDays?: number }
+    rhrLadder?: {
+      likelyDrinkingDays?: number
+      heavyStackDays?: number
+      latestRhr?: number | null
+      latestBand?: string | null
+    }
     hypotheses?: Array<{ id: string; label: string; confidence: number; text: string }>
     labSoft?: {
       present: boolean
@@ -81,7 +88,18 @@ type Cockpit = {
     }
   }
   periods: { deepAnalysis?: string; headline?: string }
-  inventory: Record<string, number>
+  inventory: {
+    nights?: number
+    activities?: number
+    trainings?: number
+    weights?: number
+    days?: number
+    hrvDays?: number
+    stressDays?: number
+    foodDays?: number
+    metricKinds?: Record<string, number>
+    [key: string]: number | Record<string, number> | undefined
+  }
 }
 
 const PRESETS: { label: string; days: number }[] = [
@@ -101,6 +119,8 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'cause', label: 'Cause', icon: HeartPulse },
 ]
 
+const FETCH_TIMEOUT_MS = 25_000
+
 function verdictClass(v: string | null | undefined) {
   if (v === 'good') return 'bg-emerald-900/50 text-emerald-300'
   if (v === 'bad') return 'bg-red-900/40 text-red-300'
@@ -108,72 +128,169 @@ function verdictClass(v: string | null | undefined) {
   return 'bg-pens-muted/30 text-pens-cream/50'
 }
 
-export default function PeriodCockpit() {
+/** Clip an already-loaded cockpit to a sub-window — avoids a second Supabase round-trip. */
+function clipCockpitToWindow(cockpit: Cockpit, from: string, to: string): Cockpit {
+  const series = (cockpit.series ?? []).filter(d => d.date >= from && d.date <= to)
+  return {
+    ...cockpit,
+    from,
+    to,
+    series,
+    inventory: {
+      ...cockpit.inventory,
+      days: series.length,
+    },
+  }
+}
+
+function windowDayCount(from: string, to: string) {
+  return (
+    Math.max(
+      1,
+      Math.round((fromDateStr(to).getTime() - fromDateStr(from).getTime()) / 86_400_000) + 1,
+    )
+  )
+}
+
+function clampToLedger(
+  cockpit: Cockpit,
+  from: string,
+  to: string,
+): { from: string; to: string; cockpit: Cockpit; didClamp: boolean } {
+  const span = cockpit.suggestedSpan
+  if (!span?.from || !span?.to || to <= span.to) {
+    return { from, to, cockpit, didClamp: false }
+  }
+  const spanDays = windowDayCount(from, to)
+  const newTo = span.to
+  let newFrom = shiftDateStr(newTo, -(spanDays - 1))
+  if (newFrom < span.from) newFrom = span.from
+  return {
+    from: newFrom,
+    to: newTo,
+    cockpit: clipCockpitToWindow(cockpit, newFrom, newTo),
+    didClamp: true,
+  }
+}
+
+export default function PeriodCockpit({
+  initialFrom,
+  initialTo,
+  initialCockpit = null,
+  initialError = null,
+}: {
+  initialFrom: string
+  initialTo: string
+  initialCockpit?: Cockpit | null
+  initialError?: string | null
+}) {
   const today = toDateStr(new Date())
-  const [to, setTo] = useState(today)
-  const [from, setFrom] = useState(shiftDateStr(today, -89))
+
+  const boot = useMemo(() => {
+    if (!initialCockpit) {
+      return {
+        from: initialFrom,
+        to: initialTo,
+        cockpit: null as Cockpit | null,
+        clamped: false,
+      }
+    }
+    const c = clampToLedger(initialCockpit, initialFrom, initialTo)
+    return { from: c.from, to: c.to, cockpit: c.cockpit, clamped: true }
+  }, [initialCockpit, initialFrom, initialTo])
+
+  const [to, setTo] = useState(boot.to)
+  const [from, setFrom] = useState(boot.from)
   const [tab, setTab] = useState<Tab>('read')
-  const [cockpit, setCockpit] = useState<Cockpit | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [cockpit, setCockpit] = useState<Cockpit | null>(boot.cockpit)
+  const [loading, setLoading] = useState(!boot.cockpit && !initialError)
+  const [error, setError] = useState<string | null>(initialError)
   /** Last day that has any ledger rows — presets/zoom anchor here, not "today". */
-  const [ledgerTo, setLedgerTo] = useState<string | null>(null)
-  const [ledgerFrom, setLedgerFrom] = useState<string | null>(null)
+  const [ledgerTo, setLedgerTo] = useState<string | null>(
+    boot.cockpit?.suggestedSpan?.to ?? null,
+  )
+  const [ledgerFrom, setLedgerFrom] = useState<string | null>(
+    boot.cockpit?.suggestedSpan?.from ?? null,
+  )
   const [labsChip, setLabsChip] = useState<{
     present: boolean
     chipLabel: string
     panelId: string | null
     flaggedCount: number
   } | null>(null)
-  const autoClampedRef = useRef(false)
+  const autoClampedRef = useRef(boot.clamped)
+  /** Skip one effect-driven fetch after client-side ledger clamp (dates changed, data already good). */
+  const skipFetchRef = useRef(false)
+  const reqIdRef = useRef(0)
+  /**
+   * SSR (or SSR error) already settled this window — do not client-refetch it.
+   * Survives Strict Mode double-effect; clears when the user zooms away.
+   */
+  const settledWindowRef = useRef<{ from: string; to: string } | null>(
+    boot.cockpit || initialError ? { from: boot.from, to: boot.to } : null,
+  )
 
   const effectiveTo = ledgerTo && ledgerTo < today ? ledgerTo : today
 
   const load = useCallback(async (f: string, t: string) => {
+    const reqId = ++reqIdRef.current
     setLoading(true)
     setError(null)
+    const ac = new AbortController()
+    const timer = window.setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS)
     try {
-      const res = await fetch(`/api/period-review?from=${f}&to=${t}`)
-      const data = await res.json()
+      const res = await fetch(`/api/period-review?from=${f}&to=${t}`, { signal: ac.signal })
+      const data = await res.json().catch(() => ({}))
+      if (reqId !== reqIdRef.current) return
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-      const next: Cockpit | null = data.cockpit ?? null
-      setCockpit(next)
+      let next: Cockpit | null = data.cockpit ?? null
 
       const span = next?.suggestedSpan
       if (span?.from && span?.to) {
         setLedgerFrom(span.from)
         setLedgerTo(span.to)
-        // First successful load: if zoom runs past the last real day, snap to ledger end
-        // and keep roughly the same window length (default 90d).
-        if (!autoClampedRef.current && t > span.to) {
+        if (!autoClampedRef.current && next && t > span.to) {
           autoClampedRef.current = true
-          const spanDays = Math.max(
-            1,
-            Math.round(
-              (fromDateStr(t).getTime() - fromDateStr(f).getTime()) / 86_400_000,
-            ) + 1,
-          )
-          const newTo = span.to
-          let newFrom = shiftDateStr(newTo, -(spanDays - 1))
-          if (newFrom < span.from) newFrom = span.from
-          setFrom(newFrom)
-          setTo(newTo)
-          return
+          const clamped = clampToLedger(next, f, t)
+          next = clamped.cockpit
+          if (clamped.didClamp && (clamped.from !== f || clamped.to !== t)) {
+            skipFetchRef.current = true
+            settledWindowRef.current = { from: clamped.from, to: clamped.to }
+            setFrom(clamped.from)
+            setTo(clamped.to)
+          }
         }
       }
       autoClampedRef.current = true
+      setCockpit(next)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load')
-      setCockpit(null)
+      if (reqId !== reqIdRef.current) return
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setError(
+          `Timed out after ${FETCH_TIMEOUT_MS / 1000}s — Prisma still hits remote Supabase. Retry or shrink the window.`,
+        )
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to load')
+      }
+      // Keep last good cockpit visible — never blank into eternal Loading.
     } finally {
-      setLoading(false)
+      window.clearTimeout(timer)
+      if (reqId === reqIdRef.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
+    if (skipFetchRef.current) {
+      skipFetchRef.current = false
+      return
+    }
+    const settled = settledWindowRef.current
+    if (settled && settled.from === from && settled.to === to) {
+      return
+    }
+    settledWindowRef.current = null
     void load(from, to)
   }, [from, to, load])
-
   useEffect(() => {
     let cancelled = false
     fetch('/api/bloodwork/latest-summary')
@@ -264,7 +381,7 @@ export default function PeriodCockpit() {
               />
             </label>
             <p className="text-xs text-pens-cream/40 pb-2">
-              Zoom the window — The Read, graphs, and cause all reflow.
+              Rolling {from} → {to}. Zoom — The Read, graphs, and cause all reflow.
               {ledgerTo && (
                 <span className="text-cyan-400/70">
                   {' '}
@@ -299,17 +416,34 @@ export default function PeriodCockpit() {
           })}
         </div>
 
-        {loading && <p className="text-pens-cream/50 text-sm">Loading window…</p>}
+        {loading && !cockpit && (
+          <p className="text-pens-cream/50 text-sm">Loading window…</p>
+        )}
+        {loading && cockpit && (
+          <p className="text-pens-cream/40 text-xs">Refreshing window…</p>
+        )}
         {error && (
           <p className="text-red-300 text-sm">
             {error}
             <span className="block text-pens-cream/40 mt-1">
               If the DB is empty, run analyze:periods locally first — live cockpit still needs rows.
+              Next is local; Prisma still talks to Supabase eu-west-1.
             </span>
+            <button
+              type="button"
+              className="mt-2 text-xs px-3 py-1.5 rounded-full border border-red-400/40 text-red-200 hover:bg-red-500/10"
+              onClick={() => void load(from, to)}
+            >
+              Retry
+            </button>
           </p>
         )}
 
-        {!loading && cockpit?.loadNotes && cockpit.loadNotes.length > 0 && (
+        {!loading && !cockpit && !error && (
+          <p className="text-pens-cream/50 text-sm">No cockpit data for this window.</p>
+        )}
+
+        {cockpit?.loadNotes && cockpit.loadNotes.length > 0 && (
           <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 space-y-2">
             <p className="text-sm font-semibold text-amber-200">
               {(cockpit.inventory?.days || 0) > 0 ? 'Data gaps in this window' : 'Why this window looks empty'}
@@ -354,14 +488,26 @@ export default function PeriodCockpit() {
           </div>
         )}
 
-        {!loading && cockpit && tab === 'read' && (
+        {cockpit && tab === 'read' && (
           <section className="rounded-2xl border border-pens-muted/20 bg-pens-surface/80 p-5 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-lg font-bold text-pens-cream">The Read</h2>
+              <div>
+                <h2 className="text-lg font-bold text-pens-cream">The Read</h2>
+                <p className="text-xs text-pens-cream/35 mt-0.5">
+                  Rolling {cockpit.from} → {cockpit.to}
+                </p>
+              </div>
               {cockpit.theRead.verdict && (
                 <span className={`text-xs px-2.5 py-0.5 rounded-full ${verdictClass(cockpit.theRead.verdict)}`}>
                   {cockpit.theRead.verdict}
-                  {cockpit.theRead.avgForm != null ? ` · Form ${cockpit.theRead.avgForm}` : ''}
+                  {cockpit.theRead.avgForm != null &&
+                  (cockpit.theRead.avgFormInputs == null || cockpit.theRead.avgFormInputs >= 2)
+                    ? ` · Form ${cockpit.theRead.avgForm}${
+                        cockpit.theRead.avgFormInputs != null
+                          ? ` · ${Math.round(cockpit.theRead.avgFormInputs)} of ${cockpit.theRead.formSignalCount ?? 5} signals`
+                          : ''
+                      }`
+                    : ''}
                 </span>
               )}
             </div>
@@ -374,7 +520,9 @@ export default function PeriodCockpit() {
                   {Math.round(cockpit.theRead.leadingCause.confidence * 100)}%)
                 </li>
               )}
-              {cockpit.theRead.topRisk && (
+              {cockpit.theRead.topRisk &&
+                cockpit.theRead.topRisk.replace(/\s*\(\d+%\)\s*$/, '').trim() !==
+                  (cockpit.theRead.leadingCause?.label ?? '') && (
                 <li>
                   <span className="text-amber-400/80">Risk · </span>
                   {cockpit.theRead.topRisk}
@@ -419,7 +567,7 @@ export default function PeriodCockpit() {
           </section>
         )}
 
-        {!loading && cockpit && tab === 'timeline' && (
+        {cockpit && tab === 'timeline' && (
           <section className="rounded-2xl border border-pens-muted/20 bg-pens-surface/80 p-5">
             <h2 className="text-sm font-semibold text-cyan-300 mb-3">
               Form score
@@ -455,7 +603,7 @@ export default function PeriodCockpit() {
           </section>
         )}
 
-        {!loading && cockpit && tab === 'body' && (
+        {cockpit && tab === 'body' && (
           <section className="space-y-4">
             <ChartCard title="Resting HR (drink ladder)" data={series} dataKey="restingHr" color="#f87171">
               <ReferenceLine y={50} stroke="#fbbf24" strokeDasharray="4 4" label={{ value: '≥50 drink', fill: '#fbbf24', fontSize: 10 }} />
@@ -470,7 +618,7 @@ export default function PeriodCockpit() {
           </section>
         )}
 
-        {!loading && cockpit && tab === 'training' && (
+        {cockpit && tab === 'training' && (
           <section className="rounded-2xl border border-pens-muted/20 bg-pens-surface/80 p-5 space-y-4">
             <div>
               <h2 className="text-sm font-semibold text-orange-300 mb-1">Training load (belasting)</h2>
@@ -522,7 +670,7 @@ export default function PeriodCockpit() {
           </section>
         )}
 
-        {!loading && cockpit && tab === 'composition' && (
+        {cockpit && tab === 'composition' && (
           <section className="rounded-2xl border border-pens-muted/20 bg-pens-surface/80 p-5">
             <h2 className="text-sm font-semibold text-purple-300 mb-2">Composition</h2>
             <p className="text-sm text-pens-cream/60">
@@ -533,7 +681,7 @@ export default function PeriodCockpit() {
           </section>
         )}
 
-        {!loading && cockpit && tab === 'cause' && (
+        {cockpit && tab === 'cause' && (
           <section className="rounded-2xl border border-red-900/40 bg-gradient-to-br from-red-950/40 to-pens-surface/80 p-5 space-y-4">
             <h2 className="text-lg font-bold text-pens-cream">
               {cockpit.causal.topHypothesis?.label || 'No clear leading cause'}
@@ -545,8 +693,12 @@ export default function PeriodCockpit() {
             </h2>
             {(cockpit.causal.rhrLadder?.likelyDrinkingDays || 0) > 0 && (
               <p className="text-sm text-amber-200/90">
-                RHR ladder: {cockpit.causal.rhrLadder?.likelyDrinkingDays} day(s) ≥50 (likely drinking),{' '}
-                {cockpit.causal.rhrLadder?.heavyStackDays || 0} day(s) ≥55 (heavy stack).
+                RHR ladder (window): {cockpit.causal.rhrLadder?.likelyDrinkingDays} day(s) ≥50,{' '}
+                {cockpit.causal.rhrLadder?.heavyStackDays || 0} day(s) ≥55
+                {cockpit.causal.rhrLadder?.latestBand
+                  ? ` · latest ${cockpit.causal.rhrLadder.latestRhr ?? '—'} (${cockpit.causal.rhrLadder.latestBand})`
+                  : ''}
+                .
               </p>
             )}
             <p className="text-sm text-pens-cream/80 whitespace-pre-wrap leading-relaxed">

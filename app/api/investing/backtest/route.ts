@@ -46,14 +46,14 @@ export async function GET(request: Request) {
   const matches: { date: string; quality: number; hours: number; regime: string | null }[] = []
 
   for (const s of sleeps) {
-    if (s.quality < sleepGte) continue
+    if (s.quality == null || s.quality < sleepGte) continue
     const r = regimeOnDate(s.date)
     if (r === regime) {
       matches.push({ date: s.date, quality: s.quality, hours: s.hours, regime: r })
     }
   }
 
-  const totalSleep = sleeps.filter(s => s.quality >= sleepGte).length
+  const totalSleep = sleeps.filter(s => s.quality != null && s.quality >= sleepGte).length
 
   return NextResponse.json({
     params: { sleepGte, regime },

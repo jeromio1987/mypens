@@ -7,11 +7,16 @@ import {
 } from '../lib/timeWindow'
 
 describe('today()', () => {
-  it('uses local calendar fields, not UTC ISO', () => {
-    // 2026-07-26 00:30 CEST = 2026-07-25 22:30 UTC — UTC slice would say 25th
-    const localMidnightish = new Date(2026, 6, 26, 0, 30, 0, 0)
-    expect(today(localMidnightish)).toBe('2026-07-26')
-    expect(localMidnightish.toISOString().slice(0, 10)).toBe('2026-07-25')
+  it('uses Europe/Brussels wall date, not UTC midnight slice', () => {
+    // 2026-07-25 22:30 UTC = 2026-07-26 00:30 CEST — UTC date would be the 25th
+    const utcEvening = new Date('2026-07-25T22:30:00.000Z')
+    expect(utcEvening.toISOString().slice(0, 10)).toBe('2026-07-25')
+    expect(today(utcEvening)).toBe('2026-07-26')
+  })
+
+  it('stays on the same Brussels calendar day mid-afternoon CEST', () => {
+    const afternoon = new Date('2026-07-26T14:00:00.000Z') // 16:00 CEST
+    expect(today(afternoon)).toBe('2026-07-26')
   })
 })
 

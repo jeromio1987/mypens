@@ -12,7 +12,15 @@
  * then blended with sportWeight so walks stay cheap even with elevated HR.
  *
  * Defaults: HRrest=50, HRmax=185 (override per day when resting_hr exists).
+ *
+ * Session dedup (T1/E3–E5): overlap-match via sessionDedupe.mjs before summing.
  */
+
+import {
+  dedupeSessions,
+  parseTrainingWindow,
+  sessionPreference,
+} from './sessionDedupe.mjs'
 
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n))
@@ -168,10 +176,75 @@ export function trainingEntryLoad(entry) {
 }
 
 /**
- * Aggregate daily load from activities + training rows.
- * @returns {{ trainingLoad: number, activityMinutes: number, hardLoad: number, easyLoad: number, bySport: Record<string, number> }}
+ * Build overlap candidates, keep winners, return filtered activity/training lists.
+ */
+export function dedupeActivityTraining(activities = [], trainings = []) {
+  /** @type {Array<{ id: string, startMs: number|null, endMs: number|null, durationSec: number, source: string, preference: number, kcal: number|null, _kind: string, _ref: any }>} */
+  const cands = []
+
+  for (let i = 0; i < activities.length; i++) {
+    const a = activities[i]
+    const dur = Math.round(Number(a.durationSec) || 0)
+    let startMs =
+      a.startedAt != null
+        ? new Date(a.startedAt).getTime()
+        : a.startTime != null
+          ? Date.parse(a.startTime)
+          : null
+    if (startMs != null && !Number.isFinite(startMs)) startMs = null
+    const endMs = startMs != null && dur > 0 ? startMs + dur * 1000 : null
+    // Untimed activities kept — synthetic noon would falsely collapse same-day sessions.
+    cands.push({
+      id: `act:${a.id ?? i}`,
+      startMs,
+      endMs,
+      durationSec: dur,
+      source: 'garmin_activity',
+      preference: sessionPreference('garmin_activity'),
+      kcal: a.calories ?? null,
+      _kind: 'activity',
+      _ref: a,
+    })
+  }
+
+  for (let i = 0; i < trainings.length; i++) {
+    const t = trainings[i]
+    const win = parseTrainingWindow(t.externalRaw)
+    const durationSec =
+      win.durationSec ||
+      (t.durationMin != null ? Math.round(Number(t.durationMin) * 60) : 0)
+    cands.push({
+      id: `train:${t.id ?? i}`,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      durationSec,
+      source: t.source ?? 'training',
+      preference: sessionPreference('training', t.source, win.packageName),
+      kcal: t.calories ?? null,
+      _kind: 'training',
+      _ref: t,
+    })
+  }
+
+  const kept = dedupeSessions(cands)
+  return {
+    activities: kept.filter(k => k._kind === 'activity').map(k => k._ref),
+    trainings: kept.filter(k => k._kind === 'training').map(k => k._ref),
+    keptCount: kept.length,
+    rawCount: cands.length,
+  }
+}
+
+/**
+ * Aggregate daily load from activities + training rows (session-deduped).
+ * @returns {{ trainingLoad: number, activityMinutes: number, hardLoad: number, easyLoad: number, bySport: Record<string, number>, activityCount: number }}
  */
 export function dayTrainingLoad(activities = [], trainings = [], opts = {}) {
+  const { activities: acts, trainings: trains, keptCount } = dedupeActivityTraining(
+    activities,
+    trainings,
+  )
+
   let trainingLoad = 0
   let activityMinutes = 0
   let hardLoad = 0
@@ -179,7 +252,7 @@ export function dayTrainingLoad(activities = [], trainings = [], opts = {}) {
   /** @type {Record<string, number>} */
   const bySport = {}
 
-  for (const a of activities) {
+  for (const a of acts) {
     const r = activityLoad(a, opts)
     trainingLoad += r.load
     activityMinutes += r.minutes
@@ -190,7 +263,7 @@ export function dayTrainingLoad(activities = [], trainings = [], opts = {}) {
       hardLoad += r.load
     }
   }
-  for (const t of trainings) {
+  for (const t of trains) {
     const r = trainingEntryLoad(t)
     trainingLoad += r.load
     activityMinutes += r.minutes
@@ -205,6 +278,7 @@ export function dayTrainingLoad(activities = [], trainings = [], opts = {}) {
     hardLoad: round1(hardLoad),
     easyLoad: round1(easyLoad),
     bySport,
+    activityCount: keptCount,
   }
 }
 

@@ -26,14 +26,18 @@ export default function HomeReadCard() {
   const [labs, setLabs] = useState<LabsChip | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const window = rollingWindow(14)
+  const dateWindow = rollingWindow(14)
 
   useEffect(() => {
     let cancelled = false
+    const ac = new AbortController()
+    const timer = globalThis.setTimeout(() => ac.abort(), 25_000)
     setLoading(true)
+    setErr(null)
     Promise.all([
       fetch(
-        `/api/period-review?from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`,
+        `/api/period-review?from=${encodeURIComponent(dateWindow.from)}&to=${encodeURIComponent(dateWindow.to)}`,
+        { signal: ac.signal },
       ).then(async r => {
         const j = await r.json()
         if (!r.ok) throw new Error(j.error || 'failed')
@@ -70,16 +74,24 @@ export default function HomeReadCard() {
         }
       })
       .catch(e => {
-        if (!cancelled) setErr(e instanceof Error ? e.message : 'failed')
+        if (cancelled) return
+        if (e instanceof DOMException && e.name === 'AbortError') {
+          setErr('Timed out loading Read (remote DB).')
+        } else {
+          setErr(e instanceof Error ? e.message : 'failed')
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        globalThis.clearTimeout(timer)
+        // Always clear — do not gate on cancelled (Strict Mode remount trap).
+        setLoading(false)
       })
     return () => {
       cancelled = true
+      globalThis.clearTimeout(timer)
+      // Do not abort in-flight fetch — abort+cancelled-skip-loading = eternal skeleton.
     }
-  }, [window.from, window.to])
-
+  }, [dateWindow.from, dateWindow.to])
   const tone =
     read?.verdict === 'good'
       ? 'border-emerald-500/30 bg-emerald-950/20'
@@ -97,7 +109,7 @@ export default function HomeReadCard() {
         <div>
           <p className="text-[10px] uppercase tracking-widest text-pens-cream/40 font-semibold">The Read</p>
           <p className="text-xs text-pens-cream/35 mt-0.5">
-            Rolling {window.from} → {window.to}
+            Rolling {dateWindow.from} → {dateWindow.to}
           </p>
         </div>
         <Link

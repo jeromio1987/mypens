@@ -53,6 +53,13 @@
       "expo-notifications",
       "expo-health-connect",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow My Pens to access photos so you can scan food packs and lab sheets.",
+          "cameraPermission": "Allow My Pens to use the camera to scan food and lab photos."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

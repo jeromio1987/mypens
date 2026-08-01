@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
+import { SESSION_COOKIE, isAuthDisabled, verifySessionToken } from '@/lib/auth'
 import { isPublicApiRoute } from '@/lib/publicApiRoutes'
 
 const PUBLIC_PAGES = new Set<string>([
@@ -14,6 +14,11 @@ const PUBLIC_PAGES = new Set<string>([
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  // Local bypass: MYPENS_AUTH_DISABLED=true skips cookie/password entirely (single-user dev).
+  if (isAuthDisabled()) {
+    return NextResponse.next()
+  }
 
   if (pathname === '/welcome') {
     const res = NextResponse.next()

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Check, Zap, ArrowLeft } from 'lucide-react'
@@ -30,7 +30,7 @@ const PREMIUM_FEATURES = [
   'Priority support',
 ]
 
-export default function UpgradePage() {
+function UpgradePageInner() {
   const { isPremium, isLoading } = useTier()
   const params = useSearchParams()
   const [working, setWorking] = useState(false)
@@ -163,5 +163,19 @@ export default function UpgradePage() {
         </p>
       </div>
     </main>
+  )
+}
+
+export default function UpgradePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-pens-deep px-4 py-10 text-pens-cream">
+          <div className="h-20 flex items-center justify-center text-pens-cream/40 text-sm">Loading…</div>
+        </main>
+      }
+    >
+      <UpgradePageInner />
+    </Suspense>
   )
 }

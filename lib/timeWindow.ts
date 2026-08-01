@@ -2,11 +2,14 @@
  * Single source of truth for "today" and date windows (P9).
  *
  * Rules:
- * - Local calendar dates (yyyy-mm-dd), never UTC `toISOString()` for day identity.
+ * - Wall-calendar dates in Europe/Brussels (yyyy-mm-dd), never UTC `toISOString()` for day identity.
  * - Noon-anchor (`T12:00:00`) for all date arithmetic — survives CET/CEST midnight drift.
  * - Every window sets BOTH `from` and `to` (inclusive).
  * - Two labels only: `rolling` (day decision) and `calendar` (Mon–Sun week).
  */
+
+/** App day-boundary timezone — matches Health Connect ingest mapping. */
+export const APP_TIMEZONE = 'Europe/Brussels'
 
 export type WindowLabel = 'rolling' | 'calendar'
 
@@ -39,9 +42,21 @@ export function shiftDateStr(s: string, days: number): string {
   return toDateStr(d)
 }
 
-/** Local "today" — noon-anchored so 00:00–02:00 Brussels still matches the wall clock. */
+/**
+ * Wall "today" in Europe/Brussels — not the Node/Vercel process timezone.
+ * Between 00:00–02:00 CEST a UTC runtime would otherwise report yesterday (X1).
+ */
 export function today(now: Date = new Date()): string {
-  return toDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0))
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: APP_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now)
+  } catch {
+    return toDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0))
+  }
 }
 
 function enumerate(from: string, to: string): string[] {

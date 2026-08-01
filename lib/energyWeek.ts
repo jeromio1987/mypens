@@ -125,14 +125,16 @@ export function buildWeekEnergyRecap(rawDays: RawDayEnergy[]): WeekEnergyRecap {
     }
   }
 
-  const tracked = rawDays.filter(d => d.foodKcal > 0 || d.activityKcal > 0)
+  // Tracked = food logged only (E6 / prior S1). Activity alone must not mark a day
+  // tracked — NEAT/EAT without food would otherwise invent a confident deficit.
+  const tracked = rawDays.filter(d => d.foodKcal > 0)
   const avgFood = mean(tracked.map(d => d.foodKcal))
   const avgAct = mean(tracked.map(d => d.activityKcal))
   const avgEat = mean(tracked.map(d => d.eatKcal ?? d.activityKcal))
   const avgNeat = mean(tracked.map(d => d.neatKcal ?? 0))
 
   const days: WeekDayEnergy[] = rawDays.map(d => {
-    const isTracked = d.foodKcal > 0 || d.activityKcal > 0
+    const isTracked = d.foodKcal > 0
     const foodKcal = Math.round(isTracked ? d.foodKcal : avgFood)
     const activityKcal = Math.round(isTracked ? d.activityKcal : avgAct)
     const eatKcal = Math.round(isTracked ? (d.eatKcal ?? d.activityKcal) : avgEat)

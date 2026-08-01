@@ -13,6 +13,8 @@ export interface DraftTrainingEntry {
   externalId: string   // Strava activity id, optionally suffixed with `#<index>` for parsed sub-entries
   externalUrl: string
   externalRaw: string  // JSON of full payload
+  /** Structured session kcal when Strava provides it (importDrafts prefers this). */
+  calories?: number | null
 }
 
 const STRENGTH_TYPES = new Set(['WeightTraining', 'Crossfit', 'Workout'])

@@ -116,7 +116,14 @@ describe('NEAT', () => {
       weightKg: 70,
     })
     expect(n.source).toBe('steps_model')
-    expect(n.neatKcal).toBe(stepsToKcal(12581, 70))
+    const gross = stepsToKcal(12581, 70)
+    expect(n.neatKcal).toBe(Math.max(0, gross - 177))
+    expect(n.neatKcal).toBeLessThan(gross)
+  })
+  it('steps model does not re-count session burn', () => {
+    const n = estimateNeat({ sessionEatKcal: 400, steps: 12000, weightKg: 80 })
+    expect(n.source).toBe('steps_model')
+    expect(n.neatKcal).toBeLessThanOrEqual(stepsToKcal(12000, 80) - 400)
   })
 })
 

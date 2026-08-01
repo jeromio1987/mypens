@@ -1,8 +1,22 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { analyzeTanitaCsv } from '@/lib/tanitaCsv'
+import { cookies } from 'next/headers'
+import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth'
+
+/** Web session only — rejects mobile bearer (Tanita import is web dashboard only). */
+async function requireSession(): Promise<NextResponse | null> {
+  const jar = await cookies()
+  const session = jar.get(SESSION_COOKIE)?.value
+  if (!(await verifySessionToken(session))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  return null
+}
 
 export async function POST(request: Request) {
+  const auth = await requireSession()
+  if (auth) return auth
   try {
     const formData = await request.formData()
     const file = formData.get('file')

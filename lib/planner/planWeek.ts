@@ -91,24 +91,41 @@ export function planWeek(
   const kcalVeryLow = ctx.avgKcal != null && ctx.avgKcal < FOOD_SOFT.kcalVeryLow
   const logged = ctx.foodDaysLogged ?? 0
   const windowDays = ctx.foodWindowDays ?? 0
-  const fuelingUnknown =
-    logged === 0 || (windowDays > 0 && logged / windowDays < FOOD_SOFT.minCoverage)
-  const softFuel = kcalVeryLow || (proteinLow && !fuelingUnknown)
+  const coverageRatio = windowDays > 0 ? logged / windowDays : 0
+  /** No food rows at all — cannot judge fueling. */
+  const fuelingUnknown = logged === 0
+  /** Some logs, but below minCoverage — honest partial, do not rewrite the week from sparse days. */
+  const fuelingThin = !fuelingUnknown && coverageRatio < FOOD_SOFT.minCoverage
+  /** Enough coverage to let soft rules ease load. */
+  const fuelingCovered = !fuelingUnknown && !fuelingThin
+  const softFuel = fuelingCovered && (kcalVeryLow || proteinLow)
   const notes: string[] = []
 
   if (sleepLow) notes.push('Sleep avg under 6.5h — volume capped; more core / easy.')
   if (compromised) notes.push('Recovery compromised (drink / high RHR) — Mon–Tue forced easy or rest.')
   if (fuelingUnknown) {
-    notes.push('Fueling unknown — few/no food logs; plan not blocked (confidence lower).')
+    notes.push('Fueling unknown — no food logs in lookback; plan not blocked (confidence lower).')
+  } else if (fuelingThin) {
+    notes.push(
+      `Fueling thin — ${logged} of ${windowDays} days logged; soft fueling only on logged days (plan not blocked).`,
+    )
   }
-  if (kcalVeryLow) {
+  if (kcalVeryLow && fuelingCovered) {
     notes.push('Recent daily kcal looks very low — quality softened and long session shortened.')
+  } else if (kcalVeryLow && fuelingThin) {
+    notes.push(
+      `Logged days avg ~${Math.round(ctx.avgKcal ?? 0)} kcal (sparse) — not rewriting the week yet.`,
+    )
   }
-  if (proteinLow && !fuelingUnknown) {
+  if (proteinLow && fuelingCovered) {
     notes.push(
       goal.kind === 'bodyfat'
         ? 'Protein intake looks soft — keep gym, avoid stacking hard aerobic on low-fuel days.'
         : 'Protein intake looks soft — prefer strength/core over extra quality work.',
+    )
+  } else if (proteinLow && fuelingThin) {
+    notes.push(
+      `Logged days avg ~${Math.round(ctx.avgProteinG ?? 0)}g protein (sparse) — cue only, not a week rewrite.`,
     )
   }
 
@@ -248,6 +265,7 @@ export function planWeek(
     }
 
     // 6-D food soft rules: never remove the long day, never invent meals — only ease load.
+    // Mutations require fuelingCovered; thin coverage stays observational (notes + per-day logged cues).
     if (softFuel && plan.intensity === 'quality') {
       plan = {
         ...plan,
@@ -256,13 +274,13 @@ export function planWeek(
         title: plan.title.replace(/Quality/i, 'Easy'),
         why: `${plan.why} Softened — recent fueling looks light.`,
       }
-    } else if (kcalVeryLow && plan.isLong) {
+    } else if (fuelingCovered && kcalVeryLow && plan.isLong) {
       plan = {
         ...plan,
         minutes: Math.max(45, Math.round(plan.minutes * 0.8)),
         why: `${plan.why} Shortened — recent daily kcal looks very low.`,
       }
-    } else if (proteinLow && !fuelingUnknown && plan.sport === 'gym') {
+    } else if (fuelingCovered && proteinLow && plan.sport === 'gym') {
       plan = {
         ...plan,
         why: `${plan.why} Gym protected while protein looks soft.`,

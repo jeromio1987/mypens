@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 
 import { EngineReadCard } from '@/components/EngineReadCard'
+import { PensLogo } from '@/components/PensLogo'
 import { SyncChip } from '@/components/SyncChip'
 import { continental as C } from '@/constants/continental'
 import { DESTINATIONS } from '@/lib/destinations'
@@ -25,12 +26,17 @@ export default function ReadTabScreen() {
         gap: 12,
       }}
     >
-      <Text style={styles.kicker}>The Continental · P.E.N.S.</Text>
-      <Text style={styles.title}>Read</Text>
+      <View style={styles.brandRow}>
+        <PensLogo size={44} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.kicker}>The Continental · P.E.N.S.</Text>
+          <Text style={styles.title}>Read</Text>
+        </View>
+      </View>
       <Text style={styles.sub}>{blurb}</Text>
 
-      <SyncChip />
       <EngineReadCard defaultDays={7} />
+      <SyncChip />
 
       <View style={styles.row}>
         <Pressable style={styles.linkCard} onPress={() => router.push('/period-review' as never)}>
@@ -51,6 +57,11 @@ export default function ReadTabScreen() {
 }
 
 const styles = StyleSheet.create({
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   kicker: {
     fontFamily: 'Inter_500Medium',
     fontSize: 10,

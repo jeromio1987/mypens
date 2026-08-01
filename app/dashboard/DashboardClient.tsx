@@ -9,7 +9,7 @@ import {
   CheckCircle, AlertTriangle, Info, CalendarDays, Flame, Map, Target, Sparkles, Image as ImageIcon,
   FileText, UtensilsCrossed,
 } from 'lucide-react'
-import type { StructuredInsight } from '@/app/api/dashboard/route'
+import type { DashboardData } from '@/lib/dashboardData'
 import GoalsPanel from '@/components/goals/GoalsPanel'
 import SyncStatusBadge from '@/components/shared/SyncStatusBadge'
 import NotificationsBadge from '@/components/shared/NotificationsBadge'
@@ -21,53 +21,6 @@ interface StreakModule { current: number; longest: number; lastLogged: string | 
 interface StreaksData {
   weight: StreakModule; food: StreakModule; sleep: StreakModule
   training: StreakModule; measurements: StreakModule
-}
-
-interface EventTag { id: string; type: string; label: string; startDate: string; endDate: string; notes?: string | null }
-
-interface WeightBreakdown {
-  creatineKg: number; alcoholKg: number; glycogenKg: number
-  sodiumKg: number; hardTrainingKg: number; totalAdjustmentKg: number
-  tanitaFlags: string[]
-}
-
-interface DashboardData {
-  weight: {
-    latest: {
-      scaleKg: number; trueWeightKg: number; date: string
-      confidence: 'high' | 'medium' | 'low' | null
-      activeConfounders: number
-      breakdown: WeightBreakdown | null
-    } | null
-    avg7: number | null
-    trend7: number | null
-  }
-  food: {
-    today: { kcal: number; proteinG: number; carbsG: number; fatG: number; entries: number }
-    avgKcal7: number | null
-  }
-  sleep: {
-    latest: { hours: number; quality: number; bedtime: string; wakeTime: string; date: string } | null
-    avgHours7: number | null
-    avgQuality7: number | null
-    avgHrv7: number | null
-    daysLogged: number
-  }
-  training: {
-    weekSessions: number
-    weekVolume: number
-    topExercises: { exercise: string; volume: number }[]
-    lastDate: string | null
-  }
-  measurements: {
-    latest: { waistCm: number | null; chestCm: number | null; hipsCm: number | null; date: string } | null
-    delta: { waistCm: number | null; chestCm: number | null } | null
-  }
-  events: {
-    active: EventTag[]
-    recent: EventTag[]
-  }
-  insights: StructuredInsight[]
 }
 
 type ConfidenceLevel = 'high' | 'medium' | 'low'
@@ -139,27 +92,51 @@ const STREAK_MODULES = [
   { key: 'measurements', label: 'Measurements', icon: Ruler,          color: 'text-rose-400' },
 ]
 
-export default function DashboardClient() {
+export default function DashboardClient({
+  initialData,
+  initialError,
+}: {
+  initialData: DashboardData | null
+  initialError: string | null
+}) {
   const { tier, isPremium, isLoading: tierLoading } = useTier()
   const [tierBusy, setTierBusy]   = useState(false)
-  const [data, setData]         = useState<DashboardData | null>(null)
-  const [loading, setLoading]   = useState(true)
+  const [data]                  = useState<DashboardData | null>(initialData)
   const [streaks, setStreaks]   = useState<StreaksData | null>(null)
-  const [apiError, setApiError] = useState<string | null>(null)
+  const [apiError]              = useState<string | null>(initialError)
   const [showGoals, setShowGoals] = useState(false)
 
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
+
   async function downloadWeeklyReport() {
+    setPdfError(null)
+    setPdfBusy(true)
     try {
       const res = await fetch('/api/report/weekly')
-      if (!res.ok) return
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string; detail?: string } | null
+        setPdfError(j?.error ?? `PDF failed (${res.status})`)
+        return
+      }
       const blob = await res.blob()
+      if (!blob.size || !blob.type.includes('pdf')) {
+        setPdfError('Server did not return a PDF.')
+        return
+      }
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = 'my-pens-weekly.pdf'
+      document.body.appendChild(a)
       a.click()
+      a.remove()
       URL.revokeObjectURL(url)
-    } catch {}
+    } catch {
+      setPdfError('Could not download the weekly PDF.')
+    } finally {
+      setPdfBusy(false)
+    }
   }
 
   async function handlePremiumDevToggle() {
@@ -180,19 +157,23 @@ export default function DashboardClient() {
     }
   }
 
+  // Streaks are garnish — never block the SSR'd overview on this call.
   useEffect(() => {
-    fetch('/api/dashboard')
+    let cancelled = false
+    const ac = new AbortController()
+    const timer = window.setTimeout(() => ac.abort(), 12_000)
+    fetch('/api/streaks', { signal: ac.signal })
       .then(r => r.json())
       .then(d => {
-        if (d.error || !d.weight) {
-          setApiError(d.error ?? 'Unexpected response. Make sure you have run: npx prisma db push')
-        } else {
-          setData(d)
-        }
+        if (!cancelled && d && !d.error) setStreaks(d as StreaksData)
       })
-      .catch(() => setApiError('Could not reach the dashboard API.'))
-      .finally(() => setLoading(false))
-    fetch('/api/streaks').then(r => r.json()).then(setStreaks).catch(() => null)
+      .catch(() => null)
+      .finally(() => window.clearTimeout(timer))
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      ac.abort()
+    }
   }, [])
 
   return (
@@ -216,80 +197,97 @@ export default function DashboardClient() {
           <PremiumGate feature="Weekly PDF report" className="rounded-lg w-full">
             <button
               type="button"
+              disabled={pdfBusy}
               onClick={() => void downloadWeeklyReport()}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-pens-muted/40 bg-pens-deep/40 text-pens-cream text-xs w-full justify-center hover:border-pens-gold/40 hover:bg-pens-navy transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-pens-muted/40 bg-pens-deep/40 text-pens-cream text-xs w-full justify-center hover:border-pens-gold/40 hover:bg-pens-navy transition-colors disabled:opacity-50"
             >
               <FileText size={14} className="shrink-0 text-pens-gold" />
-              Download weekly report (PDF)
+              {pdfBusy ? 'Building PDF…' : 'Download weekly report (PDF)'}
             </button>
           </PremiumGate>
+          {pdfError && (
+            <p className="text-xs text-red-400">{pdfError}</p>
+          )}
         </div>
 
-        {/* Header */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link href="/" className="text-pens-cream/40 hover:text-pens-cream/70 transition-colors">
-            <ArrowLeft size={20} />
-          </Link>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">P.E.N.S.</p>
-            <h1 className="text-2xl font-bold text-pens-cream">Weekly Overview</h1>
+        {/* Header — title row separate from nav chips (no flex-1 overflow onto pills) */}
+        <div className="space-y-3">
+          <div className="flex items-start gap-3">
+            <Link
+              href="/"
+              aria-label="Back"
+              className="mt-1 shrink-0 text-pens-cream/40 hover:text-pens-cream/70 transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </Link>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] uppercase tracking-widest text-pens-crimson font-semibold">P.E.N.S.</p>
+              <h1 className="text-2xl font-bold text-pens-cream leading-tight">Weekly Overview</h1>
+            </div>
+            <Link
+              href="/clubroom"
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy hover:bg-pens-deep rounded-xl text-xs font-medium text-pens-gold transition-colors border border-pens-gold/20"
+            >
+              <Sparkles size={13} />
+              Clubroom
+            </Link>
           </div>
-          <Link
-            href="/clubroom"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy hover:bg-pens-deep rounded-xl text-xs font-medium text-pens-gold transition-colors border border-pens-gold/20"
-          >
-            <Sparkles size={13} />
-            Clubroom
-          </Link>
-          <Link
-            href="/data"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-pens-cream/60 transition-colors border border-pens-muted/30"
-          >
-            <Download size={13} />
-            Data
-          </Link>
-          <Link
-            href="/period-review"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-cyan-300/80 transition-colors border border-cyan-500/25"
-          >
-            Cockpit
-          </Link>
-          <Link
-            href="/planner"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-orange-300/80 transition-colors border border-orange-500/25"
-          >
-            Planner
-          </Link>
-          <Link
-            href="/roadmap"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-pens-cream/60 transition-colors border border-pens-muted/30"
-          >
-            <Map size={13} />
-            Roadmap
-          </Link>
-          <Link
-            href="/mockups"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-pens-cream/60 transition-colors border border-pens-muted/30"
-          >
-            <ImageIcon size={13} />
-            Mockups
-          </Link>
-          <button
-            onClick={() => setShowGoals(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-pens-cream/70 bg-pens-navy/60 hover:bg-pens-navy px-3 py-1.5 rounded-xl transition-colors border border-pens-muted/30"
-          >
-            <Target size={14} />
-            Goals
-          </button>
+          <div className="flex flex-wrap gap-2 pl-8">
+            <Link
+              href="/data"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-pens-cream/60 transition-colors border border-pens-muted/30"
+            >
+              <Download size={13} />
+              Data
+            </Link>
+            <Link
+              href="/period-review"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-cyan-300/80 transition-colors border border-cyan-500/25"
+            >
+              Cockpit
+            </Link>
+            <Link
+              href="/planner"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-orange-300/80 transition-colors border border-orange-500/25"
+            >
+              Planner
+            </Link>
+            <Link
+              href="/roadmap"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-pens-cream/60 transition-colors border border-pens-muted/30"
+            >
+              <Map size={13} />
+              Roadmap
+            </Link>
+            <Link
+              href="/mockups"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-pens-navy/60 hover:bg-pens-navy rounded-xl text-xs font-medium text-pens-cream/60 transition-colors border border-pens-muted/30"
+            >
+              <ImageIcon size={13} />
+              Mockups
+            </Link>
+            <button
+              type="button"
+              onClick={() => setShowGoals(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-pens-cream/70 bg-pens-navy/60 hover:bg-pens-navy px-3 py-1.5 rounded-xl transition-colors border border-pens-muted/30"
+            >
+              <Target size={14} />
+              Goals
+            </button>
+          </div>
         </div>
-
-        {loading && <div className="text-center py-12 text-pens-cream/40 text-sm">Loading…</div>}
 
         {apiError && (
           <div className="bg-pens-crimson/10 border border-pens-crimson/30 rounded-2xl p-5 text-sm text-red-400">
             <p className="font-semibold mb-1">Dashboard failed to load</p>
             <p>{apiError}</p>
             <p className="mt-3 text-red-400/70 font-mono text-xs">npx prisma db push</p>
+          </div>
+        )}
+
+        {!apiError && !data && (
+          <div className="bg-pens-navy/40 border border-pens-muted/25 rounded-2xl p-5 text-sm text-pens-cream/60">
+            No overview data available yet.
           </div>
         )}
 
@@ -418,7 +416,7 @@ export default function DashboardClient() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
                     <span className="text-3xl font-bold text-pens-cream">{data.sleep.latest.hours}h</span>
-                    <QualityDots q={data.sleep.latest.quality} />
+                    <QualityDots q={data.sleep.latest.quality ?? 0} />
                   </div>
                   <p className="text-sm text-pens-cream/50">{data.sleep.latest.bedtime} → {data.sleep.latest.wakeTime}</p>
                   <div className="flex gap-4 text-xs text-pens-cream/40">

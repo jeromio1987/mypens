@@ -4,7 +4,7 @@
  * Mobile: mypens-mobile/components/SyncChip.tsx
  */
 
-export type SyncSourceId = 'garmin' | 'healthconnect_sleep' | 'healthconnect_workouts' | 'tanita'
+export type SyncSourceId = 'garmin' | 'healthconnect' | 'healthconnect_sleep' | 'healthconnect_workouts' | 'tanita'
 
 export type SyncSourceStatus = {
   id: SyncSourceId
@@ -15,17 +15,21 @@ export type SyncSourceStatus = {
   lastErrorAt: string | null
 }
 
+export type SyncChipTone = 'ok' | 'error' | 'unknown'
+
 export type SyncChipState = {
   sources: SyncSourceStatus[]
   /** Worst open error across sources, if any */
   primaryError: { label: string; message: string } | null
   /** ISO of most recent success across sources */
   lastAnySuccessAt: string | null
+  /** True only with a success and no errors — never green on total failure */
   healthy: boolean
+  tone: SyncChipTone
 }
 
 export function buildSyncChipState(sources: SyncSourceStatus[]): SyncChipState {
-  const withError = sources.filter(s => s.connected && s.lastError)
+  const withError = sources.filter(s => Boolean(s.lastError))
   const successes = sources
     .map(s => s.lastSuccessAt)
     .filter((x): x is string => Boolean(x))
@@ -34,10 +38,13 @@ export function buildSyncChipState(sources: SyncSourceStatus[]): SyncChipState {
   const primaryError = withError.length
     ? { label: withError[0]!.label, message: withError[0]!.lastError! }
     : null
+  const healthy = withError.length === 0 && lastAnySuccessAt != null
+  const tone: SyncChipTone = primaryError ? 'error' : healthy ? 'ok' : 'unknown'
   return {
     sources,
     primaryError,
     lastAnySuccessAt,
-    healthy: withError.length === 0,
+    healthy,
+    tone,
   }
 }

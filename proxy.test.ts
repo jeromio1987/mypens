@@ -7,11 +7,13 @@ describe('proxy middleware', () => {
   beforeEach(() => {
     process.env.SESSION_SECRET = 'test-session-secret-at-least-32-chars-long'
     delete process.env.MOBILE_PENS_API_TOKEN
+    delete process.env.MYPENS_AUTH_DISABLED
   })
 
   afterEach(() => {
     delete process.env.SESSION_SECRET
     delete process.env.MOBILE_PENS_API_TOKEN
+    delete process.env.MYPENS_AUTH_DISABLED
   })
 
   it('allows /api/health without credentials', async () => {
@@ -61,5 +63,13 @@ describe('proxy middleware', () => {
     const req = new NextRequest(new URL('http://localhost/login'))
     const res = await proxy(req)
     expect(res.status).toBe(200)
+  })
+
+  it('allows protected API and pages when MYPENS_AUTH_DISABLED=true', async () => {
+    process.env.MYPENS_AUTH_DISABLED = 'true'
+    const api = await proxy(new NextRequest(new URL('http://localhost/api/weight')))
+    expect(api.status).toBe(200)
+    const page = await proxy(new NextRequest(new URL('http://localhost/dashboard')))
+    expect(page.status).toBe(200)
   })
 })

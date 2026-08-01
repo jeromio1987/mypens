@@ -70,6 +70,7 @@ export async function GET(req: Request) {
       proteinG: s.proteinG,
       foodLogged: s.foodLogged,
       energyDelta: s.energyDelta,
+      neatSource: (s as { neatSource?: string | null }).neatSource ?? null,
       scaleKg: null as number | null,
     }))
 
@@ -112,11 +113,19 @@ export async function GET(req: Request) {
       : await prisma.weeklyFeedbackReport.findFirst({ orderBy: { weekOf: 'desc' } })
 
     return NextResponse.json({
+      // cycle = rolling 7d ending today; report = stored Mon–Sun calendar week (W1).
+      windows: {
+        cycle: { ...win, label: 'rolling' as const },
+        report: report
+          ? { from: report.weekOf, to: report.weekEnd, label: 'calendar' as const }
+          : null,
+      },
       cycle,
       report: report
         ? {
             weekOf: report.weekOf,
             weekEnd: report.weekEnd,
+            windowLabel: 'calendar' as const,
             combinedSummary: report.combinedSummary,
             healthAnalysis: report.healthAnalysis,
             claudeWorkAnalysis: report.claudeWorkAnalysis,

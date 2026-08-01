@@ -6,12 +6,16 @@ import { BarChart } from 'react-native-gifted-charts'
 
 import { useColors } from '@/hooks/useColors'
 import { MODULE_COLORS } from '@/constants/colors'
-import { isPensApiConfigured, pensFetch } from '@/lib/pensApi'
+import { isPensApiConfigured } from '@/lib/pensApi'
 import {
+  TRAIN_COCKPIT_DAYS,
+  cockpitQueryKey,
+  fetchCockpitLive,
+  pickFitnessFreshness,
   summarizeTraining,
-  type PeriodReviewLiveResponse,
 } from '@/lib/cockpitWindow'
-import { rollingWindow } from '@/lib/timeWindow'
+import { rollingWindow, shiftDateStr } from '@/lib/timeWindow'
+import { FitnessFreshnessStrip } from '@/components/FitnessFreshnessStrip'
 
 const MOD = MODULE_COLORS.training
 
@@ -23,32 +27,30 @@ function peakDayLabel(series: { date: string; trainingLoad: number }[], peak: nu
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
+/**
+ * Fetches ~55d once (shared with Train load bars via cockpitQueryKey).
+ * Chip 7/14/30 only slices the series client-side — no second network call.
+ */
 export function TrainingReviewCard({ defaultDays = 14 }: { defaultDays?: 7 | 14 | 30 }) {
   const colors = useColors()
   const { width } = useWindowDimensions()
   const enabled = isPensApiConfigured()
   const [days, setDays] = useState<7 | 14 | 30>(defaultDays)
   const [showPluHelp, setShowPluHelp] = useState(false)
-  const { from, to } = rollingWindow(days)
+  const { from: fetchFrom, to } = rollingWindow(TRAIN_COCKPIT_DAYS)
+  const displayFrom = shiftDateStr(to, -(days - 1))
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
-    queryKey: ['period-review-training', from, to],
+    queryKey: cockpitQueryKey(fetchFrom, to),
     enabled,
-    queryFn: async (): Promise<PeriodReviewLiveResponse> => {
-      const res = await pensFetch(
-        `/api/period-review?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-      )
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(j.error ?? `Training review ${res.status}`)
-      }
-      return (await res.json()) as PeriodReviewLiveResponse
-    },
+    queryFn: () => fetchCockpitLive(fetchFrom, to),
   })
 
   if (!enabled) return null
 
-  const series = data?.cockpit?.series ?? []
+  const fullSeries = data?.cockpit?.series ?? []
+  const series = fullSeries.filter(d => d.date >= displayFrom && d.date <= to)
   const sum = summarizeTraining(series)
+  const fitness = pickFitnessFreshness(data?.cockpit)
   const peakLabel = peakDayLabel(series, sum.peak)
   const hardDays = series.filter(d => (d.hardLoad || 0) > (d.easyLoad || 0) && (d.trainingLoad || 0) > 0).length
   const chartW = width - 64
@@ -69,7 +71,7 @@ export function TrainingReviewCard({ defaultDays = 14 }: { defaultDays?: 7 | 14 
         <View style={{ flex: 1 }}>
           <Text style={[styles.eyebrow, { color: MOD.primary }]}>Training review</Text>
           <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-            {from} → {to}
+            {displayFrom} → {to}
           </Text>
         </View>
         <Pressable onPress={() => setShowPluHelp(s => !s)} hitSlop={10} style={{ marginRight: 8 }}>
@@ -112,7 +114,7 @@ export function TrainingReviewCard({ defaultDays = 14 }: { defaultDays?: 7 | 14 
 
       {showPluHelp ? (
         <Text style={[styles.explain, { color: colors.mutedForeground, marginBottom: 8 }]}>
-          Belasting ≈ minutes × sport × heart-rate intensity. Walks count light; strength/HIIT heavy.
+          Load ≈ minutes × sport × heart-rate intensity. Walks count light; strength/HIIT heavy.
           Internal unit is PLU — kept off the main screen.
         </Text>
       ) : null}
@@ -120,10 +122,16 @@ export function TrainingReviewCard({ defaultDays = 14 }: { defaultDays?: 7 | 14 
       {isError ? (
         <Text style={{ color: colors.warning, fontSize: 13 }}>{(error as Error)?.message}</Text>
       ) : isLoading && !data ? (
-        <ActivityIndicator color={MOD.primary} style={{ marginVertical: 12 }} />
+        <View style={{ marginVertical: 12, gap: 8 }}>
+          <ActivityIndicator color={MOD.primary} />
+          <Text style={[styles.explain, { color: colors.mutedForeground }]}>
+            Loading cockpit… if this hangs, Next may be wedged — check /api/health.
+          </Text>
+        </View>
       ) : (
         <>
           <Text style={[styles.plain, { color: colors.foreground }]}>{plain}</Text>
+          <FitnessFreshnessStrip fitness={fitness} compact />
           <View style={styles.stats}>
             <View style={[styles.stat, { backgroundColor: colors.secondary }]}>
               <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Active days</Text>

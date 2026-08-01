@@ -117,6 +117,11 @@ export function PlannerWeekCard() {
                   <Text style={[styles.dayMeta, { color: accent }]}>
                     {d.minutes > 0 ? `${d.minutes}m · ${d.intensity}` : d.intensity}
                   </Text>
+                  {/Fueling logged:/i.test(d.why) ? (
+                    <Text style={[styles.dayFuel, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {d.why.match(/Fueling logged:[^.]+/i)?.[0] ?? 'Fueling logged'}
+                    </Text>
+                  ) : null}
                 </View>
               )
             })}
@@ -185,6 +190,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 10,
     marginTop: 4,
+  },
+  dayFuel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 9,
+    marginTop: 3,
+    lineHeight: 12,
   },
   note: {
     fontFamily: 'Inter_400Regular',

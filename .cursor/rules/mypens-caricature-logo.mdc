@@ -1,0 +1,17 @@
+# myPENS — caricature logo is sacred
+
+**Do not replace Jerome’s drinking Indian / Native American PENS caricature logo without his explicit ask.**
+
+Canonical assets (launcher + in-app `PensLogo`):
+
+- `mypens-mobile/assets/images/icon.png`
+- `mypens-mobile/assets/images/adaptive-icon.png`
+
+`PensLogo` must keep `require('../assets/images/icon.png')`.
+
+After any intentional icon change: `node mypens-mobile/scripts/sync-android-icons.mjs`, then rebuild APK.
+
+Backups:
+
+- Caricature: `icon.png.bak-caricature-202607251818`
+- Gold bottle: `icon.png.bak-gold-bottle` / `adaptive-icon.png.bak-gold-bottle`

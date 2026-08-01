@@ -33,7 +33,8 @@ export async function GET(req: Request) {
       if (from > to) {
         return NextResponse.json({ error: 'from must be ≤ to' }, { status: 400 })
       }
-      const cockpit = await buildCockpitWindow({ from, to, asOf: to })
+      const debug = searchParams.get('debug') === '1'
+      const cockpit = await buildCockpitWindow({ from, to, asOf: to, debug })
       return NextResponse.json({ mode: 'live', cockpit })
     }
 

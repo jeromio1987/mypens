@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Feather } from '@expo/vector-icons'
 
+import { PensLogo } from '@/components/PensLogo'
 import { continental as C } from '@/constants/continental'
 
 type ScreenProps = {
@@ -25,6 +26,8 @@ type ScreenProps = {
   refreshing?: boolean
   onRefresh?: () => void
   footer?: ReactNode
+  /** Tab hubs (e.g. Audit) should hide the stack back chevron. Default true. */
+  showBack?: boolean
 }
 
 export function ContinentalScreen({
@@ -35,6 +38,7 @@ export function ContinentalScreen({
   refreshing,
   onRefresh,
   footer,
+  showBack = true,
 }: ScreenProps) {
   const insets = useSafeAreaInsets()
   const router = useRouter()
@@ -42,16 +46,18 @@ export function ContinentalScreen({
 
   return (
     <View style={[styles.root, { paddingTop: topPad }]}>
-      <View style={styles.topBar}>
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
-          hitSlop={12}
-          style={styles.backBtn}
-        >
-          <Feather name="chevron-left" size={22} color={C.cream} />
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-      </View>
+      {showBack ? (
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+            hitSlop={12}
+            style={styles.backBtn}
+          >
+            <Feather name="chevron-left" size={22} color={C.cream} />
+            <Text style={styles.backLabel}>Back</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
         refreshControl={
@@ -64,8 +70,20 @@ export function ContinentalScreen({
           ) : undefined
         }
       >
-        {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-        <Text style={styles.title}>{title}</Text>
+        {!showBack ? (
+          <View style={styles.brandRow}>
+            <PensLogo size={36} />
+            <View style={{ flex: 1 }}>
+              {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+              <Text style={styles.title}>{title}</Text>
+            </View>
+          </View>
+        ) : (
+          <>
+            {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+            <Text style={styles.title}>{title}</Text>
+          </>
+        )}
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         <View style={styles.body}>{children}</View>
         {footer}
@@ -206,6 +224,12 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: 16,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
   },
   eyebrow: {
     color: C.oxblood,

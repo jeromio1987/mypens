@@ -1,0 +1,61 @@
+---
+description: After myPENS engine/ship/API/mobile changes, run standard verification before claiming done.
+alwaysApply: true
+---
+
+# myPENS — verify after ship
+
+Do **not** claim done / fixed / shipped until verification below passes (or Jerome waives a gate in writing).
+
+## When this applies
+
+Any change that touches: engines (`lib/engines/**`, `lib/*Models*`, retention), `app/api/**`, food/weight/energy/training/HC, mobile (`mypens-mobile/**`), or a ship Jerome asked to verify.
+
+## Required steps (in order)
+
+1. **Scoped unit tests for touched engines** (minimum bar):
+   ```powershell
+   npx vitest run tests/<touched>.test.ts
+   ```
+   Examples: `tests/trainingMetrics.test.ts`, `tests/periodAnalyze.test.ts`, `tests/photoFormUpload.test.ts`. If several engines changed, run each related test file. Failures → fix before continuing.
+
+2. **Wiring pass** (before / alongside verify-ship) — unfinished consumers are the recurring ship killer:
+   - Any **new export** from a shared hook/lib → `rg` every consumer; wire or document intentional skip.
+   - `flushOfflineQueue` callers must use **`droppedBad`** (or go through `usePensSync`).
+   - Run:
+     ```powershell
+     node .cursor/skills/mypens-adversarial-pre-apk/scripts/wiring-check.mjs
+     ```
+   - Known primitives checklist: `useSelectedDate.ready`, `droppedBad`, `readDeadLetter` UI, module flush lock, coverage gates (`foodCoverage`, Form signals, sync health), session-only export/import (like backup/share-links), **photo path (W6)**.
+   - Full skill: `.cursor/skills/mypens-adversarial-pre-apk/SKILL.md`  
+     Rule: `.cursor/rules/mypens-finish-the-wiring.mdc`  
+   Failures → fix before claiming ship; does **not** replace step 3.
+
+3. **Full ship verify** when ship / mobile / API lanes are in play — read and run:
+   `C:\Users\jerom\Desktop\claude\Projects\mypens\.cursor\skills\mypens-verify-ship\SKILL.md`
+   ```powershell
+   node .cursor/skills/mypens-verify-ship/scripts/verify-ship.mjs
+   ```
+   Paste VERIFY_REPORT bullets in the reply. Status must be **PASS** (or named SKIP waived by Jerome).
+   `api_smoke` must include **photo-analyze route-alive** (400/401, not 404/500; no Anthropic burn). Standalone:
+   ```powershell
+   node scripts/smoke-photo-analyze.mjs
+   ```
+
+4. **Photo path before APK** — agents must **not** offer / install a new APK until:
+   - photo-analyze smoke PASS is documented in the reply, **and**
+   - preferably a manual Take photo on the phone when an APK is already installed,
+   - **or** Jerome waives in writing / `--skip-apk` with explicit **"photo unverified"**.
+   Server-only MIME fixes can help the **existing** APK without reinstall; client photo UI changes need a new APK **only when Jerome asks**.
+
+5. **Engine-only / lib-only** (no mobile UI, no API route ship): step 1 is enough; still run steps 2–3 if Jerome said “ship” or “verify”, or if you added a shared export consumers must adopt.
+
+## Do not
+
+- Skip vitest because “it compiled”
+- Skip wiring-check because “the helper exists”
+- Say done on FAIL / wedged API
+- Offer or run `adb install` / stamp APK rebuilt when Jerome said wait / skip APK
+- Claim camera fixed on-device from code-only changes without photo smoke + (device tap or waiver)
+- Re-run long parallel vitest if another agent is already running the same suite — wait or reuse that result
+- **Call a Next restart a “foto-fix”** — if `/api/health` timed out, that is a wedged server (rule: `.cursor/rules/mypens-dev-server-health.mdc`). Probe first: `node scripts/dev-health.mjs`. Restart alone is not a ship claim; name the root cause.

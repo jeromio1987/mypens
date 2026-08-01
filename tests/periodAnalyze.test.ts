@@ -9,17 +9,27 @@ import {
   interpretPatterns,
   domainStats,
   crossMetricMatrix,
+  scoreDay,
+  FORM_MIN_INPUTS,
 } from '../scripts/lib/periodAnalyze.mjs'
 import { shiftDateStr } from '../scripts/lib/weekDates.mjs'
 
-function sleepDays(from: string, nights: number, hours: number) {
-  const out = []
+/** Sleep nights plus a second Form signal (stress) so FORM_MIN_INPUTS honesty gate is met. */
+function formDays(
+  from: string,
+  nights: number,
+  hours: number,
+  stress: number,
+) {
+  const sleeps = []
+  const metrics = []
   let d = from
   for (let i = 0; i < nights; i++) {
-    out.push({ date: d, hours, quality: 4 })
+    sleeps.push({ date: d, hours, quality: 4 })
+    metrics.push({ date: d, kind: 'stress', valueNum: stress })
     d = shiftDateStr(d, 1)
   }
-  return out
+  return { sleeps, metrics }
 }
 
 describe('buildDailySignals HRV/stress sources', () => {
@@ -47,12 +57,45 @@ describe('buildDailySignals HRV/stress sources', () => {
   })
 })
 
+describe('FORM_MIN_INPUTS honesty gate', () => {
+  it('scores sleep-only days but marks thin formInputs (< gate)', () => {
+    const scored = scoreDay({ sleepHours: 7.5 })
+    expect(scored).not.toBeNull()
+    expect(scored!.formInputs).toBe(1)
+    expect(scored!.formInputs).toBeLessThan(FORM_MIN_INPUTS)
+  })
+
+  it('excludes sleep-only days from weekly Form stretches', () => {
+    const daily = buildDailySignals({
+      sleeps: Array.from({ length: 14 }, (_, i) => ({
+        date: shiftDateStr('2026-01-05', i),
+        hours: 7.8,
+        quality: 4,
+      })),
+      metrics: [],
+      activities: [],
+    })
+    const weekly = buildWeeklyScores(daily)
+    expect(weekly).toHaveLength(0)
+  })
+
+  it('includes multi-signal days in weekly Form', () => {
+    const scored = scoreDay({ sleepHours: 7.5, stress: 25 })
+    expect(scored!.formInputs).toBeGreaterThanOrEqual(FORM_MIN_INPUTS)
+    expect(classifyScore(scored!.score)).toBe('good')
+  })
+})
+
 describe('period segments — 3m good then 9m bad', () => {
   it('12-month verdict is bad while naming the good stretch', () => {
-    // ~13 weeks strong sleep, then ~39 weeks short sleep (~12 months)
-    const good = sleepDays('2025-07-07', 91, 7.5) // ~3 months
-    const bad = sleepDays('2025-10-06', 273, 5.2) // ~9 months
-    const data = { sleeps: [...good, ...bad], metrics: [], activities: [] }
+    // ~13 weeks strong Form (sleep+stress), then ~39 weeks weak (~12 months)
+    const good = formDays('2025-07-07', 91, 7.5, 25) // ~3 months
+    const bad = formDays('2025-10-06', 273, 5.2, 65) // ~9 months
+    const data = {
+      sleeps: [...good.sleeps, ...bad.sleeps],
+      metrics: [...good.metrics, ...bad.metrics],
+      activities: [],
+    }
 
     const report = analyzePeriods(data, { asOf: '2026-07-06', horizonsMonths: [3, 12] })
     const h12 = report.horizons.find(h => h.months === 12)!
@@ -76,9 +119,10 @@ describe('period segments — 3m good then 9m bad', () => {
   })
 
   it('merges adjacent weeks into stretches', () => {
+    const { sleeps, metrics } = formDays('2026-01-05', 28, 7.8, 25)
     const daily = buildDailySignals({
-      sleeps: sleepDays('2026-01-05', 28, 7.8),
-      metrics: [],
+      sleeps,
+      metrics,
       activities: [],
     })
     const weekly = buildWeeklyScores(daily)

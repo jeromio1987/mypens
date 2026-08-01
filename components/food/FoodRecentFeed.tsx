@@ -21,7 +21,6 @@ interface FoodEntryRow {
 interface Props {
   refresh?: number
   selectedDate: string
-  onSelectDate: (date: string) => void
   onChanged?: () => void
 }
 
@@ -40,7 +39,7 @@ function dayHeading(iso: string) {
 const inputCls =
   'w-full text-xs bg-pens-navy border border-pens-muted/40 rounded px-2 py-1 text-pens-cream'
 
-export default function FoodRecentFeed({ refresh, selectedDate, onSelectDate, onChanged }: Props) {
+export default function FoodRecentFeed({ refresh, selectedDate, onChanged }: Props) {
   const [rows, setRows] = useState<FoodEntryRow[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -134,7 +133,7 @@ export default function FoodRecentFeed({ refresh, selectedDate, onSelectDate, on
     <div className="bg-pens-surface/80 border border-pens-muted/20 rounded-2xl p-4 space-y-3">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-widest text-pens-cream/50">Recent</h2>
-        <p className="text-[11px] text-pens-cream/30">Scroll · tap day · pencil to edit</p>
+        <p className="text-[11px] text-pens-cream/30">Scroll · pencil to edit</p>
       </div>
       <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
         {byDay.map(([day, items]) => {
@@ -142,19 +141,17 @@ export default function FoodRecentFeed({ refresh, selectedDate, onSelectDate, on
           const active = day === selectedDate
           return (
             <div key={day}>
-              <button
-                type="button"
-                onClick={() => onSelectDate(day)}
+              <div
                 className={[
-                  'w-full flex items-center justify-between text-left px-2 py-1.5 rounded-lg mb-1 transition-colors',
+                  'w-full flex items-center justify-between text-left px-2 py-1.5 rounded-lg mb-1',
                   active
                     ? 'bg-pens-gold/15 text-pens-gold'
-                    : 'text-pens-cream/70 hover:bg-pens-navy/50',
+                    : 'text-pens-cream/70',
                 ].join(' ')}
               >
                 <span className="text-xs font-semibold">{dayHeading(day)}</span>
                 <span className="text-[11px] opacity-70">{Math.round(kcal)} kcal · {items.length}</span>
-              </button>
+              </div>
               <ul className="space-y-0.5 pl-1">
                 {items.map(e => (
                   <li key={e.id}>

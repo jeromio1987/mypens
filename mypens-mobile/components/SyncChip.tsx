@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Feather } from '@expo/vector-icons'
 
@@ -19,41 +19,52 @@ type StatusPayload = {
 export function SyncChip() {
   const colors = useColors()
   const router = useRouter()
-  const [sources, setSources] = useState<SyncSourceStatus[]>([])
+  const [sources, setSources] = useState<SyncSourceStatus[] | null>(null)
 
   useEffect(() => {
     if (!isPensApiConfigured()) return
     let cancelled = false
     ;(async () => {
+      // One Health Connect status endpoint — do not claim separate HC sleep/workouts health.
       const endpoints: { id: SyncSourceStatus['id']; label: string; path: string }[] = [
         { id: 'garmin', label: 'Garmin', path: '/api/integrations/garmin/status' },
-        { id: 'healthconnect_sleep', label: 'HC sleep', path: '/api/integrations/healthconnect/status' },
-        { id: 'healthconnect_workouts', label: 'HC workouts', path: '/api/integrations/healthconnect/status' },
+        { id: 'healthconnect', label: 'Health Connect', path: '/api/integrations/healthconnect/status' },
       ]
-      const rows: SyncSourceStatus[] = []
-      for (const ep of endpoints) {
-        try {
-          const res = await pensFetch(ep.path)
-          const d = res.ok ? ((await res.json()) as StatusPayload) : null
-          rows.push({
-            id: ep.id,
-            label: ep.label,
-            connected: Boolean(d?.connected),
-            lastSuccessAt: d?.lastSuccessAt ?? d?.lastSyncAt ?? null,
-            lastError: d?.lastError ? String(d.lastError) : null,
-            lastErrorAt: d?.lastErrorAt ?? null,
-          })
-        } catch {
-          rows.push({
-            id: ep.id,
-            label: ep.label,
-            connected: false,
-            lastSuccessAt: null,
-            lastError: null,
-            lastErrorAt: null,
-          })
-        }
-      }
+      const rows = await Promise.all(
+        endpoints.map(async (ep): Promise<SyncSourceStatus> => {
+          try {
+            const res = await pensFetch(ep.path)
+            if (!res.ok) {
+              return {
+                id: ep.id,
+                label: ep.label,
+                connected: false,
+                lastSuccessAt: null,
+                lastError: `status ${res.status}`,
+                lastErrorAt: new Date().toISOString(),
+              }
+            }
+            const d = (await res.json()) as StatusPayload
+            return {
+              id: ep.id,
+              label: ep.label,
+              connected: Boolean(d?.connected),
+              lastSuccessAt: d?.lastSuccessAt ?? d?.lastSyncAt ?? null,
+              lastError: d?.lastError ? String(d.lastError) : null,
+              lastErrorAt: d?.lastErrorAt ?? null,
+            }
+          } catch {
+            return {
+              id: ep.id,
+              label: ep.label,
+              connected: false,
+              lastSuccessAt: null,
+              lastError: 'network error',
+              lastErrorAt: new Date().toISOString(),
+            }
+          }
+        }),
+      )
       if (!cancelled) setSources(rows)
     })()
     return () => {
@@ -61,14 +72,49 @@ export function SyncChip() {
     }
   }, [])
 
-  if (!isPensApiConfigured() || sources.length === 0) return null
+  if (!isPensApiConfigured()) return null
+
+  if (sources == null) {
+    return (
+      <Pressable
+        onPress={() => router.push('/(tabs)/audit' as never)}
+        style={[
+          styles.chip,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <Feather name="loader" size={14} color={colors.mutedForeground} />
+        <Text
+          style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_600SemiBold', flex: 1 }}
+          numberOfLines={1}
+        >
+          Sync checking…
+        </Text>
+        <Text style={{ color: colors.mutedForeground, fontSize: 10, fontFamily: 'Inter_500Medium' }}>
+          Audit
+        </Text>
+      </Pressable>
+    )
+  }
 
   const state = buildSyncChipState(sources)
   const label = state.primaryError
     ? `${state.primaryError.label} issue`
-    : state.lastAnySuccessAt
+    : state.tone === 'ok' && state.lastAnySuccessAt
       ? `Sync OK · ${new Date(state.lastAnySuccessAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-      : 'Sync'
+      : 'Sync unknown'
+
+  const iconName =
+    state.tone === 'error' ? 'alert-triangle' : state.tone === 'ok' ? 'check-circle' : 'minus-circle'
+  const iconColor =
+    state.tone === 'error' ? '#f87171' : state.tone === 'ok' ? '#34d399' : colors.mutedForeground
+  const bg =
+    state.tone === 'error' ? 'rgba(185,28,28,0.18)' : colors.card
+  const border =
+    state.tone === 'error' ? 'rgba(185,28,28,0.45)' : colors.border
 
   return (
     <Pressable
@@ -76,16 +122,12 @@ export function SyncChip() {
       style={[
         styles.chip,
         {
-          backgroundColor: state.primaryError ? 'rgba(185,28,28,0.18)' : colors.card,
-          borderColor: state.primaryError ? 'rgba(185,28,28,0.45)' : colors.border,
+          backgroundColor: bg,
+          borderColor: border,
         },
       ]}
     >
-      <Feather
-        name={state.primaryError ? 'alert-triangle' : 'check-circle'}
-        size={14}
-        color={state.primaryError ? '#f87171' : '#34d399'}
-      />
+      <Feather name={iconName} size={14} color={iconColor} />
       <Text style={{ color: colors.foreground, fontSize: 12, fontFamily: 'Inter_600SemiBold', flex: 1 }} numberOfLines={1}>
         {label}
       </Text>

@@ -26,11 +26,11 @@ import { EngineReadCard } from '@/components/EngineReadCard'
 import { DateNavBar } from '@/components/DateNavBar'
 import { useColors } from '@/hooks/useColors'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
-import { usePensSync } from '@/hooks/usePensSync'
+import { usePensSync, flushOfflineQueueWithAlert } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
-import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
+import { enqueueOp } from '@/lib/offlineQueue'
 import { enrichWeightSeriesFromRows, type EnrichedWeightRow, type WeightRow } from '@/lib/enrichWeightSeriesMobile'
 import { confidenceLabel, confidenceDetail, bandCaption } from '@/lib/pensCopy'
 import type { ConfidenceLevel } from '@/lib/retentionModels'
@@ -114,7 +114,7 @@ export default function WeightScreen() {
   const useApi = isPensApiConfigured()
   const { pending, online, refresh: refreshQueue } = usePensSync()
 
-  const { date: sharedDate, setDate: setSharedDate } = useSelectedDate()
+  const { date: sharedDate, setDate: setSharedDate, ready: dateReady } = useSelectedDate()
   const [form, setForm] = useState({ ...defaultForm, date: sharedDate })
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showRetentionNums, setShowRetentionNums] = useState(false)
@@ -251,7 +251,7 @@ export default function WeightScreen() {
     onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       if (useApi) {
-        await flushOfflineQueue()
+        await flushOfflineQueueWithAlert()
         await refreshQueue()
       }
       qc.invalidateQueries({ queryKey: ['weight'] })
@@ -323,6 +323,28 @@ export default function WeightScreen() {
   )
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top
+
+  if (!dateReady) {
+    return (
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{
+          paddingTop: topInset + 16,
+          paddingBottom: insets.bottom + 100,
+        }}
+      >
+        <View style={styles.header}>
+          <View style={[styles.moduleTag, { backgroundColor: accentBg }]}>
+            <MaterialCommunityIcons name="scale-bathroom" size={16} color={MOD.primary} />
+            <Text style={[styles.moduleLabel, { color: MOD.primary }]}>Weight</Text>
+          </View>
+        </View>
+        <View style={{ paddingVertical: 48, alignItems: 'center' }}>
+          <ActivityIndicator color={MOD.primary} />
+        </View>
+      </ScrollView>
+    )
+  }
 
   return (
     <ScrollView
@@ -417,12 +439,7 @@ export default function WeightScreen() {
       </Pressable>
 
       <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
-        <DateNavBar
-          date={sharedDate}
-          onChange={setSharedDate}
-          accent={MOD.primary}
-          recentDates={entries.slice(-14).map((e) => e.date).reverse()}
-        />
+        <DateNavBar date={sharedDate} onChange={setSharedDate} accent={MOD.primary} />
       </View>
 
       <EngineReadCard defaultDays={7} />

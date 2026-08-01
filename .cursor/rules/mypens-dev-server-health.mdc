@@ -1,0 +1,46 @@
+---
+description: Wedged local Next is not a photo/product bug — diagnose before restart; restart alone is not a fix claim.
+alwaysApply: true
+---
+
+# myPENS — wedged local Next ≠ product bug
+
+**Incident 2026-07-28:** Take photo “failed” because `:5000` was wedged (TCP listen OK, `/api/health` client-timed-out). Agents restarted Next and called it a photo fix. That is lying. Photo MIME / Anthropic / auth were not the cause.
+
+See also: `docs/DEV-SERVER-RULES.md`, `scripts/dev-health.mjs`.
+
+## When Take photo / any API “fails”
+
+**First probe (before MIME theories, before APK, before “fixing” photo):**
+
+```powershell
+node scripts/dev-health.mjs
+# or: Invoke-WebRequest http://127.0.0.1:5000/api/health -TimeoutSec 3
+```
+
+| Result | Meaning |
+|--------|---------|
+| Timeout / no body | **Wedged Next** — event loop dead; port may still be open |
+| 200 + `dbOk:false` | Prisma/DB path sick (pooler?); app process alive |
+| 200 + `dbOk:true` | Server OK → then dig into photo MIME / auth / Anthropic |
+
+`/api/health` races Prisma `SELECT 1` at **1.5s**. A **full** client timeout is **not** a slow DB await — the process is not servicing HTTP.
+
+## Hard rules
+
+1. **Diagnose WHY before or with any restart** — read terminals, count competing `npm run dev` / `next dev`, look for Turbopack `Invalid code point`, `EADDRINUSE`, `:5001` dual-dev, Prisma DLL locks, auth-env flips, pgbouncer migrate hangs. Paste evidence in the reply.
+2. **Restart alone is NOT a ship/fix claim.** You may restart once to unblock Jerome, but the reply **must name the root cause**. Never say “foto gefixt” after only killing Node.
+3. **One Next dev only** — `:5000`, same `mypens` tree. Do **not** spawn `:5001` while `:5000` exists without killing the old one and explaining why. Dual-dev shares `.next/dev` → Turbopack corruption.
+4. **Never flip `MYPENS_AUTH_DISABLED` mid-user-session** without telling Jerome. Prefer one `.env.local` change + one restart.
+5. **Prisma migrate / migrate status** → use `DIRECT_URL` (**`:5432`**), never pgbouncer **`:6543`** (hangs forever — Audit 7).
+6. **One owner for unwedge** — no parallel agents force-killing `:5000`.
+
+## Forbidden claims
+
+- “Camera fixed” / “photo fixed” when the only action was restart
+- Blaming MIME/HEIC/Anthropic while health timed out
+- Offering APK to “fix” a wedged local API
+
+## After a legitimate restart
+
+Still report: most likely cause + evidence. Then re-run `node scripts/dev-health.mjs` and (if photo is the complaint) `node scripts/smoke-photo-analyze.mjs` — health PASS first.

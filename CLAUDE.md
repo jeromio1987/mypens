@@ -33,6 +33,8 @@ http://localhost:5000
 
 Health check: `GET /api/health` — confirms `hasAnthropicKey`, `hasMobileToken`, `hasDatabaseUrl`.
 
+Local no-password access: set `MYPENS_AUTH_DISABLED=true` in `.env` (skips session/password in `proxy.ts`; leave unset/false on Vercel).
+
 ---
 
 ## File structure rules
@@ -113,18 +115,20 @@ Weight · Food · Sleep · Training · Body Measurements · Journal / Mood · Ev
 Programme builder (2-C) and weekly PDF (2-D) are **built** — do not rebuild; extend only.
 ---
 
-## Mobile bridge (Expo ↔ Next)
+## Mobile bridge (Expo ↔ API)
+
+**Daily phone = Vercel** (`https://mypens.vercel.app`). Local Next `:5000` is for **agents only**.
 
 ```env
-# mypens/.env
+# mypens/.env (+ Vercel env — must match)
 MOBILE_PENS_API_TOKEN=<shared-secret>
 
-# mypens-mobile/.env
-EXPO_PUBLIC_PENS_API_URL=http://<LAN-IPv4>:5000
+# mypens-mobile/.env (baked into APK — rebuild after change)
+EXPO_PUBLIC_PENS_API_URL=https://mypens.vercel.app
 EXPO_PUBLIC_PENS_API_TOKEN=<same-as-above>
 ```
 
-Both must restart after `.env` changes. See `docs/COWORKER-SETUP.md` for full setup steps.
+Agents temporary LAN override: `EXPO_PUBLIC_PENS_API_URL=http://<LAN-IPv4>:5000`. See `docs/COWORKER-SETUP.md` / `docs/DEV-SERVER-RULES.md`.
 
 ---
 
@@ -137,3 +141,5 @@ Both must restart after `.env` changes. See `docs/COWORKER-SETUP.md` for full se
 | Strategy, review, memory | Claude (this session) |
 
 Do not rewrite working modules from scratch. Read existing code before making changes.
+
+**Ship / APK:** every Cursor build needs an **adversarial wiring pass** before APK — not a one-time cleanup. Run `node .cursor/skills/mypens-adversarial-pre-apk/scripts/wiring-check.mjs`, then verify-ship. See `docs/AUDIT-PLAYBOOK.md` and `.cursor/rules/mypens-finish-the-wiring.mdc`.

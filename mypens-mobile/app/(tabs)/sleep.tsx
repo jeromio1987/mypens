@@ -20,12 +20,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
-import { usePensSync } from '@/hooks/usePensSync'
+import { usePensSync, flushOfflineQueueWithAlert } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured } from '@/lib/pensApi'
-import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
+import { enqueueOp } from '@/lib/offlineQueue'
 import { HealthConnectSleepCard } from '@/components/HealthConnectSleepCard'
 import { DateNavBar } from '@/components/DateNavBar'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
@@ -105,7 +105,7 @@ export default function SleepScreen() {
   const useApi = isPensApiConfigured()
   const { pending, online, refresh: refreshQueue } = usePensSync()
 
-  const { date, setDate } = useSelectedDate()
+  const { date, setDate, ready: dateReady } = useSelectedDate()
   const [showLogForm, setShowLogForm] = useState(false)
   const [bedtime, setBedtime] = useState('23:00')
   const [wakeTime, setWakeTime] = useState('07:00')
@@ -189,7 +189,7 @@ export default function SleepScreen() {
     onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       if (useApi) {
-        await flushOfflineQueue()
+        await flushOfflineQueueWithAlert()
         await refreshQueue()
       }
       qc.invalidateQueries({ queryKey: ['sleep'] })
@@ -210,6 +210,25 @@ export default function SleepScreen() {
   const chartW = width - 48
   const accentBg = isDark ? MOD.bgDark : MOD.bg
   const topInset = Platform.OS === 'web' ? 67 : insets.top
+
+  if (!dateReady) {
+    return (
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: topInset + 16, paddingBottom: insets.bottom + 100 }}
+      >
+        <View style={styles.header}>
+          <View style={[styles.moduleTag, { backgroundColor: accentBg }]}>
+            <Feather name="moon" size={16} color={MOD.primary} />
+            <Text style={[styles.moduleLabel, { color: MOD.primary }]}>Sleep</Text>
+          </View>
+        </View>
+        <View style={{ paddingVertical: 48, alignItems: 'center' }}>
+          <ActivityIndicator color={MOD.primary} />
+        </View>
+      </ScrollView>
+    )
+  }
 
   return (
     <ScrollView
@@ -373,12 +392,7 @@ export default function SleepScreen() {
       {showLogForm ? (
         <>
           <View style={{ marginHorizontal: 16, marginBottom: 4 }}>
-            <DateNavBar
-              date={date}
-              onChange={setDate}
-              accent={MOD.primary}
-              recentDates={entries.map((e) => e.date)}
-            />
+            <DateNavBar date={date} onChange={setDate} accent={MOD.primary} />
           </View>
 
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

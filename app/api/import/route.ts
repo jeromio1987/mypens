@@ -1,6 +1,18 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { prisma } from '@/lib/db'
+import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth'
 import { calculateWeightBreakdown } from '@/lib/retentionModels'
+
+/** Web session only — rejects mobile bearer (import is not a mobile operation). */
+async function requireSession(): Promise<NextResponse | null> {
+  const jar = await cookies()
+  const session = jar.get(SESSION_COOKIE)?.value
+  if (!(await verifySessionToken(session))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  return null
+}
 
 function parseCSV(text: string): { headers: string[]; rows: Record<string, string>[] } {
   const lines = text.split(/\r?\n/).filter(l => l.trim() && !l.startsWith('##'))
@@ -51,6 +63,8 @@ function int(v: string | undefined): number | null { const n = parseInt(v ?? '')
 function bool(v: string | undefined): boolean { return v === 'true' || v === '1' }
 
 export async function POST(request: Request) {
+  const auth = await requireSession()
+  if (auth) return auth
   try {
     const formData = await request.formData()
     const file = formData.get('file')

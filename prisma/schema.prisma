@@ -3,8 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Direct :5432 — use for migrate (pgbouncer :6543 hangs). See Audit 7 H1.
+  directUrl = env("DIRECT_URL")
 }
 
 model WeightEntry {
@@ -14,6 +16,7 @@ model WeightEntry {
 
   scaleKg      Float
   bodyFatPct   Float?
+  /// Reference-only (Tanita/Garmin import). Not used in BMR or energy math — Katch uses BF% → FFM (M1).
   muscleMassKg Float?
   boneMassKg   Float?
   bodyWaterPct Float?
@@ -60,6 +63,8 @@ model FoodEntry {
   microsJson String?
   // Soft display tags — JSON string array e.g. ["high_protein"]
   tagsJson   String?
+  // Enrichment provenance from review engine — JSON FoodEnrichmentMeta (macros never stored here)
+  enrichmentJson String?
 }
 
 // Phase 3 — Sleep
@@ -278,6 +283,8 @@ model GarminActivity {
   sport       String
   subSport    String?
   durationSec Float
+  /// Session start (UTC) for overlap dedup vs Strava/HC (E4/E5). Optional for legacy rows.
+  startedAt   DateTime?
   distanceM   Float?
   elevationM  Float?
   avgHr       Int?
@@ -294,8 +301,9 @@ model GarminDailyMetric {
   id         String   @id @default(cuid())
   createdAt  DateTime @default(now())
   date       String // yyyy-mm-dd
-  // stress | hrv | steps | body_battery | resting_hr | spo2 | respiration |
-  // calories | active_calories | resting_calories | total_calories | other
+  // stress | hrv | steps | steps_hc | body_battery | resting_hr | spo2 | respiration |
+  // calories | active_calories | active_calories_hc | resting_calories | total_calories | other
+  // HC companion uses *_hc side-kinds so Garmin canonical kinds are never overwritten (D1).
   kind       String
   valueNum   Float?
   valueText  String?
@@ -411,6 +419,9 @@ model UserSettings {
   bodyPhaseStartedAt     String? // yyyy-mm-dd
   bodyPhaseKgPerWeek     Float   @default(0.4)
   bodyPhaseExpectedEndAt String?
+  // Bumped on logout to revoke all web session cookies. Not used by mobile bearer
+  // or read-only share-link / snapshot tokens (those are separate secrets).
+  sessionVersion Int @default(0)
   updatedAt DateTime @updatedAt
 }
 

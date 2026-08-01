@@ -23,16 +23,40 @@ function calcStreak(dates: string[]): number {
 
 async function getScoreForUser(userId: string) {
   if (userId !== 'default') {
-    // Non-local user: return zeroes until they connect their own instance
-    return { weeklyScore: 0, currentStreak: 0, medalsEarned: 0 }
+    // Non-local user: scores unavailable until they connect their own instance (C1).
+    // Do not return zeros that look like a real last-place ranking.
+    return {
+      weeklyScore: null as number | null,
+      currentStreak: null as number | null,
+      medalsEarned: null as number | null,
+      scoreAvailable: false,
+    }
   }
 
   const sevenDaysAgo = rollingWindow(7).from
+  // Date-bounded queries only (no unbounded full-table scans per member).
+  const streakFrom = shiftDateStr(today(), -60)
   const [weightDates, trainingDates, sleepDates, foodDates, allWeight, allTraining] = await Promise.all([
-    prisma.weightEntry.findMany({ select: { date: true }, orderBy: { date: 'desc' } }),
-    prisma.trainingEntry.findMany({ select: { date: true }, orderBy: { date: 'desc' } }),
-    prisma.sleepEntry.findMany({ select: { date: true }, orderBy: { date: 'desc' } }),
-    prisma.foodEntry.findMany({ select: { date: true }, orderBy: { date: 'desc' } }),
+    prisma.weightEntry.findMany({
+      where: { date: { gte: streakFrom } },
+      select: { date: true },
+      orderBy: { date: 'desc' },
+    }),
+    prisma.trainingEntry.findMany({
+      where: { date: { gte: streakFrom } },
+      select: { date: true },
+      orderBy: { date: 'desc' },
+    }),
+    prisma.sleepEntry.findMany({
+      where: { date: { gte: streakFrom } },
+      select: { date: true },
+      orderBy: { date: 'desc' },
+    }),
+    prisma.foodEntry.findMany({
+      where: { date: { gte: streakFrom } },
+      select: { date: true },
+      orderBy: { date: 'desc' },
+    }),
     prisma.weightEntry.findMany({ where: { date: { gte: sevenDaysAgo } }, select: { date: true } }),
     prisma.trainingEntry.findMany({ where: { date: { gte: sevenDaysAgo } }, select: { date: true } }),
   ])
@@ -54,7 +78,7 @@ async function getScoreForUser(userId: string) {
     (tStreak >= 3 ? 1 : 0) + (tStreak >= 7 ? 1 : 0) +
     (sStreak >= 7 ? 1 : 0) + (fStreak >= 7 ? 1 : 0)
 
-  return { weeklyScore, currentStreak, medalsEarned }
+  return { weeklyScore, currentStreak, medalsEarned, scoreAvailable: true }
 }
 
 export async function GET(
@@ -78,9 +102,25 @@ export async function GET(
       }),
     )
 
-    rows.sort((a, b) => b.weeklyScore - a.weeklyScore || b.currentStreak - a.currentStreak)
+    // Only rank members with real scores — stub zeros must not look like competition (C1).
+    const ranked = rows
+      .filter(r => r.scoreAvailable)
+      .sort(
+        (a, b) =>
+          (b.weeklyScore ?? 0) - (a.weeklyScore ?? 0) ||
+          (b.currentStreak ?? 0) - (a.currentStreak ?? 0),
+      )
+    const unranked = rows.filter(r => !r.scoreAvailable)
 
-    return NextResponse.json({ clubId, leaderboard: rows })
+    return NextResponse.json({
+      clubId,
+      leaderboard: ranked,
+      unranked,
+      note:
+        unranked.length > 0
+          ? 'Some members have no local score yet — they are listed unranked, not as zeros.'
+          : undefined,
+    })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown'
     return NextResponse.json({ error: msg }, { status: 500 })

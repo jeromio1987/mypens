@@ -28,6 +28,7 @@ const LINKS: {
   { href: '/bloodwork', label: 'Bloodwork', blurb: 'Serum ledger from lab panels', icon: 'droplet' },
   { href: '/planner', label: 'Planner', blurb: 'Operational week directive', icon: 'calendar' },
   { href: '/period-review', label: 'Period review', blurb: 'Full cockpit (same as Read)', icon: 'activity' },
+  { href: '/dopamine-debt', label: 'Dopamine debt', blurb: 'Local liquidation protocol (no ledger API yet)', icon: 'zap' },
   { href: '/journal-log', label: 'Journal log', blurb: 'Auditor chronological feed', icon: 'book-open' },
   { href: '/(tabs)/measurements', label: 'Body', blurb: 'Tape measurements', icon: 'maximize' },
   { href: '/(tabs)/journal', label: 'Journal', blurb: 'Capture notes & mood', icon: 'edit-3' },
@@ -93,6 +94,7 @@ export default function AuditHubScreen() {
       eyebrow="P.E.N.S. · The Continental"
       title="The Audit"
       subtitle="Commands, not cues. Open a ledger."
+      showBack={false}
     >
       <ApiGate configured={configured}>
         <SectionLabel>Live status</SectionLabel>

@@ -36,6 +36,9 @@ export type WeeklyPdfProps = {
   nutritionDetail: {
     carbs: string
     fat: string
+    /** e.g. "avg over 2 logged days (2 of 7)" — never silent ÷7 */
+    foodCoverage: string
+    nFoodDays: number
   }
   sleepHrv: string
   topExercises: string[]
@@ -63,12 +66,15 @@ export default function WeeklyPdfDocument({
         <Stat label="Avg scale weight (kg)" value={summary.avgScaleKg} />
         <Stat label="Avg true weight (kg)" value={summary.avgTrueKg} />
         <Stat label="Weight trend (kg)" value={summary.weightTrend} />
-        <Stat label="Avg kcal / day" value={summary.avgKcal} />
-        <Stat label="Avg protein (g) / day" value={summary.avgProtein} />
+        <Stat label={`Avg kcal / day (${nutritionDetail.foodCoverage})`} value={summary.avgKcal} />
+        <Stat label={`Avg protein (g) / day (${nutritionDetail.foodCoverage})`} value={summary.avgProtein} />
         <Stat label="Training sessions" value={summary.trainSessions} />
         <Stat label="Training volume (kg)" value={summary.trainVolume} />
         <Text style={[styles.section, { marginTop: 24 }]}>Weekly snapshot</Text>
         <Text style={styles.muted}>Monochrome audit for the selected 7-day window.</Text>
+        <Text style={[styles.muted, { marginTop: 4 }]}>
+          Food averages: {nutritionDetail.foodCoverage}.
+        </Text>
       </Page>
 
       <Page size="A4" style={styles.page}>
@@ -86,10 +92,16 @@ export default function WeeklyPdfDocument({
 
       <Page size="A4" style={styles.page}>
         <Text style={styles.h1}>Nutrition</Text>
+        <Text style={styles.sub}>
+          Averages over logged food days only — {nutritionDetail.foodCoverage}.
+        </Text>
         <Stat label="Avg kcal / day" value={summary.avgKcal} />
         <Stat label="Avg protein (g) / day" value={summary.avgProtein} />
         <Stat label="Avg carbs (g) / day" value={nutritionDetail.carbs} />
         <Stat label="Avg fat (g) / day" value={nutritionDetail.fat} />
+        <Text style={[styles.muted, { marginTop: 8 }]}>
+          Not divided by calendar 7. Coverage: {nutritionDetail.nFoodDays} of 7 days logged.
+        </Text>
       </Page>
 
       <Page size="A4" style={styles.page}>

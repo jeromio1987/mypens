@@ -7,11 +7,14 @@ import { useRouter } from 'expo-router'
 import { useColors } from '@/hooks/useColors'
 import { isPensApiConfigured, pensFetch } from '@/lib/pensApi'
 import {
+  cockpitQueryKey,
   cockpitRange,
+  fetchCockpitLive,
+  pickFitnessFreshness,
   verdictColor,
   type CockpitWindowDays,
-  type PeriodReviewLiveResponse,
 } from '@/lib/cockpitWindow'
+import { FitnessFreshnessStrip } from '@/components/FitnessFreshnessStrip'
 
 const ACCENT = '#38bdf8'
 
@@ -30,18 +33,9 @@ export function EngineReadCard({ defaultDays = 7 }: { defaultDays?: CockpitWindo
   const range = cockpitRange(days)
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
-    queryKey: ['period-review-live', range.from, range.to],
+    queryKey: cockpitQueryKey(range.from, range.to),
     enabled,
-    queryFn: async (): Promise<PeriodReviewLiveResponse> => {
-      const res = await pensFetch(
-        `/api/period-review?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`,
-      )
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(j.error ?? `Period review ${res.status}`)
-      }
-      return (await res.json()) as PeriodReviewLiveResponse
-    },
+    queryFn: () => fetchCockpitLive(range.from, range.to),
   })
 
   const labsQ = useQuery({
@@ -61,6 +55,7 @@ export function EngineReadCard({ defaultDays = 7 }: { defaultDays?: CockpitWindo
   const inv = data?.cockpit?.inventory
   const note = data?.cockpit?.loadNotes?.[0]
   const rhr = data?.cockpit?.causal?.rhrLadder
+  const fitness = pickFitnessFreshness(data?.cockpit)
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -68,7 +63,7 @@ export function EngineReadCard({ defaultDays = 7 }: { defaultDays?: CockpitWindo
         <View style={{ flex: 1 }}>
           <Text style={[styles.eyebrow, { color: ACCENT }]}>The Read</Text>
           <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-            {range.from} → {range.to}
+            Rolling {range.from} → {range.to}
           </Text>
         </View>
         <Pressable onPress={() => void refetch()} hitSlop={10} disabled={isRefetching}>
@@ -120,20 +115,36 @@ export function EngineReadCard({ defaultDays = 7 }: { defaultDays?: CockpitWindo
       ) : read ? (
         <>
           <View style={styles.verdictRow}>
-            {read.verdict ? (
+            {read.verdict &&
+            read.avgForm != null &&
+            (read.avgFormInputs == null || read.avgFormInputs >= 2) ? (
               <View style={[styles.badge, { backgroundColor: `${verdictColor(read.verdict)}22` }]}>
                 <Text style={{ color: verdictColor(read.verdict), fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
                   {read.verdict}
-                  {read.avgForm != null ? ` · Form ${read.avgForm}` : ''}
+                  {` · Form ${read.avgForm}`}
+                  {read.avgFormInputs != null
+                    ? ` · ${Math.round(read.avgFormInputs)} of ${read.formSignalCount ?? 5} signals`
+                    : ''}
+                </Text>
+              </View>
+            ) : read.verdict ? (
+              <View style={[styles.badge, { backgroundColor: `${verdictColor(read.verdict)}22` }]}>
+                <Text style={{ color: verdictColor(read.verdict), fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                  {read.verdict}
                 </Text>
               </View>
             ) : (
-              <Text style={[styles.body, { color: colors.mutedForeground }]}>No Form score in this window</Text>
+              <Text style={[styles.body, { color: colors.mutedForeground }]}>
+                {read.avgFormInputs != null && read.avgFormInputs < 2
+                  ? 'Form thin — fewer than 2 signals'
+                  : 'No Form score in this window'}
+              </Text>
             )}
           </View>
           {read.headline ? (
             <Text style={[styles.headline, { color: colors.foreground }]}>{read.headline}</Text>
           ) : null}
+          <FitnessFreshnessStrip fitness={fitness} compact />
           <View style={styles.lines}>
             {read.leadingCause ? (
               <Text style={[styles.body, { color: colors.mutedForeground }]}>
@@ -141,7 +152,9 @@ export function EngineReadCard({ defaultDays = 7 }: { defaultDays?: CockpitWindo
                 {read.leadingCause.label} ({Math.round(read.leadingCause.confidence * 100)}%)
               </Text>
             ) : null}
-            {read.topRisk ? (
+            {read.topRisk &&
+            read.topRisk.replace(/\s*\(\d+%\)\s*$/, '').trim() !==
+              (read.leadingCause?.label ?? '') ? (
               <Text style={[styles.body, { color: colors.mutedForeground }]}>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fbbf24' }}>Risk · </Text>
                 {read.topRisk}
@@ -157,7 +170,9 @@ export function EngineReadCard({ defaultDays = 7 }: { defaultDays?: CockpitWindo
               <Text style={{ fontFamily: 'Inter_600SemiBold', color: ACCENT }}>Next · </Text>
               {read.nextAction}
             </Text>
-            {rhr && (rhr.likelyDrinkingDays || 0) > 0 ? (
+            {rhr &&
+            read.leadingCause?.id?.startsWith('rhr_') &&
+            ((rhr.likelyDrinkingDays || 0) > 0 || (rhr.heavyStackDays || 0) > 0) ? (
               <Text style={[styles.body, { color: colors.mutedForeground }]}>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#f87171' }}>RHR · </Text>
                 {rhr.likelyDrinkingDays}d ≥50 · {rhr.heavyStackDays || 0}d ≥55

@@ -16,7 +16,8 @@
     "import:garmin-dump": "python scripts/import-garmin-dump.py",
     "analyze:garmin": "node scripts/analyze-garmin.mjs",
     "analyze:periods": "node scripts/analyze-periods.mjs",
-    "test:engines": "node scripts/test-engines-detailed.mjs --open && vitest run tests/engine-stress.test.ts tests/periodAnalyze.test.ts tests/periodCausal.test.ts"
+    "test:engines": "node scripts/test-engines-detailed.mjs --open && vitest run tests/engine-stress.test.ts tests/periodAnalyze.test.ts tests/periodCausal.test.ts",
+    "enrich:food": "node scripts/enrich-food.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -35,13 +36,13 @@
     "stripe": "^22.1.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^16.2.4",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5",
     "vitest": "^3.2.4"
   },

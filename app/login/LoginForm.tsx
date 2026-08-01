@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-export default function LoginForm() {
+export default function LoginForm({ passwordLength }: { passwordLength?: number }) {
   const search = useSearchParams()
   const next = search.get('next') || '/'
   const [password, setPassword] = useState('')
@@ -13,10 +13,16 @@ export default function LoginForm() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (submitting) return
-    if (password.trim().length === 0) {
+
+    // Prefer FormData over React state so browser / password-manager autofill
+    // still submits even when onChange never fired.
+    const fd = new FormData(e.currentTarget)
+    const submitted = String(fd.get('password') ?? password).trim()
+    if (submitted.length === 0) {
       setError('Enter your password.')
       return
     }
+
     setError(null)
     setSubmitting(true)
     try {
@@ -24,19 +30,22 @@ export default function LoginForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ password: password.trim() }),
+        body: JSON.stringify({ password: submitted }),
       })
       const data = (await res.json().catch(() => null)) as { error?: string; ok?: boolean } | null
 
       if (res.ok) {
         // Confirm the session cookie actually stuck (avoids “flash then still on /login”).
-        const probe = await fetch('/api/integrations/healthconnect/status', {
+        const probe = await fetch('/api/auth/session', {
           credentials: 'same-origin',
           cache: 'no-store',
         })
-        if (probe.status === 401) {
+        const probeBody = (await probe.json().catch(() => null)) as
+          | { authenticated?: boolean }
+          | null
+        if (!probeBody?.authenticated) {
           setError(
-            'Password OK but the browser did not keep the session cookie. Use http://127.0.0.1:5000 (not a file:// or mixed host), allow cookies, then retry. For phone pairing you no longer need web login — open Training → Health Connect on the app.',
+            'Password OK but the browser did not keep the session cookie. Use http://127.0.0.1:5000 (not localhost, file://, or a different host), allow cookies, then retry.',
           )
           setSubmitting(false)
           return
@@ -49,7 +58,9 @@ export default function LoginForm() {
       if (res.status === 503) {
         setError(data?.error || 'Server is not configured for authentication.')
       } else if (res.status === 401) {
-        setError('Invalid password — check OWNER_PASSWORD in your .env (local) or Vercel env (prod).')
+        setError(
+          'Invalid password — must match OWNER_PASSWORD in the Next .env on this machine (local) or Vercel env (prod).',
+        )
       } else {
         setError(data?.error || `Sign-in failed (${res.status}).`)
       }
@@ -106,9 +117,13 @@ export default function LoginForm() {
 
       <p className="text-[10px] text-pens-cream/40 leading-relaxed">
         Local gate uses <code className="text-pens-cream/55">OWNER_PASSWORD</code> from the Next{' '}
-        <code className="text-pens-cream/55">.env</code> (exact match). If Sign in flashes and you
-        stay here, open DevTools → Network → <code className="text-pens-cream/55">/api/auth/login</code>{' '}
-        and check status 200 vs 401.
+        <code className="text-pens-cream/55">.env</code> (exact match
+        {typeof passwordLength === 'number' && passwordLength > 0
+          ? ` — currently ${passwordLength} characters`
+          : ''}
+        ). Open <code className="text-pens-cream/55">http://127.0.0.1:5000</code> — not a
+        production URL unless Vercel env is set. DevTools → Network →{' '}
+        <code className="text-pens-cream/55">/api/auth/login</code>: 200 vs 401.
       </p>
     </form>
   )

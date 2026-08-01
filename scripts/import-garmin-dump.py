@@ -518,6 +518,16 @@ def import_fits(conn, fits: list[Path]) -> tuple[int, int, int]:
             if not date:
                 # fallback: try parent folder year/month patterns or file mtime
                 date = datetime.fromtimestamp(fit_path.stat().st_mtime).date().isoformat()
+            started_at = None
+            st = parsed.get("startTime")
+            if st is not None:
+                try:
+                    if isinstance(st, datetime):
+                        started_at = st if st.tzinfo else st.replace(tzinfo=timezone.utc)
+                    else:
+                        started_at = datetime.fromisoformat(str(st).replace("Z", "+00:00"))
+                except Exception:
+                    started_at = None
             name = sport_to_name(parsed["sport"])
             row_id = cuid_like(fit_file_id)
             try:
@@ -525,9 +535,9 @@ def import_fits(conn, fits: list[Path]) -> tuple[int, int, int]:
                     """
                     INSERT INTO "GarminActivity"
                     ("id","createdAt","fitFileId","date","name","sport","subSport",
-                     "durationSec","distanceM","elevationM","avgHr","maxHr","calories",
+                     "durationSec","startedAt","distanceM","elevationM","avgHr","maxHr","calories",
                      "avgSpeedMs","maxSpeedMs")
-                    VALUES (%s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT ("fitFileId") DO NOTHING
                     """,
                     (
@@ -538,6 +548,7 @@ def import_fits(conn, fits: list[Path]) -> tuple[int, int, int]:
                         parsed["sport"],
                         parsed["subSport"],
                         parsed["durationSec"],
+                        started_at,
                         parsed["distanceM"],
                         parsed["elevationM"],
                         parsed["avgHr"],
@@ -710,7 +721,12 @@ WELLNESS_MAP = [
 
 
 def _dig_num(d: dict, keys) -> float | None:
-    """Try flat keys, then one-level nested dicts (Garmin often nests hrv.lastNightAvg)."""
+    """Try flat keys, then one-level nested dicts (Garmin often nests hrv.lastNightAvg).
+
+    Garmin Connect UDS puts daily stress under:
+      allDayStress.aggregatorList[{type: TOTAL|AWAKE|ASLEEP, averageStressLevel: N}]
+    — not as a flat averageStressLevel on the day dict.
+    """
     # flat
     for k in keys:
         if d.get(k) is None:
@@ -730,6 +746,34 @@ def _dig_num(d: dict, keys) -> float | None:
                 return float(child[k])
             except Exception:
                 pass
+        # UDS allDayStress / similar: list of typed aggregators
+        agg = child.get("aggregatorList")
+        if isinstance(agg, list) and agg:
+            by_type: dict[str, dict] = {}
+            for a in agg:
+                if isinstance(a, dict) and a.get("type"):
+                    by_type[str(a["type"]).upper()] = a
+            for pref in ("TOTAL", "AWAKE", "ASLEEP"):
+                a = by_type.get(pref)
+                if not a:
+                    continue
+                for k in keys:
+                    if a.get(k) is None:
+                        continue
+                    try:
+                        return float(a[k])
+                    except Exception:
+                        pass
+            for a in agg:
+                if not isinstance(a, dict):
+                    continue
+                for k in keys:
+                    if a.get(k) is None:
+                        continue
+                    try:
+                        return float(a[k])
+                    except Exception:
+                        pass
     # explicit common nests
     for nest_key in ("hrv", "hrvSummary", "allDayStress", "stress", "wellness", "dailyValues"):
         nested = d.get(nest_key)
@@ -742,6 +786,24 @@ def _dig_num(d: dict, keys) -> float | None:
                 return float(nested[k])
             except Exception:
                 pass
+        agg = nested.get("aggregatorList")
+        if isinstance(agg, list) and agg:
+            by_type = {
+                str(a["type"]).upper(): a
+                for a in agg
+                if isinstance(a, dict) and a.get("type")
+            }
+            for pref in ("TOTAL", "AWAKE", "ASLEEP"):
+                a = by_type.get(pref)
+                if not a:
+                    continue
+                for k in keys:
+                    if a.get(k) is None:
+                        continue
+                    try:
+                        return float(a[k])
+                    except Exception:
+                        pass
     return None
 
 

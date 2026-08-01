@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import {
-  computeSleepScore,
+  computeSleepScoreDetailed,
   hrvReadinessInclusiveRolling,
   readinessLabel,
   type SleepRow,
@@ -42,7 +42,8 @@ export async function GET(request: Request) {
       hrv: e.hrv,
     }))
 
-    const score = computeSleepScore(latest.hours, latest.quality)
+    const sleepDetailed = computeSleepScoreDetailed(latest.hours, latest.quality)
+    const score = sleepDetailed.score
     const hrvReadiness = hrvReadinessInclusiveRolling(rows)
 
     // Overall readiness: blend sleep score (primary) with HRV readiness if available
@@ -60,9 +61,12 @@ export async function GET(request: Request) {
         sleepQuality:     latest.quality,
         hrv:              latest.hrv ?? null,
         sleepScore:       score,
+        sleepDurationOnly: sleepDetailed.durationOnly,
         hrvReadiness:     hrvReadiness,
         overallReadiness: overallReadiness,
-        label:            readinessLabel(overallReadiness),
+        label:            readinessLabel(overallReadiness, {
+          durationOnly: sleepDetailed.durationOnly && hrvReadiness == null,
+        }),
         // Gate thresholds — used by the investing dashboard
         gate: {
           clear:    overallReadiness >= 65,   // proceed normally

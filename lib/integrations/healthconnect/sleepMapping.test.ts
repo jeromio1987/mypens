@@ -44,11 +44,17 @@ describe('healthconnect sleepMapping', () => {
   })
 
   it('duration-only sleep score when quality null', async () => {
-    const { computeSleepScore } = await import('@/lib/readinessMetrics')
+    const { computeSleepScore, computeSleepScoreDetailed, readinessLabel } =
+      await import('@/lib/readinessMetrics')
     const withQ = computeSleepScore(8, 3)
     const noQ = computeSleepScore(8, null)
-    expect(noQ).toBe(60)
-    expect(withQ).toBeGreaterThan(noQ)
+    // Duration-only renormalises to 0–100 (S1) — perfect night is not capped at 60.
+    expect(noQ).toBe(100)
+    expect(noQ).not.toBeLessThan(computeSleepScore(6, 3))
+    expect(withQ).toBeLessThanOrEqual(100)
+    const detailed = computeSleepScoreDetailed(8, null)
+    expect(detailed.durationOnly).toBe(true)
+    expect(readinessLabel(detailed.score, { durationOnly: true })).toMatch(/no HRV/i)
   })
 
   it('skips invalid duration', () => {

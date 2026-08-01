@@ -138,7 +138,8 @@ export default function DopamineDebtScreen() {
       <SectionLabel>Cravings ledger</SectionLabel>
       <Block>
         <EmptyHint>
-          Placeholder. Wire CravingEvent when the debt API exists. Do not invent numbers.
+          No craving events yet — the debt API is not wired. This screen only offers a local
+          liquidation directive. Numbers will appear here when CravingEvent lands; nothing is invented.
         </EmptyHint>
       </Block>
 

@@ -137,6 +137,7 @@ export function buildDailySignals(data) {
         foodCoverage: false,
         estimatedOut: null,
         energyDelta: null,
+        neatSource: null,
       })
     }
     return byDate.get(date)
@@ -151,7 +152,7 @@ export function buildDailySignals(data) {
     if (typeof s.hrv === 'number' && s.hrv > 0 && row.hrv == null) row.hrv = s.hrv
   }
   // WP 2.1 — nutrition day core. `data.food` rows: {date, kcal, proteinG, carbsG,
-  // fatG, estimatedOut?, energyDelta?} — one row per date, already aggregated by
+  // fatG, estimatedOut?, energyDelta?, neatSource?} — one row per date, already aggregated by
   // the caller (see lib/engines/cockpitData.ts → getEnergyBalanceForRange).
   // Does not touch alcohol/confounder logic in periodCausal.mjs.
   for (const f of data.food || []) {
@@ -164,6 +165,7 @@ export function buildDailySignals(data) {
     row.foodCoverage = true
     if (typeof f.estimatedOut === 'number') row.estimatedOut = f.estimatedOut
     if (typeof f.energyDelta === 'number') row.energyDelta = f.energyDelta
+    if (typeof f.neatSource === 'string') row.neatSource = f.neatSource
   }
 
   for (const m of data.metrics || []) {
@@ -218,7 +220,9 @@ export function buildDailySignals(data) {
       restingHr: row.restingHr ?? 50,
       hrMax,
     })
-    row.activityCount = acts.length + trains.length
+    // Prefer deduped count from dayTrainingLoad (T1); fall back to raw lengths.
+    row.activityCount =
+      scored.activityCount != null ? scored.activityCount : acts.length + trains.length
     row.activityMinutes = scored.activityMinutes
     row.trainingLoad = scored.trainingLoad
     row.hardLoad = scored.hardLoad
@@ -228,6 +232,15 @@ export function buildDailySignals(data) {
   return [...byDate.values()].sort((x, y) => x.date.localeCompare(y.date))
 }
 
+/** Max independent inputs that can contribute to Form (sleep, stress, HRV, steps, activity). */
+export const FORM_SIGNAL_COUNT = 5
+/** Below this, Form is too thin to show as a confident badge. */
+export const FORM_MIN_INPUTS = 2
+
+/**
+ * Day Form score from available wearables/activity signals.
+ * @returns {{ score: number, formInputs: number } | null}
+ */
 export function scoreDay(day) {
   const parts = []
   if (day.sleepHours != null) {
@@ -276,20 +289,20 @@ export function scoreDay(day) {
     parts.push(clamp(50 + day.activityCount * 12 + Math.min(load, 120) / 2.5, 50, 95))
   }
   if (!parts.length) return null
-  return Math.round(avg(parts))
+  return { score: Math.round(avg(parts)), formInputs: parts.length }
 }
 
 export function buildWeeklyScores(daily) {
   const byWeek = new Map()
   for (const day of daily) {
-    const score = scoreDay(day)
-    if (score == null) continue
+    const scored = scoreDay(day)
+    if (scored == null || scored.formInputs < FORM_MIN_INPUTS) continue
     const weekOf = mondayOf(day.date)
     if (!byWeek.has(weekOf)) {
       byWeek.set(weekOf, { weekOf, weekEnd: shiftDateStr(weekOf, 6), scores: [], days: 0 })
     }
     const w = byWeek.get(weekOf)
-    w.scores.push(score)
+    w.scores.push(scored.score)
     w.days += 1
   }
   return [...byWeek.values()]

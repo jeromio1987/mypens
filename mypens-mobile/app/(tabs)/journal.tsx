@@ -19,12 +19,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feather } from '@expo/vector-icons'
 
 import { useColors } from '@/hooks/useColors'
-import { usePensSync } from '@/hooks/usePensSync'
+import { usePensSync, flushOfflineQueueWithAlert } from '@/hooks/usePensSync'
 import { MODULE_COLORS } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/generateId'
 import { pensFetch, isPensApiConfigured, pensApiBaseUrl } from '@/lib/pensApi'
-import { enqueueOp, flushOfflineQueue } from '@/lib/offlineQueue'
+import { enqueueOp } from '@/lib/offlineQueue'
 import { DateNavBar } from '@/components/DateNavBar'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { useLocalSearchParams } from 'expo-router'
@@ -169,7 +169,7 @@ export default function JournalScreen() {
   const [content, setContent] = useState('')
   const [mood, setMood] = useState<number | undefined>(undefined)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const { date: entryDate, setDate: setEntryDate } = useSelectedDate()
+  const { date: entryDate, setDate: setEntryDate, ready: dateReady } = useSelectedDate()
   const params = useLocalSearchParams<{ date?: string }>()
 
   useEffect(() => {
@@ -247,7 +247,7 @@ export default function JournalScreen() {
     onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       if (useApi) {
-        await flushOfflineQueue()
+        await flushOfflineQueueWithAlert()
         await refreshQueue()
       }
       qc.invalidateQueries({ queryKey: ['journal'] })
@@ -284,7 +284,7 @@ export default function JournalScreen() {
     onSuccess: async () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
       if (useApi) {
-        await flushOfflineQueue()
+        await flushOfflineQueueWithAlert()
         await refreshQueue()
       }
       qc.invalidateQueries({ queryKey: ['journal'] })
@@ -293,6 +293,25 @@ export default function JournalScreen() {
 
   const accentBg = isDark ? MOD.bgDark : MOD.bg
   const topInset = Platform.OS === 'web' ? 67 : insets.top
+
+  if (!dateReady) {
+    return (
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: topInset + 16, paddingBottom: insets.bottom + 100 }}
+      >
+        <View style={styles.header}>
+          <View style={[styles.moduleTag, { backgroundColor: accentBg }]}>
+            <Feather name="book-open" size={16} color={MOD.primary} />
+            <Text style={[styles.moduleLabel, { color: MOD.primary }]}>Journal</Text>
+          </View>
+        </View>
+        <View style={{ paddingVertical: 48, alignItems: 'center' }}>
+          <ActivityIndicator color={MOD.primary} />
+        </View>
+      </ScrollView>
+    )
+  }
 
   return (
     <ScrollView
@@ -331,12 +350,7 @@ export default function JournalScreen() {
       ) : null}
 
       <View style={{ marginHorizontal: 16, marginBottom: 4 }}>
-        <DateNavBar
-          date={entryDate}
-          onChange={setEntryDate}
-          accent={MOD.primary}
-          recentDates={entries.map((e) => e.date)}
-        />
+        <DateNavBar date={entryDate} onChange={setEntryDate} accent={MOD.primary} />
       </View>
 
       {/* New entry form */}

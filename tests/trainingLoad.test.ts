@@ -92,6 +92,8 @@ describe('dayTrainingLoad + Form', () => {
     expect(scored.trainingLoad).toBe(d.trainingLoad)
 
     const form = scoreDay(d)
-    expect(form).toBeGreaterThan(50)
+    expect(form).not.toBeNull()
+    expect(form.score).toBeGreaterThan(50)
+    expect(form.formInputs).toBeGreaterThanOrEqual(2)
   })
 })

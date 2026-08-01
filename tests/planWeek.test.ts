@@ -87,4 +87,28 @@ describe('planWeek', () => {
     expect(plan.days.filter(d => d.isLong)).toHaveLength(1)
     expect(plan.notes.some(n => /Fueling unknown/i.test(n))).toBe(true)
   })
+
+  it('thin coverage names logged/window and does not rewrite quality (6-D)', () => {
+    const plan = planWeek(
+      '2026-07-27',
+      {
+        kind: 'vo2max',
+        label: 'VO2max',
+        longDay: 'saturday',
+        sports: ['running', 'cycling', 'gym'],
+      },
+      {
+        avgSleepHours: 7.5,
+        sessionsBySport: { running: 2 },
+        avgKcal: 1734,
+        avgProteinG: 90,
+        foodDaysLogged: 1,
+        foodWindowDays: 15,
+      },
+    )
+    expect(plan.notes.some(n => /1 of 15 days logged/i.test(n))).toBe(true)
+    expect(plan.notes.some(n => /Fueling unknown/i.test(n))).toBe(false)
+    // Sparse day must not wipe quality sessions
+    expect(plan.days.some(d => d.intensity === 'quality')).toBe(true)
+  })
 })

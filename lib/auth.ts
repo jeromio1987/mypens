@@ -4,6 +4,16 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
 
 const encoder = new TextEncoder()
 
+/**
+ * Local/dev bypass: set `MYPENS_AUTH_DISABLED=true` (or `1`) in `.env` to skip
+ * the password/session gate. Production should leave this unset/false.
+ * Mobile bearer (`MOBILE_PENS_API_TOKEN`) still works when auth is re-enabled.
+ */
+export function isAuthDisabled(): boolean {
+  const v = process.env.MYPENS_AUTH_DISABLED?.trim().toLowerCase()
+  return v === 'true' || v === '1'
+}
+
 function toHex(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf)
   let s = ''
@@ -38,8 +48,9 @@ async function hmacHex(secret: string, payload: string): Promise<string> {
   return toHex(sig)
 }
 
+/** Mint a web session cookie token: `v1.{issuedAt}.{sig}`. */
 export async function createSessionToken(): Promise<string | null> {
-  const secret = process.env.SESSION_SECRET
+  const secret = process.env.SESSION_SECRET?.trim()
   if (!secret) return null
   const issuedAt = Math.floor(Date.now() / 1000)
   const payload = `${SESSION_VERSION}.${issuedAt}`
@@ -48,8 +59,10 @@ export async function createSessionToken(): Promise<string | null> {
 }
 
 export async function verifySessionToken(token: string | undefined): Promise<boolean> {
+  // When auth is disabled, treat every caller as authenticated (proxy + route gates).
+  if (isAuthDisabled()) return true
   if (!token) return false
-  const secret = process.env.SESSION_SECRET
+  const secret = process.env.SESSION_SECRET?.trim()
   if (!secret) return false
 
   const parts = token.split('.')
@@ -82,12 +95,16 @@ export async function verifyOwnerPassword(submitted: string): Promise<boolean> {
   return timingSafeEqual(submittedHash, expectedHash)
 }
 
-/** HMAC-signed token for time-limited read-only weight snapshot links (uses SESSION_SECRET). */
+/**
+ * HMAC-signed token for time-limited read-only weight snapshot links (uses SESSION_SECRET).
+ * Revoke via ShareLink.revokedAt / DELETE /api/share-links.
+ * Mobile bearer auth is unrelated (MOBILE_PENS_API_TOKEN).
+ */
 const READONLY_SNAPSHOT_VERSION = 'ro1'
 const READONLY_SNAPSHOT_MAX_TTL_SEC = 60 * 60 * 24 * 90
 
 export async function mintReadOnlySnapshotToken(ttlSeconds: number): Promise<string | null> {
-  const secret = process.env.SESSION_SECRET
+  const secret = process.env.SESSION_SECRET?.trim()
   if (!secret) return null
   const ttl = Math.min(
     READONLY_SNAPSHOT_MAX_TTL_SEC,
@@ -115,7 +132,7 @@ export async function verifyReadOnlySnapshotToken(
   if (exp < now) return { ok: false, exp }
   if (exp > now + READONLY_SNAPSHOT_MAX_TTL_SEC + 120) return { ok: false }
 
-  const secret = process.env.SESSION_SECRET
+  const secret = process.env.SESSION_SECRET?.trim()
   if (!secret) return { ok: false }
 
   const payload = `${version}.${expStr}`

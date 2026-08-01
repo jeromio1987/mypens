@@ -6,6 +6,7 @@ import {
   extractKcalFromTraining,
 } from '@/lib/energyKcalExtract'
 import { estimateNeat } from '@/lib/energyNeat'
+import { resolveActiveCalories, resolveSteps } from '@/lib/dayMetricPrecedence'
 import { foodCoverageNudge, type FoodCoverageNudge } from '@/lib/foodCoverageNudge'
 import {
   buildWeekEnergyRecap,
@@ -20,6 +21,12 @@ import {
   type WeightPoint,
 } from '@/lib/energyWeightCalibration'
 import { schildklierRead, type SchildklierRead } from '@/lib/bloodworkThyroidRead'
+import {
+  dedupeSessions,
+  parseTrainingWindow,
+  sessionPreference,
+  type SessionCandidate,
+} from '@/lib/sessionDedupe'
 import { fromDateStr, shiftDateStr, toDateStr, today } from '@/lib/timeWindow'
 
 export {
@@ -60,6 +67,8 @@ export type DayEnergyBalance = {
   delta: number
   estimatedOut: number
   incompleteCapture: boolean
+  /** True when at least one FoodEntry exists for this date. */
+  foodCoverage: boolean
   /** User marked this calendar day as food-incomplete (late entry / partial log). */
   foodIncomplete: boolean
   sources: EnergyActivitySource[]
@@ -69,6 +78,22 @@ export type DayEnergyBalance = {
   disclaimer: string
   /** Soft 7d food-log coverage for Fueling nudge (not a diet score). */
   foodCoverage7d: FoodCoverageNudge
+}
+
+/** Pure incomplete-capture gate — zero-food days are not a real deficit/surplus. */
+export function dayIncompleteCapture(opts: {
+  foodIncomplete: boolean
+  foodCoverage: boolean
+  sessionCount: number
+  eatKcal: number
+  sessionsMissingKcal: number
+}): boolean {
+  return (
+    opts.foodIncomplete ||
+    !opts.foodCoverage ||
+    (opts.sessionCount > 0 && opts.eatKcal === 0) ||
+    (opts.sessionsMissingKcal > 0 && opts.eatKcal === 0)
+  )
 }
 
 const DISCLAIMER =
@@ -127,24 +152,30 @@ async function loadDeviceDayMetrics(date: string): Promise<DeviceDayRef | null> 
     where: {
       date,
       kind: {
-        in: ['steps', 'active_calories', 'resting_calories', 'total_calories', 'calories'],
+        in: [
+          'steps',
+          'steps_hc',
+          'active_calories',
+          'active_calories_hc',
+          'resting_calories',
+          'total_calories',
+          'calories',
+        ],
       },
     },
-    select: { kind: true, valueNum: true },
+    select: { kind: true, valueNum: true, sourceFile: true, raw: true },
   })
   if (rows.length === 0) return null
 
-  let steps: number | null = null
-  let activeKcal: number | null = null
+  const steps = resolveSteps(rows)
+  const activeKcal = resolveActiveCalories(rows)
   let restingKcal: number | null = null
   let totalKcal: number | null = null
 
   for (const r of rows) {
     if (r.valueNum == null || !Number.isFinite(r.valueNum)) continue
     const v = Math.round(r.valueNum)
-    if (r.kind === 'steps') steps = v
-    else if (r.kind === 'active_calories') activeKcal = v
-    else if (r.kind === 'resting_calories') restingKcal = v
+    if (r.kind === 'resting_calories') restingKcal = v
     else if (r.kind === 'total_calories') totalKcal = v
     else if (r.kind === 'calories' && totalKcal == null) totalKcal = v
   }
@@ -173,10 +204,19 @@ export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalanc
     prisma.foodEntry.aggregate({
       where: { date },
       _sum: { kcal: true },
+      _count: { _all: true },
     }),
     prisma.garminActivity.findMany({
       where: { date },
-      select: { id: true, name: true, sport: true, calories: true, distanceM: true, durationSec: true },
+      select: {
+        id: true,
+        name: true,
+        sport: true,
+        calories: true,
+        distanceM: true,
+        durationSec: true,
+        startedAt: true,
+      },
       orderBy: { createdAt: 'asc' },
     }),
     prisma.trainingEntry.findMany({
@@ -226,91 +266,63 @@ export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalanc
   }
 
   const foodKcal = roundKcal(foodAgg._sum.kcal ?? 0)
+  const foodCoverage = (foodAgg._count?._all ?? 0) > 0
   const sources: EnergyActivitySource[] = []
-  const hasGarminCals = garminActs.some(g => g.calories != null && g.calories > 0)
   const importedExternalIds = new Set(
     training.map(t => t.externalId).filter((id): id is string => Boolean(id)),
   )
 
-  for (const g of garminActs) {
-    if (g.calories != null && g.calories > 0) {
-      const dist =
-        g.distanceM && g.distanceM > 500
-          ? ` · ${(g.distanceM / 1000).toFixed(1)} km`
-          : ''
-      sources.push({
-        id: `garmin:${g.id}`,
-        label: g.name || g.sport || 'Garmin activity',
-        kcal: roundKcal(g.calories),
-        origin: 'garmin_activity',
-        detail: `${g.sport || 'activity'}${dist}`,
-      })
-    }
+  type EatCand = SessionCandidate & {
+    origin: EnergyActivitySource['origin']
+    label: string
+    detail?: string
+    kcal: number
   }
-
+  const candidates: EatCand[] = []
   let sessionsMissingKcal = 0
 
-  // Prefer Garmin-sourced HC sessions over overlapping Google Fit duplicates.
-  const hcWindows: { id: string; start: number; end: number; pkg: string; duration: number }[] = []
-  for (const t of training) {
-    if (t.source !== 'healthconnect' || !t.externalRaw) continue
-    try {
-      const o = JSON.parse(t.externalRaw) as {
-        startTime?: string
-        endTime?: string
-        packageName?: string
-        durationSec?: number
-      }
-      const start = Date.parse(o.startTime ?? '')
-      const end = Date.parse(o.endTime ?? '')
-      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue
-      hcWindows.push({
-        id: t.id,
-        start,
-        end,
-        pkg: (o.packageName ?? '').toLowerCase(),
-        duration: o.durationSec ?? Math.round((end - start) / 1000),
-      })
-    } catch {
-      /* ignore */
-    }
-  }
-  const skipTrainingIds = new Set<string>()
-  for (const a of hcWindows) {
-    for (const b of hcWindows) {
-      if (a.id >= b.id) continue
-      const overlap = Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start)) / 1000
-      const shorter = Math.min(a.duration, b.duration)
-      if (shorter <= 0 || overlap < shorter * 0.5) continue
-      const aScore = a.pkg.includes('garmin') ? 3 : a.pkg.includes('fitness') || a.pkg.includes('google') ? 0 : 1
-      const bScore = b.pkg.includes('garmin') ? 3 : b.pkg.includes('fitness') || b.pkg.includes('google') ? 0 : 1
-      if (aScore !== bScore) {
-        skipTrainingIds.add(aScore < bScore ? a.id : b.id)
-      } else {
-        skipTrainingIds.add(a.duration < b.duration ? a.id : b.id)
-      }
-    }
+  for (const g of garminActs) {
+    if (g.calories == null || g.calories <= 0) continue
+    const dur = Math.round(g.durationSec || 0)
+    const startMs: number | null = g.startedAt ? g.startedAt.getTime() : null
+    const endMs: number | null = startMs != null && dur > 0 ? startMs + dur * 1000 : null
+    const dist =
+      g.distanceM && g.distanceM > 500 ? ` · ${(g.distanceM / 1000).toFixed(1)} km` : ''
+    candidates.push({
+      id: `garmin:${g.id}`,
+      startMs,
+      endMs,
+      durationSec: dur,
+      source: 'garmin_activity',
+      preference: sessionPreference('garmin_activity'),
+      kcal: roundKcal(g.calories),
+      origin: 'garmin_activity',
+      label: g.name || g.sport || 'Garmin activity',
+      detail: `${g.sport || 'activity'}${dist}`,
+    })
   }
 
   for (const t of training) {
-    if (skipTrainingIds.has(t.id)) continue
     const extracted = extractKcalFromTraining(t)
     if (!extracted) {
       sessionsMissingKcal++
       continue
     }
-    // Prefer GarminActivity archive calories over live garmin TrainingEntry duplicates
-    if (t.source === 'garmin' && hasGarminCals) continue
-    sources.push({
+    const win = parseTrainingWindow(t.externalRaw)
+    candidates.push({
       id: `training:${t.id}`,
-      label: t.exercise,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      durationSec: win.durationSec,
+      source: t.source,
+      preference: sessionPreference('training', t.source, win.packageName),
       kcal: roundKcal(extracted.kcal),
       origin: extracted.origin === 'notes' ? 'notes' : 'training',
+      label: t.exercise,
       detail: t.source !== 'manual' ? t.source : undefined,
     })
   }
 
-  // Unpromoted inbox workouts still contribute EAT when they have calories
   for (const p of pushed) {
     if (importedExternalIds.has(p.externalId)) continue
     let kcal =
@@ -321,22 +333,38 @@ export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalanc
       sessionsMissingKcal++
       continue
     }
-    sources.push({
+    // Pushed inbox rarely has reliable start — leave untimed (kept; no false overlap).
+    candidates.push({
       id: `pushed:${p.id}`,
-      label: p.exercise,
+      startMs: null,
+      endMs: null,
+      durationSec: 0,
+      source: p.source,
+      preference: sessionPreference('pushed', p.source),
       kcal,
       origin: 'pushed',
+      label: p.exercise,
       detail: `${p.source} inbox`,
     })
   }
 
-  const eatKcal = roundKcal(
-    sources
-      .filter(s => s.origin === 'garmin_activity' || s.origin === 'training' || s.origin === 'notes' || s.origin === 'pushed')
-      .reduce((s, x) => s + x.kcal, 0),
-  )
+  const keptSessions = dedupeSessions(candidates)
+  for (const s of keptSessions) {
+    sources.push({
+      id: s.id,
+      label: s.label,
+      kcal: s.kcal,
+      origin: s.origin,
+      detail: s.detail,
+    })
+  }
 
-  const sessionCount = training.length + garminActs.length + pushed.filter(p => !importedExternalIds.has(p.externalId)).length
+  const eatKcal = roundKcal(keptSessions.reduce((sum, x) => sum + x.kcal, 0))
+
+  const sessionCount =
+    training.length +
+    garminActs.length +
+    pushed.filter(p => !importedExternalIds.has(p.externalId)).length
   const neat = estimateNeat({
     sessionEatKcal: eatKcal,
     deviceActiveKcal: deviceRef?.activeKcal ?? null,
@@ -368,10 +396,13 @@ export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalanc
     })
   }
 
-  const incompleteCapture =
-    foodIncomplete ||
-    (sessionCount > 0 && eatKcal === 0) ||
-    (sessionsMissingKcal > 0 && eatKcal === 0)
+  const incompleteCapture = dayIncompleteCapture({
+    foodIncomplete,
+    foodCoverage,
+    sessionCount,
+    eatKcal,
+    sessionsMissingKcal,
+  })
 
   return {
     date,
@@ -385,6 +416,7 @@ export async function getDayEnergyBalance(date: string): Promise<DayEnergyBalanc
     delta,
     estimatedOut,
     incompleteCapture,
+    foodCoverage,
     foodIncomplete,
     sources,
     neatDetail: neat.detail,
@@ -405,6 +437,8 @@ export type WindowDayEnergy = {
   foodCoverage: boolean
   eatKcal: number
   neatKcal: number
+  /** NEAT path — causal/signals down-rank deficit claims when `steps_model` (E2). */
+  neatSource: string
   bmrKcal: number
   activityKcal: number
   estimatedOut: number
@@ -445,11 +479,18 @@ export async function getEnergyBalanceForRange(from: string, to: string): Promis
     }),
     prisma.garminActivity.findMany({
       where: { date: { gte: from, lte: to } },
-      select: { date: true, calories: true },
+      select: {
+        id: true,
+        date: true,
+        calories: true,
+        durationSec: true,
+        startedAt: true,
+      },
     }),
     prisma.trainingEntry.findMany({
       where: { date: { gte: from, lte: to } },
       select: {
+        id: true,
         date: true,
         notes: true,
         externalRaw: true,
@@ -460,7 +501,15 @@ export async function getEnergyBalanceForRange(from: string, to: string): Promis
     }),
     prisma.pushedWorkout.findMany({
       where: { date: { gte: from, lte: to } },
-      select: { date: true, calories: true, source: true, externalId: true, notes: true, raw: true },
+      select: {
+        id: true,
+        date: true,
+        calories: true,
+        source: true,
+        externalId: true,
+        notes: true,
+        raw: true,
+      },
     }),
     prisma.weightEntry.findMany({
       where: { date: { gte: weightFrom, lte: to } },
@@ -468,8 +517,11 @@ export async function getEnergyBalanceForRange(from: string, to: string): Promis
       select: { date: true, scaleKg: true, bodyFatPct: true },
     }),
     prisma.garminDailyMetric.findMany({
-      where: { date: { gte: from, lte: to }, kind: { in: ['steps', 'active_calories'] } },
-      select: { date: true, kind: true, valueNum: true },
+      where: {
+        date: { gte: from, lte: to },
+        kind: { in: ['steps', 'steps_hc', 'active_calories', 'active_calories_hc'] },
+      },
+      select: { date: true, kind: true, valueNum: true, sourceFile: true, raw: true },
     }),
     loadBmrProfile(),
   ])
@@ -501,43 +553,77 @@ export async function getEnergyBalanceForRange(from: string, to: string): Promis
     })
   }
 
-  const garminByDate = new Map<string, number>()
-  for (const g of garminActs) {
-    if (g.calories != null && g.calories > 0) {
-      garminByDate.set(g.date, (garminByDate.get(g.date) ?? 0) + g.calories)
-    }
-  }
-  const garminDatesWithCals = new Set(
-    [...garminByDate.entries()].filter(([, v]) => v > 0).map(([d]) => d),
-  )
-
   const importedIds = new Set(
     training.map(t => t.externalId).filter((id): id is string => Boolean(id)),
   )
 
-  const trainingByDate = new Map<string, number>()
-  for (const t of training) {
-    if (t.source === 'garmin' && garminDatesWithCals.has(t.date)) continue
-    const extracted = extractKcalFromTraining(t)
-    if (!extracted) continue
-    trainingByDate.set(t.date, (trainingByDate.get(t.date) ?? 0) + extracted.kcal)
+  const candidatesByDate = new Map<string, SessionCandidate[]>()
+  const pushCand = (date: string, c: SessionCandidate) => {
+    if (!candidatesByDate.has(date)) candidatesByDate.set(date, [])
+    candidatesByDate.get(date)!.push(c)
   }
 
-  const pushedByDate = new Map<string, number>()
+  for (const g of garminActs) {
+    if (g.calories == null || g.calories <= 0) continue
+    const dur = Math.round(g.durationSec || 0)
+    const startMs: number | null = g.startedAt ? g.startedAt.getTime() : null
+    const endMs: number | null = startMs != null && dur > 0 ? startMs + dur * 1000 : null
+    pushCand(g.date, {
+      id: `garmin:${g.id}`,
+      startMs,
+      endMs,
+      durationSec: dur,
+      source: 'garmin_activity',
+      preference: sessionPreference('garmin_activity'),
+      kcal: g.calories,
+    })
+  }
+
+  for (const t of training) {
+    const extracted = extractKcalFromTraining(t)
+    if (!extracted) continue
+    const win = parseTrainingWindow(t.externalRaw)
+    pushCand(t.date, {
+      id: `training:${t.id}`,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      durationSec: win.durationSec,
+      source: t.source,
+      preference: sessionPreference('training', t.source, win.packageName),
+      kcal: extracted.kcal,
+    })
+  }
+
   for (const p of pushed) {
     if (importedIds.has(p.externalId)) continue
     let kcal = p.calories != null && p.calories > 0 ? Math.round(p.calories) : null
     if (kcal == null) kcal = extractKcalFromExternalRaw(p.raw)
     if (kcal == null) kcal = extractKcalFromNotes(p.notes)
     if (kcal == null || kcal <= 0) continue
-    pushedByDate.set(p.date, (pushedByDate.get(p.date) ?? 0) + kcal)
+    pushCand(p.date, {
+      id: `pushed:${p.id}`,
+      startMs: null,
+      endMs: null,
+      durationSec: 0,
+      source: p.source,
+      preference: sessionPreference('pushed', p.source),
+      kcal,
+    })
   }
 
-  const metricsByDate = new Map<string, Map<string, number>>()
+  const eatByDate = new Map<string, number>()
+  for (const [date, cands] of candidatesByDate) {
+    const kept = dedupeSessions(cands)
+    eatByDate.set(
+      date,
+      roundKcal(kept.reduce((s, x) => s + (x.kcal ?? 0), 0)),
+    )
+  }
+
+  const metricsByDate = new Map<string, typeof metrics>()
   for (const m of metrics) {
-    if (m.valueNum == null || !Number.isFinite(m.valueNum)) continue
-    if (!metricsByDate.has(m.date)) metricsByDate.set(m.date, new Map())
-    metricsByDate.get(m.date)!.set(m.kind, Math.round(m.valueNum))
+    if (!metricsByDate.has(m.date)) metricsByDate.set(m.date, [])
+    metricsByDate.get(m.date)!.push(m)
   }
 
   return dates.map(date => {
@@ -548,16 +634,14 @@ export async function getEnergyBalanceForRange(from: string, to: string): Promis
     const fatG = food?.fatG ?? 0
     const foodCoverage = Boolean(food)
 
-    const eatKcal = roundKcal(
-      (garminByDate.get(date) ?? 0) + (trainingByDate.get(date) ?? 0) + (pushedByDate.get(date) ?? 0),
-    )
+    const eatKcal = eatByDate.get(date) ?? 0
     const weightKg = weightOnOrBefore(date, weightSeries)
     const bodyFatPct = bodyFatOnOrBefore(date, weightSeries)
-    const dayMetrics = metricsByDate.get(date)
+    const dayRows = metricsByDate.get(date) ?? []
     const neat = estimateNeat({
       sessionEatKcal: eatKcal,
-      deviceActiveKcal: dayMetrics?.get('active_calories') ?? null,
-      steps: dayMetrics?.get('steps') ?? null,
+      deviceActiveKcal: resolveActiveCalories(dayRows),
+      steps: resolveSteps(dayRows),
       weightKg,
     })
     const bmr = estimateBmrDetailed(weightKg, profile, bodyFatPct)
@@ -574,6 +658,7 @@ export async function getEnergyBalanceForRange(from: string, to: string): Promis
       foodCoverage,
       eatKcal,
       neatKcal: neat.neatKcal,
+      neatSource: neat.source,
       bmrKcal: bmr.kcal,
       activityKcal,
       estimatedOut,
@@ -621,40 +706,47 @@ async function loadThyroidSoftContext(): Promise<SchildklierRead | null> {
   return read.present ? read : null
 }
 
-type MetricKindMap = Map<string, Map<string, number>>
+type MetricRow = {
+  date: string
+  kind: string
+  valueNum: number | null
+  sourceFile: string | null
+  raw: string | null
+}
+type MetricRowsByDate = Map<string, MetricRow[]>
 
-async function loadMetricsByDate(
-  from: string,
-  to: string,
-): Promise<MetricKindMap> {
+async function loadMetricsByDate(from: string, to: string): Promise<MetricRowsByDate> {
   const rows = await prisma.garminDailyMetric.findMany({
     where: {
       date: { gte: from, lte: to },
       kind: {
-        in: ['steps', 'active_calories', 'resting_calories', 'total_calories', 'calories'],
+        in: [
+          'steps',
+          'steps_hc',
+          'active_calories',
+          'active_calories_hc',
+          'resting_calories',
+          'total_calories',
+          'calories',
+        ],
       },
     },
-    select: { date: true, kind: true, valueNum: true },
+    select: { date: true, kind: true, valueNum: true, sourceFile: true, raw: true },
   })
-  const map: MetricKindMap = new Map()
+  const map: MetricRowsByDate = new Map()
   for (const r of rows) {
-    if (r.valueNum == null || !Number.isFinite(r.valueNum)) continue
-    if (!map.has(r.date)) map.set(r.date, new Map())
-    map.get(r.date)!.set(r.kind, Math.round(r.valueNum))
+    if (!map.has(r.date)) map.set(r.date, [])
+    map.get(r.date)!.push(r)
   }
   return map
 }
 
-function deviceActiveForDate(metrics: MetricKindMap, date: string): number | null {
-  const m = metrics.get(date)
-  if (!m) return null
-  return m.get('active_calories') ?? null
+function deviceActiveForDate(metrics: MetricRowsByDate, date: string): number | null {
+  return resolveActiveCalories(metrics.get(date) ?? [])
 }
 
-function stepsForDate(metrics: MetricKindMap, date: string): number | null {
-  const m = metrics.get(date)
-  if (!m) return null
-  return m.get('steps') ?? null
+function stepsForDate(metrics: MetricRowsByDate, date: string): number | null {
+  return resolveSteps(metrics.get(date) ?? [])
 }
 
 /**
@@ -690,11 +782,18 @@ export async function getRollingEnergyRecap(
       }),
       prisma.garminActivity.findMany({
         where: { date: { gte: from, lte: to } },
-        select: { date: true, calories: true },
+        select: {
+          id: true,
+          date: true,
+          calories: true,
+          durationSec: true,
+          startedAt: true,
+        },
       }),
       prisma.trainingEntry.findMany({
         where: { date: { gte: from, lte: to } },
         select: {
+          id: true,
           date: true,
           notes: true,
           externalRaw: true,
@@ -706,8 +805,10 @@ export async function getRollingEnergyRecap(
       prisma.pushedWorkout.findMany({
         where: { date: { gte: from, lte: to } },
         select: {
+          id: true,
           date: true,
           calories: true,
+          source: true,
           externalId: true,
           notes: true,
           raw: true,
@@ -728,26 +829,45 @@ export async function getRollingEnergyRecap(
     foodByDate.set(r.date, Math.round(r._sum.kcal ?? 0))
   }
 
-  const garminByDate = new Map<string, number>()
-  for (const g of garminActs) {
-    if (g.calories != null && g.calories > 0) {
-      garminByDate.set(g.date, (garminByDate.get(g.date) ?? 0) + g.calories)
-    }
-  }
-
-  const trainingByDate = new Map<string, number>()
-  const garminDatesWithCals = new Set(
-    [...garminByDate.entries()].filter(([, v]) => v > 0).map(([d]) => d),
-  )
   const importedIds = new Set(
     training.map(t => t.externalId).filter((id): id is string => Boolean(id)),
   )
 
+  const candidatesByDate = new Map<string, SessionCandidate[]>()
+  const pushCand = (date: string, c: SessionCandidate) => {
+    if (!candidatesByDate.has(date)) candidatesByDate.set(date, [])
+    candidatesByDate.get(date)!.push(c)
+  }
+
+  for (const g of garminActs) {
+    if (g.calories == null || g.calories <= 0) continue
+    const dur = Math.round(g.durationSec || 0)
+    const startMs: number | null = g.startedAt ? g.startedAt.getTime() : null
+    const endMs: number | null = startMs != null && dur > 0 ? startMs + dur * 1000 : null
+    pushCand(g.date, {
+      id: `garmin:${g.id}`,
+      startMs,
+      endMs,
+      durationSec: dur,
+      source: 'garmin_activity',
+      preference: sessionPreference('garmin_activity'),
+      kcal: g.calories,
+    })
+  }
+
   for (const t of training) {
-    if (t.source === 'garmin' && garminDatesWithCals.has(t.date)) continue
     const extracted = extractKcalFromTraining(t)
     if (!extracted) continue
-    trainingByDate.set(t.date, (trainingByDate.get(t.date) ?? 0) + extracted.kcal)
+    const win = parseTrainingWindow(t.externalRaw)
+    pushCand(t.date, {
+      id: `training:${t.id}`,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      durationSec: win.durationSec,
+      source: t.source,
+      preference: sessionPreference('training', t.source, win.packageName),
+      kcal: extracted.kcal,
+    })
   }
 
   for (const p of pushed) {
@@ -756,7 +876,21 @@ export async function getRollingEnergyRecap(
     if (kcal == null) kcal = extractKcalFromExternalRaw(p.raw)
     if (kcal == null) kcal = extractKcalFromNotes(p.notes)
     if (kcal == null || kcal <= 0) continue
-    trainingByDate.set(p.date, (trainingByDate.get(p.date) ?? 0) + kcal)
+    pushCand(p.date, {
+      id: `pushed:${p.id}`,
+      startMs: null,
+      endMs: null,
+      durationSec: 0,
+      source: p.source ?? 'pushed',
+      preference: sessionPreference('pushed', p.source),
+      kcal,
+    })
+  }
+
+  const eatByDate = new Map<string, number>()
+  for (const [date, cands] of candidatesByDate) {
+    const kept = dedupeSessions(cands)
+    eatByDate.set(date, Math.round(kept.reduce((s, x) => s + (x.kcal ?? 0), 0)))
   }
 
   let weightSeries: WeightPointBf[] = [...weights].sort((a, b) => a.date.localeCompare(b.date))
@@ -771,7 +905,7 @@ export async function getRollingEnergyRecap(
 
   const raw: RawDayEnergy[] = dates.map(date => {
     const foodKcal = foodByDate.get(date) ?? 0
-    const eatKcal = Math.round((garminByDate.get(date) ?? 0) + (trainingByDate.get(date) ?? 0))
+    const eatKcal = eatByDate.get(date) ?? 0
     const weightKg = weightOnOrBefore(date, weightSeries)
     const bodyFatPct = bodyFatOnOrBefore(date, weightSeries)
     const neat = estimateNeat({

@@ -1,0 +1,30 @@
+---
+description: Never stack DateNavBar with a second recent-dates chip strip — one date control per capture screen (P0 double date chrome).
+globs: mypens-mobile/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# myPENS — no double date chrome (P0)
+
+**Anti-pattern:** Fueling (and other capture tabs) showing **Yesterday/Today DateNavBar** plus a **second** horizontal recent-dates chip row (`Thu 23 Jul`, `Sun 26 Jul`, …). Fixed once (chips removed from DateNavBar), then reimplemented by restoring “history chips” on top of the pill row.
+
+## Hard rule
+
+**One date control per capture screen.**
+
+1. Use shared `DateNavBar` (`mypens-mobile/components/DateNavBar.tsx`) — ← / Yesterday / Today / → + shortLabel, with `lookbackDays` for history.
+2. **Do not** render a second `recentDates` chip strip in the same screen JSX.
+3. **Do not** re-add a chip strip *inside* DateNavBar under the pill row. Arrows + lookback **are** the history UI.
+4. `recentDates` on DateNavBar is call-site compat only and must stay **ignored** — do not revive chip rendering.
+
+## Checklist before shipping date UI
+
+- [ ] Screen has exactly one of: DateNavBar **or** a custom date picker — never both stacked
+- [ ] `rg DateNavBar` / `recentDates` / `shortLabel` on the screen — no duplicate date chip map
+- [ ] wiring-check **W5** PASS
+
+## Related
+
+- Wiring heuristic: W5 in `.cursor/skills/mypens-adversarial-pre-apk/scripts/wiring-check.mjs`
+- Playbook: `docs/AUDIT-PLAYBOOK.md` (P0 double date chrome)
+- Finish-the-wiring known traps list

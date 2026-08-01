@@ -10,17 +10,14 @@ import { syncSleep } from '@/lib/integrations/garmin/sleepSync'
  * scheduler (Vercel cron, GitHub Actions, etc.) so missed Push notifications
  * never leave the log out of date.
  *
- * Auth: requires `Authorization: Bearer <CRON_SECRET>` header, OR
- *       `?secret=<CRON_SECRET>` query param. If CRON_SECRET is unset the
+ * Auth: `Authorization: Bearer <CRON_SECRET>` (header only — query-param
+ *       secrets land in proxy/CDN/Referer logs). If CRON_SECRET is unset the
  *       endpoint refuses to run to avoid an unauthenticated import trigger.
  */
 function isAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET
   if (!secret) return false
-  const auth = request.headers.get('authorization')
-  if (auth === `Bearer ${secret}`) return true
-  const url = new URL(request.url)
-  return url.searchParams.get('secret') === secret
+  return request.headers.get('authorization') === `Bearer ${secret}`
 }
 
 async function run(request: Request) {

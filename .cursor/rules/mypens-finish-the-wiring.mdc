@@ -1,0 +1,51 @@
+---
+description: Finish wiring every new primitive to all consumers before claiming done — myPENS recurring failure mode.
+alwaysApply: true
+---
+
+# myPENS — finish the wiring
+
+**Root cause of recurring audit bugs:** agents build the correct primitive (flag, return field, store, lock, coverage gate, auth helper) but do not wire it to every consumer. That is not “bad formulas” — it is unfinished last-mile work.
+
+## Hard rule
+
+When you add or change a helper / flag / return field (`ready`, `droppedBad`, `deadLetter`, locks, coverage gates, auth helpers):
+
+1. **Grep every consumer** (`rg` / search across web + `mypens-mobile`).
+2. **Wire each call site**, or leave a one-line comment documenting an intentional skip.
+3. Before claiming done, ask: **“where else does this apply?”**
+
+Do not ship a primitive that only works in the file where you invented it.
+
+## Known primitives checklist (extend when adding new ones)
+
+| Primitive | Owner | Must be wired |
+|-----------|-------|---------------|
+| `useSelectedDate().ready` | `mypens-mobile/hooks/useSelectedDate.ts` | Every consumer: gate date-dependent UI/queries until ready |
+| `flushOfflineQueue()` → `droppedBad` | `mypens-mobile/lib/offlineQueue.ts` | Callers must read result (or share via `usePensSync`); never bare `await flushOfflineQueue()` that ignores drops |
+| `readDeadLetter` | `mypens-mobile/lib/offlineQueue.ts` | At least one UI/sync path must surface dead-letter ops (not only the store writer) |
+| Flush lock | `offlineQueue` module `inFlight` | Module scope only — never per-hook / per-screen `useRef` for cross-tab queue state |
+| Coverage gates | e.g. `foodCoverage`, Form signal count, sync health | Confident UI numbers/states must gate on coverage — no hard kcal/score when data does not support it |
+| Auth helpers | `requireAuth` / session cookie (backup, share-links) | New destructive / export / import routes match the **stricter** pattern (session-only) unless Jerome explicitly says mobile needs bearer |
+
+## Shared locks & queues
+
+Cross-screen state (offline flush, shared queues, global sync locks) lives at **module scope**. A `useRef` inside one hook instance does **not** serialize five mounted tabs.
+
+## Auth boundaries
+
+`app/api/backup` and `app/api/share-links` require the **session cookie** and reject the mobile bearer. New export / import / destructive dump routes must match that stricter pattern unless Jerome says the phone must call them.
+
+## Confident UI = coverage gates
+
+Never render a bold number or “healthy / synced” state when the underlying signal is incomplete. Link honesty: `foodCoverage`, Form input counts, sync health / `droppedBad`, empty vs zero.
+
+## Known anti-pattern — P0 double date chrome
+
+Never stack **DateNavBar** (Yesterday/Today + arrows) with a **second** recent-dates chip strip on the same capture screen, and never re-add chips under the pill row inside `DateNavBar` itself. One date control only. Rule: `.cursor/rules/mypens-no-double-date-nav.mdc`. Wiring-check **W5**.
+
+## Done bar
+
+A feature is not done when the helper exists. It is done when **every consumer** uses it (or documents why not), and the adversarial pre-APK wiring check is green when shipping.
+
+See: `docs/AUDIT-PLAYBOOK.md`, `.cursor/skills/mypens-adversarial-pre-apk/SKILL.md`.

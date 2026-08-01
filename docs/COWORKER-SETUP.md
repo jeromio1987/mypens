@@ -59,30 +59,30 @@ You should see JSON like:
 - **`hasMobileToken: false`** → owner must add `MOBILE_PENS_API_TOKEN` to **`mypens/.env`**, then restart Next.
 - **`hasDatabaseUrl: false`** → database URL missing; owner fixes Prisma env — separate from mobile.
 
-### 3) Mobile bridge (Expo → Next)
+### 3) Mobile bridge (Expo → API)
 
-In **`mypens/.env`** (Next):
+**Daily phone = Vercel.** Local Next `:5000` is for **code agents only**.
+
+In **`mypens/.env`** (and **Vercel** env — must match):
 
 ```env
 MOBILE_PENS_API_TOKEN=<same-long-secret-everywhere>
 ```
 
-In **`mypens-mobile/.env`** (Expo):
+In **`mypens-mobile/.env`** (Expo — baked into APK at build time):
 
 ```env
-EXPO_PUBLIC_PENS_API_URL=http://<PC-LAN-IPv4>:5000
+EXPO_PUBLIC_PENS_API_URL=https://mypens.vercel.app
 EXPO_PUBLIC_PENS_API_TOKEN=<same-as-MOBILE_PENS_API_TOKEN>
 ```
 
-Get IPv4 from `ipconfig` (Wi‑Fi adapter). Restart **both** Next and Expo after any `.env` change.
+Rebuild the APK after any `EXPO_PUBLIC_*` change. Agents temporarily debugging against LAN may override URL to `http://<PC-LAN-IPv4>:5000` — do **not** leave that as the daily default.
 
-### 4) Phone can reach the PC
+### 4) Phone reaches production (no local Next)
 
-On the **phone** (same Wi‑Fi), Safari/Chrome:
+On the phone browser: `https://mypens.vercel.app` — Food → Take photo works without `npm run dev`.
 
-`http://<same-IPv4>:5000`
-
-- If it does not load: **Windows Defender Firewall** → allow inbound **TCP 5000** for private networks (or for Node). Retry.
+Agents-only LAN check: `http://<PC-LAN-IPv4>:5000` (firewall may block TCP 5000).
 
 ### 5) Expo
 
@@ -92,7 +92,7 @@ From **`mypens-mobile`**:
 npx expo start
 ```
 
-Owner opens **Food** tab: no “connect” banner, lists load, photo scan works if `hasAnthropicKey` is true.
+Owner opens **Food** tab against **Vercel**: no “connect” banner, lists load, photo scan works if production `hasAnthropicKey` is true.
 
 ### 6) Supabase (only if owner still uses Supabase tabs on Expo)
 
@@ -110,7 +110,7 @@ Owner supplies URL + anon key from [Supabase dashboard](https://supabase.com/das
 
 ## Done criteria
 
-- [ ] `http://localhost:5000/api/health` shows all three `has*` flags the owner expects  
-- [ ] Phone browser opens `http://LAN-IP:5000`  
-- [ ] Expo Food tab works against Next (no config banner)  
-- [ ] Optional: photo scan returns items (needs `hasAnthropicKey: true`)
+- [ ] Production `https://mypens.vercel.app/api/health` shows all three `has*` flags the owner expects  
+- [ ] Phone APK points at `https://mypens.vercel.app` (rebuild after `EXPO_PUBLIC_*` change)  
+- [ ] Expo Food tab works against Vercel (no config banner; no local Next needed)  
+- [ ] Optional: photo scan returns items (needs production `hasAnthropicKey: true`)

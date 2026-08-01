@@ -72,7 +72,8 @@ allowed to have **pre-existing** errors only under:
 If Next is up (default `EXPO_PUBLIC_PENS_API_URL` or `http://127.0.0.1:5000`):
 
 1. `GET /api/health` — must return quickly (`ok`)
-2. With `MOBILE_PENS_API_TOKEN` / `EXPO_PUBLIC_PENS_API_TOKEN`:
+2. **Photo-analyze route-alive** (no Anthropic burn): `POST /api/food/photo-analyze` with empty FormData → **400** (file required) or **401** (auth), never **404/500**. With bearer: must not **401** (token mismatch). Standalone: `node scripts/smoke-photo-analyze.mjs`.
+3. With `MOBILE_PENS_API_TOKEN` / `EXPO_PUBLIC_PENS_API_TOKEN`:
    - `GET /api/food?date=<today>`
    - `GET /api/energy-balance?date=<known-date>`
 
@@ -85,11 +86,13 @@ Hung listener (port open, no response) → **FAIL** smoke with “API wedged”.
 
 `mypens-mobile/android/app/build.gradle` uses `debuggableVariants = []` → JS is
 **embedded**. Any mobile UI change this session requires rebuild + `adb install -r`
-(keep HC grants).
+(keep HC grants) — **only when Jerome asks**.
+
+**Photo path before APK:** do not offer install until photo-analyze smoke PASS is in the report, or use `--skip-apk` with explicit **photo unverified**. Camera client fixes are not on-device until a new APK.
 
 - Mobile UI changed **and** neither `--apk-rebuilt` nor session stamp
   `mypens-mobile/docs/.verify_apk_rebuilt` → **FAIL** “ship complete” narrative
-- Jerome said skip → pass `--skip-apk` (report notes SKIP)
+- Jerome said skip → pass `--skip-apk` (report notes SKIP + photo unverified if camera untested)
 
 Stamp after install:
 
@@ -119,6 +122,7 @@ Status: PASS | FAIL
 Copy and tick before saying done:
 
 ```
+- [ ] Ran wiring-check.mjs (adversarial pre-APK) — PASS
 - [ ] Ran verify-ship.mjs
 - [ ] Status PASS (or Jerome waived a specific SKIP in writing)
 - [ ] If mobile UI changed: APK rebuilt + adb install -r (or --skip-apk)
@@ -127,5 +131,7 @@ Copy and tick before saying done:
 
 ## Stop hook
 
-Project stop hook runs mobile `tsc` when mypens paths are dirty and follow-ups
-loudly on failure. Still run the full skill before claiming ship done.
+Project stop hook runs mobile `tsc` **and** `wiring-check.mjs` when mypens paths
+are dirty; follow-ups loudly on either failure. Still run adversarial pre-APK
+(wiring-check) then this full skill before claiming ship done.
+See `.cursor/skills/mypens-adversarial-pre-apk/SKILL.md`.

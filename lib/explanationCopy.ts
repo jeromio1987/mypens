@@ -30,3 +30,8 @@ export const VERDICT_LABELS: Record<string, string> = {
   verdict_journal:      'The Mood Ledger',
   verdict_anchor:       'The Recovery Ledger',
 }
+
+/** Look up retention / verdict copy by key; falls back to the key itself. */
+export function explain(key: string): string {
+  return RETENTION_COPY[key] ?? VERDICT_LABELS[key] ?? key
+}

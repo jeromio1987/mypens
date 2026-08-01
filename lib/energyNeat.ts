@@ -4,6 +4,8 @@
  * Health Connect often under-reports Active (e.g. 14 kcal with 12k steps) — if
  * Active < sessions, fall back to the steps→kcal model instead of locking NEAT at 0.
  * Never add residual + steps (would double-count).
+ * Steps model: gross steps→kcal minus session EAT so session burn is not re-counted
+ * when day steps already include walk/run session steps (E1 / FULL-ENGINE-AUDIT-2026-08-01).
  */
 
 export type NeatSource = 'device_active_residual' | 'steps_model' | 'none'
@@ -35,8 +37,9 @@ function fromSteps(
   deviceActiveKcal: number | null,
   detailSuffix?: string,
 ): NeatEstimate {
-  const neatKcal = stepsToKcal(steps, weightKg)
-  const base = `NEAT from steps (${steps.toLocaleString()} × ~${STEPS_KCAL_BASE} kcal @ ${STEPS_REF_KG} kg ref)`
+  const gross = stepsToKcal(steps, weightKg)
+  const neatKcal = Math.max(0, gross - sessionEatKcal)
+  const base = `NEAT from steps (${steps.toLocaleString()} × ~${STEPS_KCAL_BASE} kcal @ ${STEPS_REF_KG} kg ref; −${sessionEatKcal} session EAT → ${neatKcal})`
   return {
     neatKcal,
     source: 'steps_model',

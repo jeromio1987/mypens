@@ -10,6 +10,8 @@ export type SignalDay = {
   proteinG?: number | null
   foodLogged?: boolean
   energyDelta?: number | null
+  /** When `steps_model`, deficit-vs-weight signals are down-ranked (E2). */
+  neatSource?: string | null
   scaleKg?: number | null
 }
 
@@ -156,14 +158,36 @@ export function detectSignals(days: SignalDay[], labs?: LabSignalContext | null)
   // weight stall vs deficit
   {
     const cfg = byId.weight_stall_vs_deficit
-    const win = sorted.slice(-cfg.windowDays)
+    // Calendar window ending on latest day (R2) — not a sparse row slice.
+    const last = sorted[sorted.length - 1]
+    let win = sorted.slice(-cfg.windowDays)
+    if (last?.date && /^\d{4}-\d{2}-\d{2}$/.test(last.date)) {
+      const [y, m, d] = last.date.split('-').map(Number)
+      const endUtc = Date.UTC(y, m - 1, d)
+      const fromUtc = endUtc - (cfg.windowDays - 1) * 86400000
+      const fromDate = new Date(fromUtc)
+      const from = `${fromDate.getUTCFullYear()}-${String(fromDate.getUTCMonth() + 1).padStart(2, '0')}-${String(fromDate.getUTCDate()).padStart(2, '0')}`
+      win = sorted.filter(r => r.date >= from && r.date <= last.date)
+    }
     const deltas = win.map(d => d.energyDelta).filter((n): n is number => n != null)
     const weights = win.map(d => d.scaleKg).filter((n): n is number => n != null)
+    const stepsModelShare =
+      win.length > 0
+        ? win.filter(d => d.neatSource === 'steps_model').length / win.length
+        : 0
     const unknowns: string[] = []
     if (deltas.length < 5) unknowns.push(`Only ${deltas.length} days with energyDelta`)
     if (weights.length < 2) unknowns.push('Need ≥2 scale readings')
+    if (stepsModelShare >= 0.5) unknowns.push('Many days used steps-model NEAT — deficit may be inflated')
     const meanDelta = mean(deltas)
-    if (meanDelta != null && meanDelta <= cfg.params.minDeficitKcal && weights.length >= 2) {
+    // E2: skip when steps_model dominates unless deficit is extreme.
+    const skipStepsInflation = stepsModelShare >= 0.5 && (meanDelta == null || meanDelta > -500)
+    if (
+      !skipStepsInflation &&
+      meanDelta != null &&
+      meanDelta <= cfg.params.minDeficitKcal &&
+      weights.length >= 2
+    ) {
       const change = weights[weights.length - 1]! - weights[0]!
       if (Math.abs(change) < cfg.params.maxAbsKgChange) {
         hits.push({

@@ -14,8 +14,10 @@ export type PortionableMacros = {
   /** Full package net weight when readable from label (optional). */
   packGrams: number | null
   brand?: string | null
-  micros?: Record<string, number>
-  tags?: string[]
+  micros?: Record<string, number> | null
+  tags?: string[] | null
+  name?: string
+  meal?: string
 }
 
 export function roundMacro(n: number, decimals = 1): number {

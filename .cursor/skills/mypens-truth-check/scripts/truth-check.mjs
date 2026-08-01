@@ -139,9 +139,10 @@ function checkT1() {
 }
 
 function checkT2() {
-  const verdict = path.join(ROOT, 'app', 'api', 'verdict', 'route.ts')
+  // Grep the implementation owner, not thin route wrappers (WP 2.2 → lib/verdictData.ts).
+  const verdict = path.join(ROOT, 'lib', 'verdictData.ts')
   if (!fs.existsSync(verdict)) {
-    failures.push('T2 missing app/api/verdict/route.ts')
+    failures.push('T2 missing lib/verdictData.ts')
     return
   }
   const src = fs.readFileSync(verdict, 'utf8')
@@ -159,7 +160,8 @@ function checkT3() {
     'mypens-mobile/app/(tabs)/training.tsx',
     'mypens-mobile/app/(tabs)/sleep.tsx',
     'mypens-mobile/app/verdict.tsx',
-    'app/verdict/page.tsx',
+    // Client owns empty-state UI; page.tsx is a thin SSR wrapper after WP 2.2.
+    'app/verdict/VerdictClient.tsx',
     'app/dashboard/DashboardClient.tsx',
   ]
   const emptyMarkers = /EmptyHint|empty|no data|onvoldoende|incompleteCapture|hasEnoughData|Building your baseline|—/i

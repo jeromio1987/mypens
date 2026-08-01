@@ -20,8 +20,7 @@ type StatusPayload = {
 
 const ENDPOINTS: { id: SyncSourceStatus['id']; label: string; endpoint: string }[] = [
   { id: 'garmin', label: 'Garmin', endpoint: '/api/integrations/garmin/status' },
-  { id: 'healthconnect_sleep', label: 'HC sleep', endpoint: '/api/integrations/healthconnect/status' },
-  { id: 'healthconnect_workouts', label: 'HC workouts', endpoint: '/api/integrations/healthconnect/status' },
+  { id: 'healthconnect', label: 'Health Connect', endpoint: '/api/integrations/healthconnect/status' },
 ]
 
 function pickSuccess(d: StatusPayload | null): string | null {
@@ -38,7 +37,17 @@ export default function SyncStatusBadge() {
       ENDPOINTS.map(async p => {
         try {
           const r = await fetch(p.endpoint)
-          const d = r.ok ? ((await r.json()) as StatusPayload) : null
+          if (!r.ok) {
+            return {
+              id: p.id,
+              label: p.label,
+              connected: false,
+              lastSuccessAt: null,
+              lastError: `status ${r.status}`,
+              lastErrorAt: new Date().toISOString(),
+            } satisfies SyncSourceStatus
+          }
+          const d = (await r.json()) as StatusPayload
           return {
             id: p.id,
             label: p.label,
@@ -53,8 +62,8 @@ export default function SyncStatusBadge() {
             label: p.label,
             connected: false,
             lastSuccessAt: null,
-            lastError: null,
-            lastErrorAt: null,
+            lastError: 'network error',
+            lastErrorAt: new Date().toISOString(),
           } satisfies SyncSourceStatus
         }
       }),
