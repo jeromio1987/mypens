@@ -14,7 +14,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { loadGarminData } from './lib/garminAnalyze.mjs'
-import { analyzePeriods, periodsToMarkdown } from './lib/periodAnalyze.mjs'
+import { analyzePeriods, periodsToMarkdown, periodsToHtml } from './lib/periodAnalyze.mjs'
 import { loadConfounders } from './lib/periodCausal.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -83,8 +83,12 @@ async function main() {
     const dir = join(REPO_ROOT, 'docs', 'reports')
     mkdirSync(dir, { recursive: true })
     const path = join(dir, `period-review-${report.asOf}.md`)
+    const htmlPath = join(dir, `period-review-${report.asOf}.html`)
     writeFileSync(path, periodsToMarkdown(report), 'utf8')
+    writeFileSync(htmlPath, periodsToHtml(report), 'utf8')
     console.log(`[period-review] wrote ${path}`)
+    console.log(`[period-review] wrote ${htmlPath}`)
+    console.log(`[period-review] open: start "" "${htmlPath}"`)
 
     if (args.dry) {
       console.log('[period-review] --dry: skipped DB upsert')

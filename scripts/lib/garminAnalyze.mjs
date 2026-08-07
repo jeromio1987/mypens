@@ -96,7 +96,7 @@ function joinByDate(a, b) {
  * @param {object} data
  * @param {Array} data.sleeps - SleepEntry rows {date, hours, quality, hrv?}
  * @param {Array} data.weights - WeightEntry {date, trueWeightKg|scaleKg}
- * @param {Array} data.trainings - TrainingEntry {date, volume, exercise?}
+ * @param {Array} data.trainings - TrainingEntry {date, volume, exercise?, source?}
  * @param {Array} data.activities - GarminActivity {date, sport, durationSec, distanceM, avgHr, calories}
  * @param {Array} data.metrics - GarminDailyMetric {date, kind, valueNum}
  * @param {string} [data.weekOf]
@@ -108,6 +108,26 @@ export function analyzeGarmin(data) {
   const trainings = data.trainings || []
   const activities = data.activities || []
   const metrics = data.metrics || []
+
+  // Training provenance: strava | garmin | manual | healthkit | …
+  const trainingBySource = {}
+  let trainingVolume = 0
+  for (const t of trainings) {
+    const src = (t.source || 'manual').toLowerCase()
+    if (!trainingBySource[src]) trainingBySource[src] = { count: 0, volume: 0 }
+    trainingBySource[src].count++
+    trainingBySource[src].volume += t.volume || 0
+    trainingVolume += t.volume || 0
+  }
+
+  const bodyFatSeries = seriesByDate(
+    weights.filter(w => typeof w.bodyFatPct === 'number'),
+    'date',
+    w => w.bodyFatPct,
+  )
+  const tanitaWeights = weights.filter(
+    w => (w.source || '').toLowerCase().includes('tanita') || typeof w.bodyFatPct === 'number',
+  )
 
   const byKind = {}
   for (const m of metrics) {
@@ -245,6 +265,21 @@ export function analyzeGarmin(data) {
           entries: weights.length,
           latestKg: weights[weights.length - 1]?.trueWeightKg ?? weights[weights.length - 1]?.scaleKg ?? null,
           avgKg: avg(weights.map(w => w.trueWeightKg ?? w.scaleKg)),
+          tanitaEntries: tanitaWeights.length,
+          latestBodyFatPct: bodyFatSeries.values.length
+            ? bodyFatSeries.values[bodyFatSeries.values.length - 1]
+            : null,
+          avgBodyFatPct: avg(bodyFatSeries.values),
+          bodyFatTrend: trend(bodyFatSeries.values),
+        }
+      : null,
+    training: trainings.length
+      ? {
+          sessions: trainings.length,
+          totalVolume: Math.round(trainingVolume),
+          bySource: trainingBySource,
+          stravaSessions: trainingBySource.strava?.count || 0,
+          manualSessions: trainingBySource.manual?.count || 0,
         }
       : null,
   }
@@ -321,6 +356,26 @@ export function analyzeGarmin(data) {
   if (domains.weight?.latestKg != null) {
     findings.push(`Weight: latest ${domains.weight.latestKg} kg (avg ${domains.weight.avgKg} across ${domains.weight.entries} entries).`)
   }
+  if (domains.weight?.latestBodyFatPct != null) {
+    findings.push(
+      `Body comp (Tanita-style): latest BF ${domains.weight.latestBodyFatPct}%` +
+        (domains.weight.avgBodyFatPct != null ? ` (avg ${domains.weight.avgBodyFatPct}%)` : '') +
+        `, trend ${domains.weight.bodyFatTrend}, ${domains.weight.tanitaEntries} composition-capable weigh-ins.`,
+    )
+    if (domains.weight.bodyFatTrend === 'down') wins.push('Body-fat trend down across the window.')
+    if (domains.weight.bodyFatTrend === 'up') risks.push('Body-fat trend up — check calorie / alcohol load.')
+  }
+  if (domains.training) {
+    const srcBits = Object.entries(domains.training.bySource)
+      .map(([k, v]) => `${k}×${v.count}`)
+      .join(', ')
+    findings.push(
+      `Training ledger: ${domains.training.sessions} sessions (volume ~${domains.training.totalVolume}). Sources: ${srcBits || 'n/a'}.`,
+    )
+    if (domains.training.stravaSessions > 0) {
+      wins.push(`${domains.training.stravaSessions} Strava-sourced training rows in window.`)
+    }
+  }
 
   // Correlation findings
   if (cross.stressVsSleep != null) {
@@ -344,6 +399,7 @@ export function analyzeGarmin(data) {
     (byKind.hrv || []).length > 0,
     (byKind.steps || []).length > 0,
     inventory.weightEntries > 0,
+    inventory.trainingEntries > 0, // Strava / manual ledger
   ].filter(Boolean).length
 
   return {
@@ -353,9 +409,10 @@ export function analyzeGarmin(data) {
     domains,
     crossLinks: cross,
     findings,
-    risks: risks.slice(0, 6),
-    wins: wins.slice(0, 6),
-    coverageScore, // 0–6 domains present
+    risks: risks.slice(0, 8),
+    wins: wins.slice(0, 8),
+    coverageScore, // 0–7 domains present (Garmin + Strava/Tanita ledger)
+    coverageMax: 7,
     summary:
       findings[0] ||
       'Garmin analysis ran but found no usable rows — import the Connect dump first.',
@@ -399,13 +456,29 @@ export async function loadGarminData(prisma, { weekOf, weekEnd, allTime = false 
       prisma.weightEntry.findMany({
         where: whereDate,
         orderBy: { date: 'asc' },
-        select: { date: true, trueWeightKg: true, scaleKg: true },
+        select: {
+          date: true,
+          trueWeightKg: true,
+          scaleKg: true,
+          bodyFatPct: true,
+          muscleMassKg: true,
+          source: true,
+          alcoholUnits: true,
+        },
       }),
     ),
     safe('training', () =>
       prisma.trainingEntry.findMany({
         where: whereDate,
-        select: { date: true, volume: true, exercise: true, source: true },
+        select: {
+          date: true,
+          volume: true,
+          exercise: true,
+          source: true,
+          sets: true,
+          reps: true,
+          weightKg: true,
+        },
       }),
     ),
     safe('activities', () =>

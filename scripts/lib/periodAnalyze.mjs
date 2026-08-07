@@ -13,6 +13,7 @@
 
 import { mondayOf, shiftDateStr, toDateStr, fromDateStr, weekBounds } from './weekDates.mjs'
 import { analyzeCausal } from './periodCausal.mjs'
+import { esc, reportCss, friendlyCausal } from './reportHtml.mjs'
 
 const GOOD = 'good'
 const MIXED = 'mixed'
@@ -147,6 +148,22 @@ export function buildDailySignals(data) {
     if (!row) continue
     row.activityCount += 1
     row.activityMinutes += Math.round((a.durationSec || 0) / 60)
+  }
+
+  // Strava / manual / Health* TrainingEntry rows — count as structured sessions
+  // so Period Review does not treat a Strava-heavy week as “zero activity”.
+  for (const t of data.trainings || []) {
+    const row = touch(t.date)
+    if (!row) continue
+    row.activityCount += 1
+    const mins =
+      typeof t.durationSec === 'number'
+        ? Math.round(t.durationSec / 60)
+        : typeof t.durationMin === 'number'
+          ? Math.round(t.durationMin)
+          : // Strength imports rarely carry duration; use volume as a soft proxy.
+            Math.max(20, Math.min(90, Math.round(((t.volume || 0) / 2000) * 10) || 45))
+    row.activityMinutes += mins
   }
 
   return [...byDate.values()].sort((x, y) => x.date.localeCompare(y.date))
@@ -1139,6 +1156,66 @@ export function periodsToMarkdown(report) {
   }
 
   return lines.join('\n')
+}
+
+function escHtml(s) {
+  return esc(s)
+}
+
+/** Standalone HTML for double-click / `start` — no server required. */
+export function periodsToHtml(report) {
+  const conf = report.topHypothesis
+    ? Math.round((report.topHypothesis.confidence || 0) * 100)
+    : null
+
+  const horizons = (report.horizons || [])
+    .map(h => {
+      if (!h.verdict) {
+        return `<article class="horizon"><strong>${escHtml(h.label)}</strong><div class="meta">No scored weeks in this window.</div></article>`
+      }
+      const patterns = (h.patterns || [])
+        .slice(0, 4)
+        .map(p => `<li><strong>${escHtml(p.title)}</strong> — ${escHtml(p.text)}</li>`)
+        .join('')
+      const advice = (h.advice || [])
+        .slice(0, 5)
+        .map(a => `<li>${escHtml(a.text)}</li>`)
+        .join('')
+      return `<article class="horizon">
+  <div class="horizon-top">
+    <div><strong>${escHtml(h.label)}</strong></div>
+    <span class="verdict ${escHtml(h.verdict)}">${escHtml(h.verdict)}</span>
+  </div>
+  <div class="meta" style="margin-top:8px">
+    Score ${h.score}/100 · ${h.weeks} weeks
+    (${h.goodWeeks} good / ${h.mixedWeeks} mixed / ${h.badWeeks} bad)
+    ${h.causal?.topHypothesis ? ` · Cause: ${escHtml(friendlyCausal(h.causal.topHypothesis.id) || h.causal.topHypothesis.label)}` : ''}
+  </div>
+  ${h.analysis ? `<details style="margin-top:10px"><summary>Read analysis</summary><p class="prose">${escHtml(h.analysis)}</p></details>` : ''}
+  ${patterns ? `<h3 style="margin-top:12px">Patterns</h3><ul class="list findings">${patterns}</ul>` : ''}
+  ${advice ? `<h3 style="margin-top:12px">Advice</h3><ul class="list wins">${advice}</ul>` : ''}
+</article>`
+    })
+    .join('\n')
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Period Review — ${escHtml(report.asOf)}</title>
+<style>${reportCss()}</style></head><body><main>
+<p class="kicker">MY PENS · Period review</p>
+<h1>Period conclusions</h1>
+<p class="sub">As of ${escHtml(report.asOf)} · data ${escHtml(report.dataSpan?.from || '—')} → ${escHtml(report.dataSpan?.to || '—')}</p>
+<section class="hero"><div class="score pass">${escHtml(report.headline)}</div></section>
+<section class="callout" style="margin-top:16px">
+  <div class="title">${escHtml(report.topHypothesis?.label || 'No clear leading cause')}</div>
+  <div class="note">${conf != null ? `${conf}% confidence` : ''}</div>
+  <p class="prose" style="margin-top:10px">${escHtml(report.causalNarrative || report.topHypothesis?.text || 'No causal narrative.')}</p>
+</section>
+<h2>Deep analysis</h2>
+<div class="card prose">${escHtml(report.deepAnalysis || 'none')}</div>
+<h2>By time window</h2>
+${horizons}
+</main></body></html>`
 }
 
 export { GOOD, MIXED, BAD, weekBounds }

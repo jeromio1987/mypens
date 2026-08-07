@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 
 import { weekBounds, shiftDateStr } from './lib/weekDates.mjs'
 import { analyzeGarmin, loadGarminData } from './lib/garminAnalyze.mjs'
+import { esc, reportCss, bulletList, inventoryTiles, domainTiles } from './lib/reportHtml.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(__dirname, '..')
@@ -49,7 +50,7 @@ function toMarkdown(report) {
   return `# Garmin Analysis Engine
 
 _Window: ${report.weekOf || 'all-time'} → ${report.weekEnd || 'all-time'}_
-_Coverage score: ${report.coverageScore}/6 domains_
+_Coverage score: ${report.coverageScore}/${report.coverageMax || 7} domains_
 
 ## Summary
 ${report.summary}
@@ -78,6 +79,34 @@ ${JSON.stringify(report.domains, null, 2)}
 ${JSON.stringify(report.crossLinks, null, 2)}
 \`\`\`
 `
+}
+
+function toHtml(report) {
+  const corr = Object.entries(report.crossLinks || {})
+    .filter(([, v]) => v != null)
+    .map(([k, v]) => `${k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}: r=${v}`)
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Garmin Analysis — ${esc(report.weekOf || 'all-time')}</title>
+<style>${reportCss()}</style></head><body><main>
+<p class="kicker">MY PENS · Garmin analysis</p>
+<h1>Garmin conclusions</h1>
+<p class="sub">Window ${esc(report.weekOf || 'all-time')} → ${esc(report.weekEnd || 'all-time')} · coverage ${report.coverageScore}/${report.coverageMax || 7}</p>
+<section class="hero"><div class="score pass">${esc(report.summary)}</div></section>
+<h2>Data on hand</h2>
+<div class="grid metrics">${inventoryTiles(report.inventory)}</div>
+<h2>Domain snapshot</h2>
+<div class="grid metrics">${domainTiles(report.domains)}</div>
+<h2>Signals</h2>
+<div class="grid two">
+  <div class="card"><h3>What is going well</h3>${bulletList(report.wins, 'wins')}</div>
+  <div class="card"><h3>What needs attention</h3>${bulletList(report.risks, 'risks')}</div>
+</div>
+<h2>Key findings</h2>
+<div class="card">${bulletList(report.findings, 'findings')}</div>
+${corr.length ? `<h2>Correlations</h2><div class="card">${bulletList(corr, 'findings')}</div>` : ''}
+</main></body></html>`
 }
 
 async function main() {
@@ -121,8 +150,12 @@ async function main() {
     mkdirSync(dir, { recursive: true })
     const tag = allTime ? 'all-time' : weekOf
     const path = join(dir, `garmin-analysis-${tag}.md`)
+    const htmlPath = join(dir, `garmin-analysis-${tag}.html`)
     writeFileSync(path, toMarkdown(report), 'utf8')
+    writeFileSync(htmlPath, toHtml(report), 'utf8')
     console.log(`[garmin-analyze] wrote ${path}`)
+    console.log(`[garmin-analyze] wrote ${htmlPath}`)
+    console.log(`[garmin-analyze] open: start "" "${htmlPath}"`)
     console.log(JSON.stringify({ inventory: report.inventory, risks: report.risks, wins: report.wins }, null, 2))
   } finally {
     await prisma.$disconnect()
