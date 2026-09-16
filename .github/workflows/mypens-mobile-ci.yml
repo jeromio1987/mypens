@@ -1,0 +1,34 @@
+﻿name: myPENS mobile CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'mypens-mobile/**'
+      - '.github/workflows/mypens-mobile-ci.yml'
+  pull_request:
+    paths:
+      - 'mypens-mobile/**'
+      - '.github/workflows/mypens-mobile-ci.yml'
+
+defaults:
+  run:
+    working-directory: mypens-mobile
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mypens-mobile/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck

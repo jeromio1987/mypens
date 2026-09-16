@@ -1,0 +1,48 @@
+﻿name: myPENS CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - '**'
+      - '.github/workflows/mypens-ci.yml'
+      - '!mypens-mobile/**'
+  pull_request:
+    paths:
+      - '**'
+      - '.github/workflows/mypens-ci.yml'
+      - '!mypens-mobile/**'
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci?schema=public
+      SESSION_SECRET: ci-ci-ci-ci-ci-ci-ci-ci-ci-ci-ci-ci-ci-32chars
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
